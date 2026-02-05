@@ -32,6 +32,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Run database migrations on startup
+  try {
+    console.log("Running database migrations...");
+    const { execSync } = require("child_process");
+    execSync("npm run db:push", { stdio: "inherit" });
+    console.log("Database migrations completed successfully");
+  } catch (error) {
+    console.warn("Database migrations warning:", error);
+    // Don't fail startup if migrations fail - database might already be initialized
+  }
+
   const app = express();
   const server = createServer(app);
 
