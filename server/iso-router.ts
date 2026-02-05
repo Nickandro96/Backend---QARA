@@ -18,9 +18,9 @@ export const isoRouter = router({
   saveQualification: protectedProcedure
     .input(z.object({
       siteId: z.number().optional(),
-      targetStandards: z.array(z.enum(["9001", "13485"])), // Can target both
-      organizationType: z.enum(["manufacturer", "service_provider", "both"]),
-      economicRole: z.enum(["fabricant", "importateur", "distributeur", "mandataire"]).optional(),
+      targetStandards: z.array(z.string()), // Use string to be more flexible
+      organizationType: z.string(),
+      economicRole: z.string().nullable().optional(),
       processes: z.array(z.string()).optional(), // ["conception", "fabrication", etc.]
       certificationScope: z.string().optional(),
       excludedClauses: z.array(z.string()).optional(), // ["7.3"] for no design
@@ -56,8 +56,8 @@ export const isoRouter = router({
       
       const qualificationData = {
         targetStandards: JSON.stringify(input.targetStandards),
-        organizationType: input.organizationType,
-        economicRole: input.economicRole || null,
+        organizationType: (input.organizationType as any) || "manufacturer",
+        economicRole: (input.economicRole as any) || null,
         processes: input.processes ? JSON.stringify(input.processes) : null,
         certificationScope: input.certificationScope || null,
         excludedClauses: input.excludedClauses ? JSON.stringify(input.excludedClauses) : null,
