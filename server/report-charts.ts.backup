@@ -1,0 +1,298 @@
+/**
+ * Module de génération de graphiques Chart.js pour les rapports PDF
+ * 
+ * Génère des images PNG de graphiques (radar, histogramme, heatmap) 
+ * à intégrer dans les rapports d'audit PDF
+ */
+
+import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
+import { ChartConfiguration } from 'chart.js';
+
+// Configuration globale
+const width = 800;
+const height = 600;
+
+/**
+ * Génère un graphique radar de conformité par processus
+ * 
+ * @param processes - Liste des processus avec leurs scores
+ * @returns Buffer PNG du graphique
+ */
+export async function generateRadarChart(processes: { name: string; score: number }[]): Promise<Buffer> {
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
+
+  const configuration: ChartConfiguration = {
+    type: 'radar',
+    data: {
+      labels: processes.map(p => p.name),
+      datasets: [{
+        label: 'Taux de Conformité (%)',
+        data: processes.map(p => p.score),
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        borderColor: 'rgb(54, 162, 235)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgb(54, 162, 235)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgb(54, 162, 235)',
+      }],
+    },
+    options: {
+      responsive: false,
+      scales: {
+        r: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            stepSize: 20,
+          },
+        },
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Conformité par Processus',
+          font: {
+            size: 18,
+          },
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+        },
+      },
+    },
+  };
+
+  return await chartJSNodeCanvas.renderToBuffer(configuration);
+}
+
+/**
+ * Génère un histogramme des non-conformités par criticité
+ * 
+ * @param data - Données NC par criticité
+ * @returns Buffer PNG du graphique
+ */
+export async function generateHistogramChart(data: {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}): Promise<Buffer> {
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
+
+  const configuration: ChartConfiguration = {
+    type: 'bar',
+    data: {
+      labels: ['Critique', 'Élevée', 'Moyenne', 'Faible'],
+      datasets: [{
+        label: 'Nombre de NC',
+        data: [data.critical, data.high, data.medium, data.low],
+        backgroundColor: [
+          'rgba(220, 38, 38, 0.8)',   // Rouge (Critique)
+          'rgba(249, 115, 22, 0.8)',  // Orange (Élevée)
+          'rgba(234, 179, 8, 0.8)',   // Jaune (Moyenne)
+          'rgba(34, 197, 94, 0.8)',   // Vert (Faible)
+        ],
+        borderColor: [
+          'rgb(220, 38, 38)',
+          'rgb(249, 115, 22)',
+          'rgb(234, 179, 8)',
+          'rgb(34, 197, 94)',
+        ],
+        borderWidth: 1,
+      }],
+    },
+    options: {
+      responsive: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            stepSize: 1,
+          },
+        },
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Non-Conformités par Criticité',
+          font: {
+            size: 18,
+          },
+        },
+        legend: {
+          display: false,
+        },
+      },
+    },
+  };
+
+  return await chartJSNodeCanvas.renderToBuffer(configuration);
+}
+
+/**
+ * Génère une heatmap des risques par processus
+ * 
+ * @param matrix - Matrice processus x criticité
+ * @returns Buffer PNG du graphique
+ */
+export async function generateHeatmapChart(matrix: {
+  processes: string[];
+  criticalities: string[];
+  values: number[][];
+}): Promise<Buffer> {
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height: 700 });
+
+  // Transformation de la matrice en format Chart.js
+  const datasets = matrix.criticalities.map((criticality, critIndex) => ({
+    label: criticality,
+    data: matrix.processes.map((_, procIndex) => ({
+      x: procIndex,
+      y: critIndex,
+      v: matrix.values[procIndex][critIndex],
+    })),
+    backgroundColor: (context: any) => {
+      const value = context.raw?.v || 0;
+      if (value === 0) return 'rgba(229, 231, 235, 0.8)'; // Gris (aucune NC)
+      if (value <= 2) return 'rgba(34, 197, 94, 0.8)';    // Vert (faible)
+      if (value <= 5) return 'rgba(234, 179, 8, 0.8)';    // Jaune (moyen)
+      if (value <= 10) return 'rgba(249, 115, 22, 0.8)';  // Orange (élevé)
+      return 'rgba(220, 38, 38, 0.8)';                     // Rouge (critique)
+    },
+    borderWidth: 1,
+    borderColor: '#fff',
+    width: ({ chart }: any) => (chart.chartArea || {}).width / matrix.processes.length - 1,
+    height: ({ chart }: any) => (chart.chartArea || {}).height / matrix.criticalities.length - 1,
+  }));
+
+  const configuration: ChartConfiguration = {
+    type: 'bar',
+    data: {
+      labels: matrix.processes,
+      datasets,
+    },
+    options: {
+      responsive: false,
+      indexAxis: 'y',
+      scales: {
+        x: {
+          stacked: true,
+          display: false,
+        },
+        y: {
+          stacked: true,
+        },
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Heatmap des Risques par Processus',
+          font: {
+            size: 18,
+          },
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+        },
+        tooltip: {
+          callbacks: {
+            label: (context: any) => {
+              const value = context.raw?.v || 0;
+              return `${context.dataset.label}: ${value} NC`;
+            },
+          },
+        },
+      },
+    },
+  };
+
+  return await chartJSNodeCanvas.renderToBuffer(configuration);
+}
+
+/**
+ * Génère un graphique d'évolution temporelle (12 mois)
+ * 
+ * @param timeline - Données d'évolution mensuelle
+ * @returns Buffer PNG du graphique
+ */
+export async function generateTimelineChart(timeline: {
+  months: string[];
+  conformity: number[];
+  nc: number[];
+}): Promise<Buffer> {
+  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
+
+  const configuration: ChartConfiguration = {
+    type: 'line',
+    data: {
+      labels: timeline.months,
+      datasets: [
+        {
+          label: 'Taux de Conformité (%)',
+          data: timeline.conformity,
+          borderColor: 'rgb(34, 197, 94)',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          yAxisID: 'y',
+          tension: 0.3,
+        },
+        {
+          label: 'Nombre de NC',
+          data: timeline.nc,
+          borderColor: 'rgb(220, 38, 38)',
+          backgroundColor: 'rgba(220, 38, 38, 0.1)',
+          yAxisID: 'y1',
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      scales: {
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: {
+            display: true,
+            text: 'Conformité (%)',
+          },
+          min: 0,
+          max: 100,
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Nombre de NC',
+          },
+          grid: {
+            drawOnChartArea: false,
+          },
+        },
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Évolution sur 12 Mois',
+          font: {
+            size: 18,
+          },
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+        },
+      },
+    },
+  };
+
+  return await chartJSNodeCanvas.renderToBuffer(configuration);
+}
