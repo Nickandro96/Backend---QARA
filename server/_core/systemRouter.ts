@@ -50,8 +50,8 @@ export const systemRouter = router({
         ...cookieOptions, 
         maxAge: ONE_YEAR_MS,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
+        secure: true,
+        sameSite: "none"
       });
 
       return { success: true, message: "Utilisateur créé et connecté localement" };
@@ -100,8 +100,8 @@ export const systemRouter = router({
         ...cookieOptions, 
         maxAge: ONE_YEAR_MS,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
+        secure: true,
+        sameSite: "none"
       });
 
       return { success: true, message: "Inscription réussie" };
@@ -142,8 +142,8 @@ export const systemRouter = router({
         ...cookieOptions, 
         maxAge: ONE_YEAR_MS,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
+        secure: true,
+        sameSite: "none"
       });
 
       return { success: true, message: "Connexion réussie" };
