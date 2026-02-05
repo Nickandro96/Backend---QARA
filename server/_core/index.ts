@@ -32,15 +32,19 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  // Run database migrations on startup
+  // Initialize database on startup
   try {
-    console.log("Running database migrations...");
-    const { execSync } = require("child_process");
-    execSync("npm run db:push", { stdio: "inherit" });
-    console.log("Database migrations completed successfully");
+    console.log("Initializing database...");
+    const { migrate } = require("drizzle-orm/mysql2/migrator");
+    const { getDb } = require("./db");
+    const db = await getDb();
+    if (db) {
+      await migrate(db, { migrationsFolder: "./drizzle" });
+      console.log("Database initialized successfully");
+    }
   } catch (error) {
-    console.warn("Database migrations warning:", error);
-    // Don't fail startup if migrations fail - database might already be initialized
+    console.warn("Database initialization warning:", error);
+    // Don't fail startup if initialization fails - database might already be initialized
   }
 
   const app = express();
