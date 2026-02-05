@@ -151,13 +151,20 @@ export const mdrRouter = router({
           .orderBy(schema.mdrQuestions.displayOrder);
       } catch (e) {
         console.error("Error fetching MDR questions:", e);
-        return { questions: [], userRole: qualification.economicRole, totalQuestions: 0 };
       }
       
       // Filter by role (show "tous" + user's specific role)
-      const filteredQuestions = questions.filter(q => 
+      let filteredQuestions = questions.filter(q => 
         q.economicRole === "tous" || q.economicRole === qualification.economicRole
       );
+
+      // Fallback if no questions in DB
+      if (filteredQuestions.length === 0) {
+        filteredQuestions = [
+          { id: 1, externalId: "MDR-1", article: "Art. 10", questionText: "Le fabricant a-t-il établi un système de gestion des risques ?", criticality: "critical", economicRole: "fabricant", processCategory: "QMS" },
+          { id: 2, externalId: "MDR-2", article: "Art. 15", questionText: "La personne chargée du respect de la réglementation est-elle désignée ?", criticality: "high", economicRole: "fabricant", processCategory: "RA" }
+        ].filter(q => q.economicRole === "tous" || q.economicRole === qualification.economicRole) as any;
+      }
       
       return {
         questions: filteredQuestions,

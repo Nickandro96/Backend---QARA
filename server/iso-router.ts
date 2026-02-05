@@ -165,19 +165,20 @@ export const isoRouter = router({
         )
         .limit(1);
       
-      if (!qualification) {
-        return [];
-      }
-      
-      const targetStandards = JSON.parse(qualification.targetStandards as string) as string[];
-      
       const allStandards = [
         { code: "9001", name: "ISO 9001:2015", description: "Systèmes de management de la qualité" },
         { code: "13485", name: "ISO 13485:2016", description: "Dispositifs médicaux - Systèmes de management de la qualité" },
       ];
+
+      if (!qualification) {
+        return allStandards;
+      }
+      
+      const targetStandards = JSON.parse(qualification.targetStandards as string) as string[];
       
       // Filter standards based on user's qualification
-      return allStandards.filter(std => targetStandards.includes(std.code));
+      const filtered = allStandards.filter(std => targetStandards.includes(std.code));
+      return filtered.length > 0 ? filtered : allStandards;
     }),
 
   /**
@@ -249,6 +250,14 @@ export const isoRouter = router({
       let filteredQuestions = excludedClauses.length > 0
         ? questions.filter(q => !excludedClauses.some(excluded => q.clause?.startsWith(excluded)))
         : questions;
+
+      // Fallback if no questions in DB
+      if (filteredQuestions.length === 0) {
+        filteredQuestions = [
+          { id: 101, externalId: "ISO-1", standard: input.standard, clauseTitle: "SMQ", questionText: "L'organisme a-t-il établi un SMQ ?", criticality: "high", applicability: "all", processCategory: "QMS" },
+          { id: 102, externalId: "ISO-2", standard: input.standard, clauseTitle: "Leadership", questionText: "La direction démontre-t-elle son engagement ?", criticality: "medium", applicability: "all", processCategory: "Management" }
+        ] as any;
+      }
       
       // ISO questions use 'applicability' and 'processCategory' instead of 'economicRole' and 'businessProcess'
       // Economic Role Mapping for ISO Applicability

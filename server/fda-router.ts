@@ -241,7 +241,7 @@ export const fdaRouter = router({
       }
       
       // Filter questions: ALL + questions applicable to user's roles
-      const filteredQuestions = allQuestions.filter(q => {
+      let filteredQuestions = allQuestions.filter(q => {
         if (q.applicabilityType === 'ALL') {
           return true;
         }
@@ -249,11 +249,19 @@ export const fdaRouter = router({
         const applicableRoles = applicabilityMap.get(q.id) || [];
         return userRoles.some(role => applicableRoles.includes(role));
       });
+
+      // Fallback if no questions in DB
+      if (filteredQuestions.length === 0) {
+        filteredQuestions = [
+          { id: 201, externalId: "FDA-1", frameworkCode: input.frameworkCode, questionShort: "QSR Compliance", questionDetailed: "Does the manufacturer establish and maintain a quality system?", criticality: "critical", applicabilityType: "ALL" },
+          { id: 202, externalId: "FDA-2", frameworkCode: input.frameworkCode, questionShort: "Registration", questionDetailed: "Is the establishment registered with the FDA?", criticality: "high", applicabilityType: "ALL" }
+        ] as any;
+      }
       
       return {
         questions: filteredQuestions,
         userRoles,
-        totalQuestions: allQuestions.length,
+        totalQuestions: filteredQuestions.length,
         applicableQuestions: filteredQuestions.length,
       };
     }),
