@@ -1,0 +1,122 @@
+[
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(a)",
+    "role": "manufacturer_us",
+    "question": "Disposez-vous d'une procédure écrite décrivant votre processus de contrôle de conception (design controls) incluant les responsabilités, les revues, la vérification et la validation ?",
+    "evidence": ["Procédure de contrôle de conception", "Design Control Procedure", "Organigramme des responsabilités design", "Matrice RACI design"],
+    "criticality": "high",
+    "risks": "Non-conformité majeure FDA. Impossibilité de démontrer la maîtrise du développement. Rejet de soumission 510(k)/PMA.",
+    "action_plan": "1. Créer une Design Control Procedure basée sur ISO 13485 clause 7.3 et 21 CFR 820.30. 2. Définir les rôles (Design Lead, Design Reviewer, Verification Lead, Validation Lead). 3. Établir les phases (Planning, Input, Output, Review, Verification, Validation, Transfer, Changes). 4. Former l'équipe design. 5. Auditer l'application sur un projet pilote.",
+    "ai_prompt": "Expliquez les exigences FDA pour les design controls selon 21 CFR 820.30 et QMSR. Quelles sont les différences avec ISO 13485 ? Proposez une structure de Design Control Procedure conforme FDA."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(c)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi et maintenu un Design History File (DHF) pour chaque type ou famille de dispositif contenant tous les enregistrements nécessaires pour démontrer que le design a été développé conformément au plan de conception approuvé ?",
+    "evidence": ["Design History File (DHF)", "Index DHF", "Design Plan", "Design Input Requirements", "Design Output Specifications", "Design Review Records", "Verification Reports", "Validation Reports", "Design Transfer Records"],
+    "criticality": "high",
+    "risks": "Observation FDA majeure. Impossibilité de tracer l'historique de conception. Rejet lors d'inspection FDA. Difficulté à défendre les choix de conception.",
+    "action_plan": "1. Créer une structure DHF standardisée (sections : Planning, Inputs, Outputs, Reviews, V&V, Transfer, Changes). 2. Définir le contenu minimum de chaque section. 3. Établir une procédure de gestion du DHF (création, mise à jour, archivage). 4. Former les équipes design. 5. Auditer les DHF existants et combler les lacunes. 6. Mettre en place un système de gestion électronique (eDHF) si applicable.",
+    "ai_prompt": "Qu'est-ce qu'un Design History File (DHF) selon la FDA ? Quelle est la structure recommandée ? Quels documents doivent obligatoirement figurer dans le DHF ? Proposez un template de DHF conforme aux attentes FDA."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(d)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi et maintenu un Design Input document qui définit les exigences du dispositif en termes de performances, de sécurité, et d'usage prévu, incluant les besoins des utilisateurs et des patients ?",
+    "evidence": ["Design Input Document", "User Needs Analysis", "Intended Use Statement", "Performance Requirements", "Safety Requirements", "Regulatory Requirements List", "Standards Applicability Matrix", "Risk Management File (ISO 14971)"],
+    "criticality": "high",
+    "risks": "Design non conforme aux besoins réels. Validation impossible. Rejet FDA. Rappel post-market si défaillance liée à des inputs incomplets.",
+    "action_plan": "1. Identifier toutes les sources d'inputs (utilisateurs, patients, régulations, normes, risques). 2. Créer un Design Input Document structuré (fonctionnel, performance, sécurité, usabilité, réglementaire). 3. Assurer la traçabilité inputs → outputs. 4. Faire valider les inputs par les parties prenantes. 5. Établir un processus de gestion des changements d'inputs.",
+    "ai_prompt": "Expliquez les exigences FDA pour les Design Inputs (21 CFR 820.30(d)). Quelle est la différence entre User Needs et Design Inputs ? Comment structurer un Design Input Document ? Proposez un template."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(e)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi des Design Outputs documentés qui répondent aux Design Inputs, incluant les spécifications du dispositif, les dessins techniques, les spécifications logicielles, et les critères d'acceptation ?",
+    "evidence": ["Design Output Specifications", "Product Specifications", "Technical Drawings", "Software Design Specifications", "Acceptance Criteria", "Traceability Matrix (Inputs to Outputs)", "Bill of Materials (BOM)", "Manufacturing Instructions"],
+    "criticality": "high",
+    "risks": "Impossibilité de fabriquer le dispositif de manière reproductible. Non-conformité FDA. Rejet de soumission. Variabilité de production.",
+    "action_plan": "1. Définir tous les Design Outputs nécessaires (spécifications produit, dessins, logiciel, tests). 2. Créer une matrice de traçabilité Design Inputs → Design Outputs. 3. Établir des critères d'acceptation mesurables. 4. Faire réviser les outputs par l'équipe design. 5. Valider que les outputs répondent aux inputs. 6. Approuver formellement les outputs avant transfert en production.",
+    "ai_prompt": "Qu'est-ce qu'un Design Output selon la FDA ? Quelle est la différence entre Design Output et Product Specification ? Comment assurer la traçabilité Design Inputs → Design Outputs ? Proposez une matrice de traçabilité."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(f)",
+    "role": "manufacturer_us",
+    "question": "Conduisez-vous des Design Reviews formelles à des étapes appropriées du développement, documentées avec les participants, les résultats, et les actions de suivi ?",
+    "evidence": ["Design Review Procedure", "Design Review Schedule", "Design Review Reports", "Participant List", "Review Checklists", "Action Items Log", "Sign-off Records"],
+    "criticality": "high",
+    "risks": "Défauts de conception non détectés. Retards de développement. Coûts de correction post-lancement. Non-conformité FDA.",
+    "action_plan": "1. Définir les jalons de Design Review (ex: après inputs, après outputs, avant V&V, avant transfert). 2. Créer des checklists de revue par phase. 3. Désigner les participants requis (design, qualité, RA, production, clinical). 4. Établir un format de rapport de revue. 5. Mettre en place un système de suivi des actions. 6. Former les reviewers.",
+    "ai_prompt": "Qu'est-ce qu'une Design Review selon 21 CFR 820.30(f) ? À quelles étapes doit-on conduire des Design Reviews ? Qui doit participer ? Proposez un template de Design Review Report."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(g)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi et exécuté un plan de Design Verification documenté avec des méthodes appropriées (tests, analyses, inspections) pour confirmer que les Design Outputs répondent aux Design Inputs ?",
+    "evidence": ["Design Verification Plan", "Verification Protocols", "Test Reports", "Verification Results", "Traceability Matrix (Inputs to Verification)", "Acceptance Criteria", "Verification Summary Report"],
+    "criticality": "high",
+    "risks": "Dispositif non conforme aux spécifications. Défaillances en production. Rappels. Rejet FDA.",
+    "action_plan": "1. Créer un Design Verification Plan listant toutes les vérifications nécessaires. 2. Établir des protocoles de test détaillés. 3. Définir les critères d'acceptation. 4. Exécuter les tests et documenter les résultats. 5. Créer une matrice de traçabilité Design Inputs → Verification Tests. 6. Approuver les résultats avant passage en validation.",
+    "ai_prompt": "Quelle est la différence entre Design Verification et Design Validation selon la FDA ? Quelles méthodes de vérification sont acceptables ? Comment structurer un Design Verification Plan ? Proposez un template."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(g)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi et exécuté un plan de Design Validation documenté avec des méthodes appropriées (essais cliniques, tests utilisateurs, simulations) pour confirmer que le dispositif répond aux besoins des utilisateurs et à l'usage prévu dans des conditions réelles ou simulées ?",
+    "evidence": ["Design Validation Plan", "Validation Protocols", "Clinical Evaluation Report", "Usability Testing Report", "Simulated Use Testing", "User Feedback", "Validation Summary Report", "Traceability Matrix (User Needs to Validation)"],
+    "criticality": "high",
+    "risks": "Dispositif inadapté à l'usage réel. Erreurs d'utilisation. Incidents patients. Rappel. Rejet FDA.",
+    "action_plan": "1. Créer un Design Validation Plan basé sur les User Needs et l'Intended Use. 2. Définir les méthodes de validation (clinical, usability, simulated use). 3. Établir des protocoles de validation. 4. Exécuter les validations dans des conditions réelles ou simulées. 5. Analyser les résultats et confirmer que les User Needs sont satisfaits. 6. Documenter dans un Validation Summary Report.",
+    "ai_prompt": "Qu'est-ce que la Design Validation selon 21 CFR 820.30(g) ? Quand doit-elle être conduite ? Quelles méthodes sont acceptables (clinical trials, usability testing, simulated use) ? Proposez un template de Design Validation Plan."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(h)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi une procédure de Design Transfer pour assurer que les Design Outputs sont correctement traduits en spécifications de production et que le dispositif peut être fabriqué de manière reproductible ?",
+    "evidence": ["Design Transfer Procedure", "Design Transfer Plan", "Production Specifications", "Manufacturing Instructions", "Process Validation Reports", "Transfer Acceptance Criteria", "Transfer Approval Records"],
+    "criticality": "high",
+    "risks": "Impossibilité de produire le dispositif conformément au design. Variabilité de production. Non-conformités. Rejet FDA.",
+    "action_plan": "1. Créer une Design Transfer Procedure définissant les étapes et responsabilités. 2. Établir un Design Transfer Plan pour chaque projet. 3. Traduire les Design Outputs en spécifications de production. 4. Valider les processus de fabrication (IQ/OQ/PQ). 5. Former le personnel de production. 6. Conduire des runs pilotes. 7. Approuver formellement le transfert.",
+    "ai_prompt": "Qu'est-ce que le Design Transfer selon 21 CFR 820.30(h) ? Quelles sont les étapes clés ? Comment assurer que le dispositif peut être fabriqué de manière reproductible ? Proposez un template de Design Transfer Plan."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(i)",
+    "role": "manufacturer_us",
+    "question": "Avez-vous établi une procédure de Design Changes pour identifier, documenter, valider, vérifier, réviser et approuver tous les changements de conception avant leur mise en œuvre ?",
+    "evidence": ["Design Change Procedure", "Change Request Forms", "Impact Analysis", "Verification/Validation of Changes", "Design Review of Changes", "Approval Records", "Change History Log"],
+    "criticality": "high",
+    "risks": "Changements non maîtrisés. Régression du design. Non-conformités. Incidents patients. Observation FDA.",
+    "action_plan": "1. Créer une Design Change Procedure définissant le processus de gestion des changements. 2. Établir un formulaire de demande de changement. 3. Définir les critères d'analyse d'impact (sécurité, performance, regulatory). 4. Exiger la vérification/validation des changements selon l'impact. 5. Mettre en place un comité de revue des changements. 6. Documenter tous les changements dans le DHF.",
+    "ai_prompt": "Comment gérer les Design Changes selon 21 CFR 820.30(i) ? Quand faut-il re-vérifier ou re-valider un changement ? Comment documenter les changements dans le DHF ? Proposez un template de Design Change Request."
+  },
+  {
+    "referential": "FDA_QMSR",
+    "process": "Design & Development",
+    "reference": "21 CFR 820.30(j)",
+    "role": "manufacturer_us",
+    "question": "Maintenez-vous un Device Master Record (DMR) contenant toutes les spécifications et procédures nécessaires pour fabriquer, emballer, étiqueter, et distribuer le dispositif ?",
+    "evidence": ["Device Master Record (DMR)", "DMR Index", "Product Specifications", "Manufacturing Procedures", "Packaging Specifications", "Labeling Specifications", "Quality Control Procedures", "Acceptance Criteria"],
+    "criticality": "high",
+    "risks": "Impossibilité de fabriquer le dispositif de manière reproductible. Non-conformité FDA majeure. Rejet lors d'inspection.",
+    "action_plan": "1. Créer une structure DMR standardisée. 2. Définir le contenu minimum (spécifications produit, procédures fabrication, contrôles qualité, emballage, étiquetage). 3. Établir une procédure de gestion du DMR (création, mise à jour, approbation). 4. Assurer la traçabilité DHF → DMR. 5. Former les équipes production et qualité. 6. Auditer les DMR existants.",
+    "ai_prompt": "Qu'est-ce qu'un Device Master Record (DMR) selon 21 CFR 820.30(j) ? Quelle est la différence entre DHF et DMR ? Quel contenu doit figurer dans le DMR ? Proposez une structure de DMR."
+  }
+]

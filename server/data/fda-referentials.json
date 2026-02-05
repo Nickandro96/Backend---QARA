@@ -1,0 +1,52 @@
+[
+  {
+    "code": "FDA_QMSR",
+    "name": "FDA Quality Management System Regulation (QMSR)",
+    "description": "Nouvelle réglementation FDA alignée sur ISO 13485, en vigueur à partir du 2 février 2026, remplaçant progressivement le 21 CFR Part 820",
+    "version": "2026",
+    "effectiveDate": "2026-02-02"
+  },
+  {
+    "code": "FDA_820",
+    "name": "21 CFR Part 820 - Quality System Regulation (QSR)",
+    "description": "Réglementation historique du système qualité FDA pour dispositifs médicaux, applicable jusqu'à transition complète vers QMSR",
+    "version": "Current",
+    "effectiveDate": "1996-06-01"
+  },
+  {
+    "code": "FDA_807",
+    "name": "21 CFR Part 807 - Establishment Registration and Device Listing",
+    "description": "Exigences d'enregistrement des établissements et de listing des dispositifs auprès de la FDA",
+    "version": "Current"
+  },
+  {
+    "code": "FDA_510K",
+    "name": "510(k) Premarket Notification",
+    "description": "Voie réglementaire pour démontrer la substantial equivalence avec un dispositif prédicat légalement commercialisé",
+    "version": "Current"
+  },
+  {
+    "code": "FDA_DE_NOVO",
+    "name": "De Novo Classification Request",
+    "description": "Voie réglementaire pour dispositifs nouveaux de risque faible à modéré sans prédicat approprié",
+    "version": "Current"
+  },
+  {
+    "code": "FDA_PMA",
+    "name": "Premarket Approval (PMA)",
+    "description": "Processus d'approbation préalable à la commercialisation pour dispositifs de Classe III à haut risque",
+    "version": "Current"
+  },
+  {
+    "code": "FDA_POSTMARKET",
+    "name": "FDA Postmarket Requirements",
+    "description": "Exigences post-commercialisation incluant MDR reporting, corrections & removals, recalls",
+    "version": "Current"
+  },
+  {
+    "code": "FDA_LABELING_UDI",
+    "name": "FDA Labeling and UDI Requirements",
+    "description": "Exigences d'étiquetage et Unique Device Identification pour dispositifs médicaux",
+    "version": "Current"
+  }
+]
