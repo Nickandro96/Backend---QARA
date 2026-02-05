@@ -1187,3 +1187,21 @@ export async function storePasswordHash(openId: string, hash: string): Promise<v
 export async function getPasswordHash(openId: string): Promise<string | undefined> {
   return passwordHashStore.get(openId);
 }
+
+export async function listAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(users).orderBy(desc(users.createdAt));
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function listAllUserProfiles() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(userProfiles);
+}

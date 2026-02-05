@@ -162,4 +162,36 @@ export const systemRouter = router({
         success: delivered,
       } as const;
     }),
+
+  listUsers: adminProcedure.query(async () => {
+    const users = await db.listAllUsers();
+    const profiles = await db.listAllUserProfiles();
+    
+    return users.map(user => ({
+      ...user,
+      profile: profiles.find(p => p.userId === user.id) || null
+    }));
+  }),
+
+  updateUserRole: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      role: z.enum(["user", "admin"])
+    }))
+    .mutation(async ({ input }) => {
+      await db.updateUserRole(input.userId, input.role);
+      return { success: true };
+    }),
+
+  updateUserProfile: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      subscriptionTier: z.enum(["free", "pro", "expert", "entreprise"]).optional(),
+      subscriptionStatus: z.enum(["active", "canceled", "past_due", "trialing"]).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { userId, ...data } = input;
+      await db.upsertUserProfile(userId, data as any);
+      return { success: true };
+    }),
 });
