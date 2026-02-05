@@ -1,0 +1,2 @@
+ALTER TABLE `iso_role_qualifications` ADD `economicRole` enum('fabricant','importateur','distributeur','mandataire');--> statement-breakpoint
+ALTER TABLE `iso_role_qualifications` ADD `processes` text;

@@ -1,0 +1,1 @@
+ALTER TABLE `audit_responses` ADD `response` text;

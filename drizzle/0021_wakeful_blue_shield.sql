@@ -1,0 +1,1 @@
+ALTER TABLE `audits` ADD `clientOrganization` varchar(255);
