@@ -34,20 +34,37 @@ export const fdaRouter = router({
       // Compute roles based on answers
       const computedRoles: string[] = [];
       
+      // Logic based on FDA framework definitions
       if (input.brandOnLabel || input.designsOrSpecifiesDevice) {
-        computedRoles.push('FDA_LM');
+        computedRoles.push('FDA_LM'); // Labeler / Specification Developer
+      }
+      
+      if (input.manufacturesOrReworks) {
+        computedRoles.push('FDA_MFG'); // Manufacturer
       }
       
       if (input.manufacturesForThirdParty) {
-        computedRoles.push('FDA_CMO');
+        computedRoles.push('FDA_CMO'); // Contract Manufacturer
       }
       
       if (input.firstImportIntoUS) {
-        computedRoles.push('FDA_IMP');
+        computedRoles.push('FDA_IMP'); // Initial Importer
       }
       
       if (input.distributesWithoutModification) {
-        computedRoles.push('FDA_DIST');
+        computedRoles.push('FDA_DIST'); // Distributor
+      }
+
+      if (input.relabelingOrRepackaging) {
+        computedRoles.push('FDA_REL'); // Relabeler / Repackager
+      }
+
+      if (input.servicing) {
+        computedRoles.push('FDA_SRV'); // Remanufacturer / Servicer
+      }
+
+      if (input.softwareAsMedicalDevice) {
+        computedRoles.push('FDA_SAMD'); // SaMD Developer
       }
       
       // Check if qualification already exists

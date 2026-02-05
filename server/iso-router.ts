@@ -251,19 +251,43 @@ export const isoRouter = router({
         : questions;
       
       // ISO questions use 'applicability' and 'processCategory' instead of 'economicRole' and 'businessProcess'
+      // Economic Role Mapping for ISO Applicability
       if (input.economicRole) {
         filteredQuestions = filteredQuestions.filter(q => {
           if (q.applicability === "all") return true;
+          
+          // Fabricant -> manufacturers_only
           if (input.economicRole === "fabricant" && q.applicability === "manufacturers_only") return true;
-          if (input.economicRole !== "fabricant" && q.applicability === "service_providers") return true;
+          
+          // Importateur/Distributeur/Mandataire -> service_providers
+          const isServiceProvider = ["importateur", "distributeur", "mandataire"].includes(input.economicRole!);
+          if (isServiceProvider && q.applicability === "service_providers") return true;
+          
           return false;
         });
       }
       
+      // Process Mapping
       if (input.processes && input.processes.length > 0) {
         filteredQuestions = filteredQuestions.filter(q => {
           if (!q.processCategory) return true;
-          return input.processes!.includes(q.processCategory.toLowerCase());
+          
+          // Mapping frontend processes to backend categories
+          const processMap: Record<string, string[]> = {
+            'conception': ['design', 'r&d', 'qms'],
+            'fabrication': ['production', 'manufacturing', 'qms'],
+            'distribution': ['distribution', 'logistics', 'qms'],
+            'stockage': ['storage', 'logistics', 'qms'],
+            'installation': ['installation', 'service', 'qms'],
+            'maintenance': ['maintenance', 'service', 'qms'],
+            'service_apres_vente': ['service', 'post-market', 'qms']
+          };
+
+          const normalizedCategory = q.processCategory.toLowerCase();
+          return input.processes!.some(p => {
+            const mappedCategories = processMap[p] || [p];
+            return mappedCategories.includes(normalizedCategory);
+          });
         });
       }
       
