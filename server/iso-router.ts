@@ -115,7 +115,14 @@ export const isoRouter = router({
         .limit(1);
       
       if (!qualification) {
-        return null;
+        return {
+          targetStandards: [],
+          organizationType: "manufacturer",
+          economicRole: null,
+          processes: [],
+          certificationScope: null,
+          excludedClauses: [],
+        };
       }
       
       return {
@@ -216,14 +223,11 @@ export const isoRouter = router({
         });
       }
       
-      // Map standard code to referentialId (2 = ISO 9001, 3 = ISO 13485)
-      const referentialId = input.standard === "9001" ? 2 : 3;
-      
-      // Get all questions for selected standard from main questions table
+      // Get all questions for selected standard from ISO questions table
       const questions = await db.select()
-        .from(schema.questions)
-        .where(eq(schema.questions.referentialId, referentialId))
-        .orderBy(schema.questions.displayOrder);
+        .from(schema.isoQuestions)
+        .where(eq(schema.isoQuestions.standard, input.standard))
+        .orderBy(schema.isoQuestions.displayOrder);
       
       // Filter out excluded clauses if any
       const excludedClauses = qualification.excludedClauses 
@@ -231,21 +235,23 @@ export const isoRouter = router({
         : [];
       
       let filteredQuestions = excludedClauses.length > 0
-        ? questions.filter(q => !excludedClauses.some(excluded => q.article?.startsWith(excluded)))
+        ? questions.filter(q => !excludedClauses.some(excluded => q.clause?.startsWith(excluded)))
         : questions;
       
-      // Filter by economic role if provided
+      // ISO questions use 'applicability' and 'processCategory' instead of 'economicRole' and 'businessProcess'
       if (input.economicRole) {
-        filteredQuestions = filteredQuestions.filter(q => 
-          q.economicRole === input.economicRole || q.economicRole === "tous"
-        );
+        filteredQuestions = filteredQuestions.filter(q => {
+          if (q.applicability === "all") return true;
+          if (input.economicRole === "fabricant" && q.applicability === "manufacturers_only") return true;
+          if (input.economicRole !== "fabricant" && q.applicability === "service_providers") return true;
+          return false;
+        });
       }
       
-      // Filter by business processes if provided
       if (input.processes && input.processes.length > 0) {
         filteredQuestions = filteredQuestions.filter(q => {
-          if (!q.businessProcess || q.businessProcess === "tous") return true;
-          return input.processes!.includes(q.businessProcess);
+          if (!q.processCategory) return true;
+          return input.processes!.includes(q.processCategory.toLowerCase());
         });
       }
       
