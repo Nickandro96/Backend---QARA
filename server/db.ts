@@ -1164,3 +1164,26 @@ export async function compareAudits(audit1Id: number, audit2Id: number, userId: 
     newFindings,
   };
 }
+
+
+// Password management (stored in memory for now, should be in a separate table)
+const passwordHashStore = new Map<string, string>();
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function storePasswordHash(openId: string, hash: string): Promise<void> {
+  passwordHashStore.set(openId, hash);
+}
+
+export async function getPasswordHash(openId: string): Promise<string | undefined> {
+  return passwordHashStore.get(openId);
+}

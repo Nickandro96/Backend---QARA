@@ -5,6 +5,7 @@ import * as db from "../db";
 import { sdk } from "./sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./cookies";
+import { hashPassword, verifyPassword } from "./passwordUtils";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -37,7 +38,7 @@ export const systemRouter = router({
         email: input.email,
         loginMethod: "local",
         lastSignedIn: new Date(),
-        role: "admin", // Premier utilisateur créé via cette route est admin
+        role: "admin",
       });
 
       const sessionToken = await sdk.createSessionToken(openId, {
@@ -54,6 +55,98 @@ export const systemRouter = router({
       });
 
       return { success: true, message: "Utilisateur créé et connecté localement" };
+    }),
+
+  /**
+   * Route pour s'inscrire avec email et mot de passe
+   */
+  register: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+        password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+        company: z.string().optional(),
+        role: z.string().optional(),
+        phone: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const existingUser = await db.getUserByEmail(input.email);
+      if (existingUser) {
+        throw new Error("Un utilisateur avec cet email existe déjà");
+      }
+
+      const openId = `local_${input.email}`;
+      const hashedPassword = hashPassword(input.password);
+      
+      await db.upsertUser({
+        openId,
+        name: input.name,
+        email: input.email,
+        loginMethod: "local_password",
+        lastSignedIn: new Date(),
+        role: "user",
+      });
+
+      await db.storePasswordHash(openId, hashedPassword);
+
+      const sessionToken = await sdk.createSessionToken(openId, {
+        name: input.name,
+      });
+
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, { 
+        ...cookieOptions, 
+        maxAge: ONE_YEAR_MS,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax"
+      });
+
+      return { success: true, message: "Inscription réussie" };
+    }),
+
+  /**
+   * Route pour se connecter avec email et mot de passe
+   */
+  login: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        password: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const user = await db.getUserByEmail(input.email);
+      if (!user) {
+        throw new Error("Email ou mot de passe incorrect");
+      }
+
+      const storedHash = await db.getPasswordHash(user.openId);
+      if (!storedHash || !verifyPassword(input.password, storedHash)) {
+        throw new Error("Email ou mot de passe incorrect");
+      }
+
+      await db.upsertUser({
+        openId: user.openId,
+        lastSignedIn: new Date(),
+      });
+
+      const sessionToken = await sdk.createSessionToken(user.openId, {
+        name: user.name,
+      });
+
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, { 
+        ...cookieOptions, 
+        maxAge: ONE_YEAR_MS,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax"
+      });
+
+      return { success: true, message: "Connexion réussie" };
     }),
 
   notifyOwner: adminProcedure
