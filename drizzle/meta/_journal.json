@@ -1,0 +1,174 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1769291088681,
+      "tag": "0000_ambitious_midnight",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1769291253044,
+      "tag": "0001_crazy_the_initiative",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769292826466,
+      "tag": "0002_salty_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1769294761041,
+      "tag": "0003_safe_rictor",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769357451933,
+      "tag": "0004_jazzy_lake",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769360469641,
+      "tag": "0005_kind_mikhail_rasputin",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1769364864468,
+      "tag": "0006_famous_meggan",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1769377838645,
+      "tag": "0007_salty_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1769417988067,
+      "tag": "0008_stale_ogun",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1769446133707,
+      "tag": "0009_curvy_overlord",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1769510124737,
+      "tag": "0010_absurd_proudstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1769510909795,
+      "tag": "0011_unknown_wong",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1769510942757,
+      "tag": "0012_minor_the_liberteens",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1769511179253,
+      "tag": "0013_dusty_micromax",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1769590827910,
+      "tag": "0014_fixed_senator_kelly",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1769592437587,
+      "tag": "0015_wide_annihilus",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1769704649022,
+      "tag": "0016_good_infant_terrible",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1769767461165,
+      "tag": "0017_old_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1770113443494,
+      "tag": "0018_boring_zaladane",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1770135379957,
+      "tag": "0019_violet_marrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1770200300265,
+      "tag": "0020_fresh_captain_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1770216024544,
+      "tag": "0021_wakeful_blue_shield",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1770216093601,
+      "tag": "0022_motionless_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1770217962287,
+      "tag": "0023_tan_forge",
+      "breakpoints": true
+    }
+  ]
+}
