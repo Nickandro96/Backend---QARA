@@ -36,7 +36,7 @@ async function startServer() {
   try {
     console.log("Initializing database...");
     const { migrate } = await import("drizzle-orm/mysql2/migrator");
-    const { getDb } = await import("./db.js");
+    const { getDb } = await import("./db");
     const db = await getDb();
     if (db) {
       await migrate(db, { migrationsFolder: "./drizzle/migrations" });
