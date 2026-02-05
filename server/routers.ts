@@ -1052,7 +1052,7 @@ Fournissez :
   iso: isoRouter,
 
   // Audit Management (create, list, update audits)
-  audit: auditRouter,
+  auditManagement: auditRouter,
 
   // Audit Reports Generation
   reports: router({
