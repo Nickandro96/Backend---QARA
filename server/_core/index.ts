@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { stripeWebhookEndpoint } from "../stripe/webhookEndpoint";
 import { generatePackDGPDF } from "../pdf-generator";
 import * as analyticsDb from "../db-analytics";
+import { initializeDatabase } from "./initDb";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,19 +34,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   // Initialize database on startup
-  try {
-    console.log("Initializing database...");
-    const { migrate } = await import("drizzle-orm/mysql2/migrator");
-    const { getDb } = await import("./db");
-    const db = await getDb();
-    if (db) {
-      await migrate(db, { migrationsFolder: "./drizzle/migrations" });
-      console.log("Database initialized successfully");
-    }
-  } catch (error) {
-    console.warn("Database initialization warning:", error);
-    // Don't fail startup if initialization fails - database might already be initialized
-  }
+  await initializeDatabase();
 
   const app = express();
   const server = createServer(app);
