@@ -102,17 +102,23 @@ export const isoRouter = router({
       }
       
       // Get user's ISO qualification
-      const [qualification] = await db.select()
-        .from(schema.isoRoleQualifications)
-        .where(
-          input.siteId
-            ? and(
-                eq(schema.isoRoleQualifications.userId, ctx.user.id),
-                eq(schema.isoRoleQualifications.siteId, input.siteId)
-              )
-            : eq(schema.isoRoleQualifications.userId, ctx.user.id)
-        )
-        .limit(1);
+      let qualification = null;
+      try {
+        const results = await db.select()
+          .from(schema.isoRoleQualifications)
+          .where(
+            input.siteId
+              ? and(
+                  eq(schema.isoRoleQualifications.userId, ctx.user.id),
+                  eq(schema.isoRoleQualifications.siteId, input.siteId)
+                )
+              : eq(schema.isoRoleQualifications.userId, ctx.user.id)
+          )
+          .limit(1);
+        qualification = results[0];
+      } catch (e) {
+        console.error("Error fetching ISO qualification:", e);
+      }
       
       if (!qualification) {
         return {
@@ -224,10 +230,16 @@ export const isoRouter = router({
       }
       
       // Get all questions for selected standard from ISO questions table
-      const questions = await db.select()
-        .from(schema.isoQuestions)
-        .where(eq(schema.isoQuestions.standard, input.standard))
-        .orderBy(schema.isoQuestions.displayOrder);
+      let questions = [];
+      try {
+        questions = await db.select()
+          .from(schema.isoQuestions)
+          .where(eq(schema.isoQuestions.standard, input.standard))
+          .orderBy(schema.isoQuestions.displayOrder);
+      } catch (e) {
+        console.error("Error fetching ISO questions:", e);
+        return { questions: [], standard: input.standard, totalQuestions: 0, excludedClauses: [] };
+      }
       
       // Filter out excluded clauses if any
       const excludedClauses = qualification.excludedClauses 

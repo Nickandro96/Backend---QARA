@@ -78,20 +78,31 @@ export const mdrRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       
-      const [qualification] = await db.select()
-        .from(schema.mdrRoleQualifications)
-        .where(
-          input.siteId
-            ? and(
-                eq(schema.mdrRoleQualifications.userId, ctx.user.id),
-                eq(schema.mdrRoleQualifications.siteId, input.siteId)
-              )
-            : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
-        )
-        .limit(1);
+      let qualification = null;
+      try {
+        const results = await db.select()
+          .from(schema.mdrRoleQualifications)
+          .where(
+            input.siteId
+              ? and(
+                  eq(schema.mdrRoleQualifications.userId, ctx.user.id),
+                  eq(schema.mdrRoleQualifications.siteId, input.siteId)
+                )
+              : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
+          )
+          .limit(1);
+        qualification = results[0];
+      } catch (e) {
+        console.error("Error fetching MDR qualification:", e);
+      }
       
       if (!qualification) {
-        return null;
+        return {
+          economicRole: "fabricant",
+          hasAuthorizedRepresentative: false,
+          targetMarkets: [],
+          deviceClasses: [],
+        };
       }
       
       return {
@@ -132,10 +143,16 @@ export const mdrRouter = router({
       }
       
       // Get all questions for user's role (including "tous")
-      const questions = await db.select()
-        .from(schema.mdrQuestions)
-        .where(eq(schema.mdrQuestions.isActive, true))
-        .orderBy(schema.mdrQuestions.displayOrder);
+      let questions = [];
+      try {
+        questions = await db.select()
+          .from(schema.mdrQuestions)
+          .where(eq(schema.mdrQuestions.isActive, true))
+          .orderBy(schema.mdrQuestions.displayOrder);
+      } catch (e) {
+        console.error("Error fetching MDR questions:", e);
+        return { questions: [], userRole: qualification.economicRole, totalQuestions: 0 };
+      }
       
       // Filter by role (show "tous" + user's specific role)
       const filteredQuestions = questions.filter(q => 

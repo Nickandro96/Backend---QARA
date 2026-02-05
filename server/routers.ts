@@ -73,12 +73,17 @@ export const appRouter = router({
         z.object({
           referentialId: z.number().optional(),
           processId: z.number().optional(),
-          economicRole: z.enum(["fabricant", "importateur", "distributeur", "manufacturer_us", "specification_developer", "contract_manufacturer", "initial_importer"]).optional(),
+          economicRole: z.string().optional(),
         })
       )
       .query(async ({ input }) => {
-        // Inclure les questions "tous" + questions spécifiques au rôle
-        return await db.getQuestions(input);
+        try {
+          // Inclure les questions "tous" + questions spécifiques au rôle
+          return await db.getQuestions(input as any) || [];
+        } catch (e) {
+          console.error("Error in questions.list:", e);
+          return [];
+        }
       }),
 
     getById: protectedProcedure
@@ -136,21 +141,22 @@ export const appRouter = router({
         processId: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        // Get all questions for the filter
-        const profile = await db.getUserProfile(ctx.user.id);
-        const questions = await db.getQuestions({
-          ...input,
-          economicRole: profile?.economicRole || undefined,
-        });
-        
-        const questionIds = questions.map(q => q.id);
-        const responses = await db.getUserResponses(ctx.user.id, questionIds);
-        
-        const total = questions.length;
-        const answered = responses.length;
-        const conforme = responses.filter(r => r.status === "conforme").length;
-        const nok = responses.filter(r => r.status === "nok").length;
-        const na = responses.filter(r => r.status === "na").length;
+        try {
+          // Get all questions for the filter
+          const profile = await db.getUserProfile(ctx.user.id);
+          const questions = await db.getQuestions({
+            ...input,
+            economicRole: profile?.economicRole || undefined,
+          }) || [];
+          
+          const questionIds = questions.map(q => q.id);
+          const responses = await db.getUserResponses(ctx.user.id, questionIds) || [];
+          
+          const total = questions.length;
+          const answered = responses.length;
+          const conforme = responses.filter(r => r.status === "conforme").length;
+          const nok = responses.filter(r => r.status === "nok").length;
+          const na = responses.filter(r => r.status === "na").length;
         
         // Calculate compliance score (excluding NA)
         const applicable = total - na;
@@ -165,6 +171,10 @@ export const appRouter = router({
           score: Math.round(score * 100) / 100,
           progress: total > 0 ? (answered / total) * 100 : 0,
         };
+      } catch (e) {
+        console.error("Error in getScore:", e);
+        return { total: 0, answered: 0, conforme: 0, nok: 0, na: 0, score: 0, progress: 0 };
+      }
       }),
 
     getById: protectedProcedure
@@ -697,7 +707,13 @@ Fournissez :
   // Demo router for FREE users
   demo: router({
     checkUsage: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getDemoUsage(ctx.user.id);
+      try {
+        const usage = await db.getDemoUsage(ctx.user.id);
+        return usage || { userId: ctx.user.id, hasUsedDemo: false, usedAt: null };
+      } catch (e) {
+        console.error("Error in demo.checkUsage:", e);
+        return { userId: ctx.user.id, hasUsedDemo: false, usedAt: null };
+      }
     }),
     
     getQuestions: protectedProcedure.query(async ({ ctx }) => {

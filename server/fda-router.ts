@@ -117,20 +117,37 @@ export const fdaRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       
-      const [qualification] = await db.select()
-        .from(schema.fdaRoleQualifications)
-        .where(
-          input.siteId
-            ? and(
-                eq(schema.fdaRoleQualifications.userId, ctx.user.id),
-                eq(schema.fdaRoleQualifications.siteId, input.siteId)
-              )
-            : eq(schema.fdaRoleQualifications.userId, ctx.user.id)
-        )
-        .limit(1);
+      let qualification = null;
+      try {
+        const results = await db.select()
+          .from(schema.fdaRoleQualifications)
+          .where(
+            input.siteId
+              ? and(
+                  eq(schema.fdaRoleQualifications.userId, ctx.user.id),
+                  eq(schema.fdaRoleQualifications.siteId, input.siteId)
+                )
+              : eq(schema.fdaRoleQualifications.userId, ctx.user.id)
+          )
+          .limit(1);
+        qualification = results[0];
+      } catch (e) {
+        console.error("Error fetching FDA qualification:", e);
+      }
       
       if (!qualification) {
-        return null;
+        return {
+          brandOnLabel: false,
+          designsOrSpecifiesDevice: false,
+          manufacturesOrReworks: false,
+          manufacturesForThirdParty: false,
+          firstImportIntoUS: false,
+          distributesWithoutModification: false,
+          relabelingOrRepackaging: false,
+          servicing: false,
+          softwareAsMedicalDevice: false,
+          computedRoles: [],
+        };
       }
       
       return {
@@ -180,10 +197,16 @@ export const fdaRouter = router({
       }
       
       // Get ALL questions for this framework
-      const allQuestions = await db.select()
-        .from(schema.fdaQuestions)
-        .where(eq(schema.fdaQuestions.frameworkCode, input.frameworkCode))
-        .orderBy(schema.fdaQuestions.process, schema.fdaQuestions.subprocess);
+      let allQuestions = [];
+      try {
+        allQuestions = await db.select()
+          .from(schema.fdaQuestions)
+          .where(eq(schema.fdaQuestions.frameworkCode, input.frameworkCode))
+          .orderBy(schema.fdaQuestions.process, schema.fdaQuestions.subprocess);
+      } catch (e) {
+        console.error("Error fetching FDA questions:", e);
+        return { questions: [], userRoles: userRoles, totalQuestions: 0, applicableQuestions: 0 };
+      }
       
       // Get applicability mappings
       const questionIds = allQuestions.map(q => q.id);
