@@ -6,12 +6,20 @@ export async function initializeDatabase() {
   try {
     console.log("Initializing database...");
     
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST || "localhost",
-      user: process.env.DB_USER || "root",
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || "railway",
-    });
+    // Parse DATABASE_URL if available, otherwise use individual variables
+    let connectionConfig: any;
+    if (process.env.DATABASE_URL) {
+      connectionConfig = process.env.DATABASE_URL;
+    } else {
+      connectionConfig = {
+        host: process.env.DB_HOST || "localhost",
+        user: process.env.DB_USER || "root",
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME || "railway",
+      };
+    }
+    
+    const connection = await mysql.createConnection(connectionConfig);
     
     // Read and execute all migration files
     const migrationsDir = path.join(process.cwd(), "drizzle", "migrations");
