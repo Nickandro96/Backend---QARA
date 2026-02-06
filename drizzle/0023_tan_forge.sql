@@ -1,4 +1,6 @@
 -- Update audit_responses table
+ALTER TABLE `audit_responses` ADD COLUMN IF NOT EXISTS `auditId` int;
+ALTER TABLE `audit_responses` ADD COLUMN IF NOT EXISTS `questionKey` varchar(255);
 ALTER TABLE `audit_responses` ADD COLUMN IF NOT EXISTS `note` text;
 ALTER TABLE `audit_responses` ADD COLUMN IF NOT EXISTS `role` varchar(50);
 ALTER TABLE `audit_responses` ADD COLUMN IF NOT EXISTS `processId` varchar(50);
@@ -19,10 +21,6 @@ CREATE TABLE IF NOT EXISTS `mdr_evidence_files` (
 );
 
 -- Add indexes and constraints if not exists
--- Note: MySQL doesn't support IF NOT EXISTS for ADD CONSTRAINT or CREATE INDEX in all versions
--- We rely on the migration being idempotent through the schema tool if possible, 
--- or we use a procedure for true idempotency if needed.
-
 DROP PROCEDURE IF EXISTS AddMdrConstraints;
 DELIMITER //
 CREATE PROCEDURE AddMdrConstraints()
@@ -35,6 +33,11 @@ BEGIN
     -- Add index for mdr_evidence_files
     IF NOT EXISTS (SELECT * FROM information_schema.STATISTICS WHERE TABLE_NAME = 'mdr_evidence_files' AND INDEX_NAME = 'mdr_evidence_user_audit_question_idx') THEN
         CREATE INDEX `mdr_evidence_user_audit_question_idx` ON `mdr_evidence_files` (`userId`,`auditId`,`questionKey`);
+    END IF;
+
+    -- Add unique index for audit_responses if not exists
+    IF NOT EXISTS (SELECT * FROM information_schema.STATISTICS WHERE TABLE_NAME = 'audit_responses' AND INDEX_NAME = 'user_audit_question_key_idx') THEN
+        CREATE UNIQUE INDEX `user_audit_question_key_idx` ON `audit_responses` (`userId`,`auditId`,`questionKey`);
     END IF;
 END //
 DELIMITER ;
