@@ -6,43 +6,78 @@ import { eq, and, desc } from "drizzle-orm";
 
 export const auditRouter = router({
   /**
-   * Create a new audit
+   * Create a new audit with strict validation
    */
   create: protectedProcedure
     .input(z.object({
       auditType: z.enum(["internal", "external", "supplier", "certification", "surveillance", "blanc"]),
-      name: z.string(),
-      referentialIds: z.array(z.number()).optional(),
+      name: z.string().min(1, "Le nom de l'audit est requis"),
+      referentialIds: z.array(z.number()).min(1, "Au moins un referentiel est requis"),
       siteId: z.number().optional(),
       auditorName: z.string().optional(),
       auditorEmail: z.string().email().optional(),
-      startDate: z.string().optional(), // ISO date string
+      startDate: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) {
+        console.error("[AUDIT CREATE] Database not available");
+        throw new Error("Database not available");
+      }
       
-      const [audit] = await db.insert(schema.audits).values({
-        userId: ctx.user.id,
-        name: input.name,
-        auditType: input.auditType,
-        referentialIds: input.referentialIds ? JSON.stringify(input.referentialIds) : null,
-        siteId: input.siteId || null,
-        auditorName: input.auditorName || null,
-        auditorEmail: input.auditorEmail || null,
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        notes: input.notes || null,
-        status: "draft",
-        score: null,
-        conformityRate: null,
-        siteLocation: null,
-        clientOrganization: null,
-        endDate: null,
-        closedAt: null,
-      }).$returningId();
+      // Strict validation
+      if (!ctx.user?.id) {
+        console.error("[AUDIT CREATE] User ID missing", { userId: ctx.user?.id });
+        throw new Error("User ID is required");
+      }
       
-      return { auditId: audit.id };
+      if (!input.name || input.name.trim().length === 0) {
+        console.error("[AUDIT CREATE] Audit name is empty");
+        throw new Error("Audit name is required and cannot be empty");
+      }
+      
+      if (!input.referentialIds || input.referentialIds.length === 0) {
+        console.error("[AUDIT CREATE] No referential IDs provided");
+        throw new Error("At least one referential is required");
+      }
+      
+      if (!input.auditType) {
+        console.error("[AUDIT CREATE] Audit type is missing");
+        throw new Error("Audit type is required");
+      }
+      
+      try {
+        const [audit] = await db.insert(schema.audits).values({
+          userId: ctx.user.id,
+          name: input.name.trim(),
+          auditType: input.auditType,
+          referentialIds: input.referentialIds ? JSON.stringify(input.referentialIds) : null,
+          siteId: input.siteId || null,
+          auditorName: input.auditorName || null,
+          auditorEmail: input.auditorEmail || null,
+          startDate: input.startDate ? new Date(input.startDate) : null,
+          notes: input.notes || null,
+          status: "draft",
+          score: null,
+          conformityRate: null,
+          siteLocation: null,
+          clientOrganization: null,
+          endDate: null,
+          closedAt: null,
+        }).$returningId();
+        
+        console.log("[AUDIT CREATE] Audit created successfully", { auditId: audit.id, userId: ctx.user.id });
+        return { auditId: audit.id };
+      } catch (error) {
+        console.error("[AUDIT CREATE] Database insertion failed", {
+          error: error instanceof Error ? error.message : String(error),
+          userId: ctx.user.id,
+          auditName: input.name,
+          referentialIds: input.referentialIds,
+        });
+        throw error;
+      }
     }),
 
   /**
@@ -181,7 +216,7 @@ export const auditRouter = router({
       clientOrganization: z.string().optional(),
       auditorName: z.string().optional(),
       auditorEmail: z.string().email().optional(),
-      startDate: z.string().optional(), // ISO date string
+      startDate: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
