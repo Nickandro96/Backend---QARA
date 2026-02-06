@@ -19,8 +19,8 @@ export async function getDb() {
           console.log("[Database] Running forced schema sync for audit_responses...");
           
           const runSafeAlter = async (table: string, column: string, type: string, modify = false) => {
+            let action = modify ? 'MODIFY' : 'ADD COLUMN';
             try {
-              const action = modify ? 'MODIFY' : 'ADD COLUMN';
               await _db!.execute(sql.raw(`ALTER TABLE ${table} ${action} ${column} ${type}`));
               console.log(`[Database] Successfully ${action} column ${column} in ${table}.`);
             } catch (e: any) {
