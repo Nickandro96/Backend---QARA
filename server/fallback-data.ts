@@ -241,10 +241,96 @@ export const FALLBACK_MDR_QUESTIONS = [
 ];
 
 export const FALLBACK_ISO_QUESTIONS = [
-  { id: "iso-4-q1", externalId: "ISO-4", standard: "13485", clauseTitle: "Clause 4", questionText: "Le périmètre du QMS est-il clairement défini ?", criticality: "high", applicability: "all", processCategory: "Système de management qualité (QMS)", displayOrder: 1 },
-  { id: "iso-5-q1", externalId: "ISO-5", standard: "13485", clauseTitle: "Clause 5", questionText: "La direction démontre-t-elle son engagement QMS ?", criticality: "high", applicability: "all", processCategory: "Gouvernance & stratégie réglementaire", displayOrder: 2 },
-  { id: "iso-7-4-q1", externalId: "ISO-7.4", standard: "13485", clauseTitle: "Clause 7.4", questionText: "Comment sont évalués et qualifiés les fournisseurs critiques ?", criticality: "critical", applicability: "all", processCategory: "Achats & fournisseurs", displayOrder: 3 },
-  { id: "iso-8-2-2-q1", externalId: "ISO-8.2.2", standard: "13485", clauseTitle: "Clause 8.2.2", questionText: "Existe-t-il un programme d'audit interne basé sur le risque ?", criticality: "high", applicability: "all", processCategory: "Audits & conformité", displayOrder: 4 }
+  {
+    "id": "iso-4-1-q1",
+    "article": "Clause 4.1",
+    "questionText": "Le système de management de la qualité est-il documenté et maintenu conformément à la norme ISO 13485 ?",
+    "questionShort": "Documentation SMQ",
+    "criticality": "high",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant",
+      "mandataire",
+      "importateur",
+      "distributeur"
+    ],
+    "applicableProcesses": [
+      "qms"
+    ]
+  },
+  {
+    "id": "iso-4-2-q1",
+    "article": "Clause 4.2",
+    "questionText": "La documentation comprend-elle une politique qualité et des objectifs qualité ?",
+    "questionShort": "Politique et objectifs",
+    "criticality": "medium",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant"
+    ],
+    "applicableProcesses": [
+      "qms",
+      "gov_strat"
+    ]
+  },
+  {
+    "id": "iso-5-1-q1",
+    "article": "Clause 5.1",
+    "questionText": "La direction fournit-elle des preuves de son engagement envers le développement et la mise en œuvre du SMQ ?",
+    "questionShort": "Engagement direction",
+    "criticality": "high",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant"
+    ],
+    "applicableProcesses": [
+      "gov_strat"
+    ]
+  },
+  {
+    "id": "iso-6-2-q1",
+    "article": "Clause 6.2",
+    "questionText": "Le personnel effectuant un travail ayant une incidence sur la qualité est-il compétent ?",
+    "questionShort": "Compétence personnel",
+    "criticality": "medium",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant",
+      "importateur",
+      "distributeur"
+    ],
+    "applicableProcesses": [
+      "qms"
+    ]
+  },
+  {
+    "id": "iso-7-4-1-q1",
+    "article": "Clause 7.4.1",
+    "questionText": "L'organisation a-t-elle établi des critères pour la sélection, l'évaluation et la réévaluation des fournisseurs ?",
+    "questionShort": "Sélection fournisseurs",
+    "criticality": "critical",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant"
+    ],
+    "applicableProcesses": [
+      "purchasing_suppliers"
+    ]
+  },
+  {
+    "id": "iso-8-2-1-q1",
+    "article": "Clause 8.2.1",
+    "questionText": "L'organisation a-t-elle établi un processus de rétroaction pour fournir un avertissement précoce des problèmes de qualité ?",
+    "questionShort": "Rétroaction clients",
+    "criticality": "high",
+    "economicRole": "fabricant",
+    "applicableRoles": [
+      "fabricant"
+    ],
+    "applicableProcesses": [
+      "pms_pmcf"
+    ]
+  }
 ];
 
 export const FALLBACK_FDA_QUESTIONS = [
