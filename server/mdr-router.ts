@@ -9,6 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { FALLBACK_MDR_QUESTIONS } from "./fallback-data";
 
 export const mdrRouter = router({
   /**
@@ -160,10 +161,9 @@ export const mdrRouter = router({
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
-        filteredQuestions = [
-          { id: 1, externalId: "MDR-1", article: "Art. 10", questionText: "Le fabricant a-t-il établi un système de gestion des risques ?", criticality: "critical", economicRole: "fabricant", processCategory: "QMS" },
-          { id: 2, externalId: "MDR-2", article: "Art. 15", questionText: "La personne chargée du respect de la réglementation est-elle désignée ?", criticality: "high", economicRole: "fabricant", processCategory: "RA" }
-        ].filter(q => q.economicRole === "tous" || q.economicRole === qualification.economicRole) as any;
+        filteredQuestions = FALLBACK_MDR_QUESTIONS.filter(q => 
+          q.economicRole === "tous" || q.economicRole === qualification.economicRole
+        ) as any;
       }
       
       return {

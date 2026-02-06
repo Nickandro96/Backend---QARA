@@ -9,6 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { FALLBACK_ISO_QUESTIONS } from "./fallback-data";
 
 export const isoRouter = router({
   /**
@@ -253,10 +254,7 @@ export const isoRouter = router({
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
-        filteredQuestions = [
-          { id: 101, externalId: "ISO-1", standard: input.standard, clauseTitle: "SMQ", questionText: "L'organisme a-t-il établi un SMQ ?", criticality: "high", applicability: "all", processCategory: "QMS" },
-          { id: 102, externalId: "ISO-2", standard: input.standard, clauseTitle: "Leadership", questionText: "La direction démontre-t-elle son engagement ?", criticality: "medium", applicability: "all", processCategory: "Management" }
-        ] as any;
+        filteredQuestions = FALLBACK_ISO_QUESTIONS.filter(q => q.standard === input.standard) as any;
       }
       
       // ISO questions use 'applicability' and 'processCategory' instead of 'economicRole' and 'businessProcess'

@@ -9,6 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { FALLBACK_FDA_QUESTIONS } from "./fallback-data";
 
 export const fdaRouter = router({
   /**
@@ -252,10 +253,7 @@ export const fdaRouter = router({
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
-        filteredQuestions = [
-          { id: 201, externalId: "FDA-1", frameworkCode: input.frameworkCode, questionShort: "QSR Compliance", questionDetailed: "Does the manufacturer establish and maintain a quality system?", criticality: "critical", applicabilityType: "ALL" },
-          { id: 202, externalId: "FDA-2", frameworkCode: input.frameworkCode, questionShort: "Registration", questionDetailed: "Is the establishment registered with the FDA?", criticality: "high", applicabilityType: "ALL" }
-        ] as any;
+        filteredQuestions = FALLBACK_FDA_QUESTIONS.filter(q => q.frameworkCode === input.frameworkCode) as any;
       }
       
       return {

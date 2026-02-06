@@ -13,6 +13,7 @@ import { invokeLLM } from "./_core/llm";
 import { deviceClassifications } from "../drizzle/schema";
 import { getDb } from "./db";
 import { stripeRouter } from "./stripe/router";
+import { FALLBACK_REFERENTIALS, FALLBACK_PROCESSES } from "./fallback-data";
 import { fdaRouter } from "./fda-router";
 import { mdrRouter } from "./mdr-router";
 import { isoRouter } from "./iso-router";
@@ -61,12 +62,7 @@ export const appRouter = router({
       if (results.length > 0) return results;
       
       // Fallback data if DB is empty
-      return [
-        { id: 1, code: "MDR", name: "Règlement (UE) 2017/745 (MDR)", description: "Règlement relatif aux dispositifs médicaux", version: "2017/745" },
-        { id: 2, code: "ISO_13485", name: "ISO 13485:2016", description: "Dispositifs médicaux - Systèmes de management de la qualité", version: "2016" },
-        { id: 3, code: "ISO_9001", name: "ISO 9001:2015", description: "Systèmes de management de la qualité", version: "2015" },
-        { id: 4, code: "FDA_820", name: "FDA 21 CFR Part 820 (QSR)", description: "Quality System Regulation", version: "Part 820" }
-      ];
+      return FALLBACK_REFERENTIALS;
     }),
   }),
 
@@ -76,15 +72,7 @@ export const appRouter = router({
       if (results.length > 0) return results;
 
       // Fallback data if DB is empty
-      return [
-        { id: 1, name: "Gouvernance & Management", description: "Responsabilité de la direction et stratégie", displayOrder: 1, icon: "LayoutDashboard" },
-        { id: 2, name: "Système de Management de la Qualité", description: "Documentation et maîtrise du SMQ", displayOrder: 2, icon: "FileText" },
-        { id: 3, name: "Conception & Développement", description: "Maîtrise de la conception des dispositifs", displayOrder: 3, icon: "Lightbulb" },
-        { id: 4, name: "Gestion des Risques", description: "Analyse et maîtrise des risques", displayOrder: 4, icon: "AlertTriangle" },
-        { id: 5, name: "Achats & Fournisseurs", description: "Maîtrise des fournisseurs et sous-traitants", displayOrder: 5, icon: "ShoppingCart" },
-        { id: 6, name: "Production & Prestation de service", description: "Maîtrise de la fabrication", displayOrder: 6, icon: "Factory" },
-        { id: 7, name: "Surveillance Après-Vente", description: "PMS et vigilance", displayOrder: 7, icon: "Activity" }
-      ];
+      return FALLBACK_PROCESSES;
     }),
   }),
 
