@@ -560,6 +560,9 @@ Fournissez :
       }),
   }),
 
+  // MDR Router
+  mdr: mdrRouter,
+
   // FDA Classification router
   fdaClassification: router({
     save: protectedProcedure
