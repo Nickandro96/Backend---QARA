@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -51,19 +52,38 @@ export const appRouter = router({
         companyName: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await db.upsertUserProfile(ctx.user.id, input);
+        await db.updateUserProfile(ctx.user.id, input);
         return { success: true };
+      }),
+  }),
+
+  sites: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getSites(ctx.user.id);
+    }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(2),
+        address: z.string().optional(),
+        city: z.string().optional(),
+        country: z.string().optional(),
+        isMainSite: z.boolean().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await db.createSite({
+          ...input,
+          userId: ctx.user.id,
+        });
       }),
   }),
 
   referentials: router({
     list: publicProcedure.query(async () => {
       try {
-        const results = await db.getAllReferentials();
-        if (results.length > 0) return results;
-        throw new Error('Empty referentials');
+        const refs = await db.getAllReferentials();
+        return refs.length > 0 ? refs : FALLBACK_REFERENTIALS;
       } catch (e) {
-        console.error("Using fallback referentials:", e);
         return FALLBACK_REFERENTIALS;
       }
     }),
@@ -72,332 +92,136 @@ export const appRouter = router({
   processes: router({
     list: publicProcedure.query(async () => {
       try {
-        const results = await db.getAllProcesses();
-        if (results.length > 0) return results;
-        throw new Error('Empty processes');
+        const procs = await db.getAllProcesses();
+        return procs.length > 0 ? procs : FALLBACK_PROCESSES;
       } catch (e) {
-        console.error("Using fallback processes:", e);
         return FALLBACK_PROCESSES;
       }
     }),
   }),
 
-  questions: router({
-    list: protectedProcedure
-      .input(
-        z.object({
-          referentialId: z.number().optional(),
-          processId: z.number().optional(),
-          economicRole: z.string().optional(),
-        })
-      )
-      .query(async ({ input }) => {
-        try {
-          // Inclure les questions "tous" + questions spécifiques au rôle
-          return await db.getQuestions(input as any) || [];
-        } catch (e) {
-          console.error("Error in questions.list:", e);
-          return [];
-        }
-      }),
-
-    getById: protectedProcedure
-      .input(z.object({ questionId: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getQuestionById(input.questionId);
-      }),
-  }),
-
-  audit: auditRouter,
-
-  findings: router({
+  audits: router({
     list: protectedProcedure
       .input(z.object({
-        auditId: z.number(),
-      }))
+        status: z.enum(["planned", "in_progress", "completed", "cancelled"]).optional(),
+        siteId: z.number().optional(),
+      }).optional())
       .query(async ({ ctx, input }) => {
-        return await db.getFindingsByAudit(input.auditId, ctx.user.id);
-      }),
-  }),
-
-  actions: router({
-    list: protectedProcedure
-      .input(z.object({
-        auditId: z.number(),
-      }))
-      .query(async ({ ctx, input }) => {
-        return await db.getActionsByAudit(input.auditId, ctx.user.id);
-      }),
-  }),
-
-  evidence: router({
-    list: protectedProcedure
-      .input(z.object({
-        questionId: z.number(),
-      }))
-      .query(async ({ ctx, input }) => {
-        return await db.getEvidenceFiles(ctx.user.id, input.questionId);
-      }),
-
-    upload: protectedProcedure
-      .input(z.object({
-        questionId: z.number(),
-        fileName: z.string(),
-        fileData: z.string(), // base64
-        mimeType: z.string(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        // Decode base64
-        const buffer = Buffer.from(input.fileData, 'base64');
-        
-        // Generate unique file key
-        const fileKey = `evidence/${ctx.user.id}/${input.questionId}/${nanoid()}-${input.fileName}`;
-        
-        // Upload to S3
-        const { url } = await storagePut(fileKey, buffer, input.mimeType);
-        
-        // Save to database
-        await db.addEvidenceFile({
-          userId: ctx.user.id,
-          questionId: input.questionId,
-          fileName: input.fileName,
-          fileKey,
-          fileUrl: url,
-          fileSize: buffer.length,
-          mimeType: input.mimeType,
-        });
-        
-        return { success: true, url };
-      }),
-
-    delete: protectedProcedure
-      .input(z.object({
-        fileId: z.number(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        await db.deleteEvidenceFile(input.fileId, ctx.user.id);
-        return { success: true };
-      }),
-  }),
-
-  badges: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserBadges(ctx.user.id);
-    }),
-  }),
-
-  ai: router({
-    getRecommendation: protectedProcedure
-      .input(z.object({
-        questionId: z.number(),
-        context: z.string().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const question = await db.getQuestionById(input.questionId);
-        if (!question) {
-          throw new Error("Question not found");
-        }
-
-        const profile = await db.getUserProfile(ctx.user.id);
-        const response = await db.getUserResponse(ctx.user.id, input.questionId);
-
-        const prompt = question.aiPrompt || `Expliquez cette exigence réglementaire pour un ${profile?.economicRole || 'fabricant'}.`;
-        
-        const systemPrompt = `Vous êtes un expert en conformité réglementaire MDR et ISO 13485. 
-Votre rôle est d'aider les professionnels des dispositifs médicaux à comprendre et appliquer les exigences réglementaires.
-Soyez précis, concret et donnez des exemples pratiques.`;
-
-        const userPrompt = `
-Question d'audit : ${question.questionText}
-Article/Clause : ${question.article}
-Rôle économique : ${profile?.economicRole || 'fabricant'}
-Statut actuel : ${response?.status || 'non répondu'}
-${input.context ? `Contexte additionnel : ${input.context}` : ''}
-
-${prompt}
-
-Fournissez :
-1. Une explication claire de l'exigence
-2. Des exemples de preuves acceptables
-3. ${response?.status === 'nok' ? 'Un plan d\'action détaillé pour corriger la non-conformité' : 'Des suggestions d\'amélioration'}
-`;
-
-        const llmResponse = await invokeLLM({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        });
-
-        return {
-          recommendation: llmResponse.choices[0]?.message?.content || "Aucune recommandation disponible",
-        };
-      }),
-  }),
-
-  regulatory: router({
-    list: protectedProcedure
-      .input(z.object({
-        referentialId: z.number().optional(),
-        processId: z.number().optional(),
-        impactLevel: z.enum(['high', 'medium', 'low']).optional(),
-        status: z.enum(['acte', 'a_venir', 'en_consultation']).optional(),
-        region: z.enum(['EU', 'US']).optional(),
-        search: z.string().optional(),
-        limit: z.number().optional(),
-      }))
-      .query(async ({ input }) => {
-        return await db.getRegulatoryUpdates(input);
-      }),
-
-    getAlertPreferences: protectedProcedure
-      .query(async ({ ctx }) => {
-        return await db.getWatchAlertPreferences(ctx.user.id);
-      }),
-
-    updateAlertPreferences: protectedProcedure
-      .input(z.object({
-        emailEnabled: z.boolean(),
-        minImpactLevel: z.enum(['high', 'medium', 'low']),
-        regions: z.array(z.enum(['EU', 'US'])),
-        referentialIds: z.array(z.number()).optional(),
-        processIds: z.array(z.number()).optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        return await db.upsertWatchAlertPreferences({
+        return await db.getAudits({
           userId: ctx.user.id,
           ...input,
         });
       }),
-
-    getStats: protectedProcedure
-      .query(async () => {
-        return await db.getRegulatoryStats();
+    
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const audit = await db.getAuditById(input.id);
+        if (!audit || audit.userId !== ctx.user.id) {
+          throw new Error("Audit non trouvé");
+        }
+        return audit;
       }),
-  }),
-
-  sprints: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserSprints(ctx.user.id);
-    }),
 
     create: protectedProcedure
       .input(z.object({
-        name: z.string(),
-        targetScore: z.number(),
-        startDate: z.date(),
-        endDate: z.date(),
-        processId: z.number().optional(),
+        name: z.string().min(2),
+        siteId: z.number().optional(),
+        auditType: z.enum(["internal", "supplier", "mock"]),
+        referentialIds: z.array(z.number()),
       }))
       .mutation(async ({ ctx, input }) => {
-        await db.createSprint({
+        return await db.createAudit({
+          ...input,
           userId: ctx.user.id,
-          name: input.name,
-          targetScore: input.targetScore.toString(),
-          startDate: input.startDate,
-          endDate: input.endDate,
-          processId: input.processId,
+          referentials: JSON.stringify(input.referentialIds),
         });
-        return { success: true };
       }),
   }),
-  
-  classification: router({
-    classify: protectedProcedure
+
+  questions: router({
+    list: protectedProcedure
       .input(z.object({
-        device_name: z.string().optional(),
-        device_description: z.string().optional(),
-        device_type: z.enum(["dm", "accessoire"]).optional(),
-        is_active: z.boolean().optional(),
-        is_software: z.boolean().optional(),
-        invasiveness: z.enum(["non-invasif", "invasif_orifice", "chirurgical"]).optional(),
-        implantable: z.boolean().optional(),
-        duration: z.enum(["transitoire", "court_terme", "long_terme"]).optional(),
-        contact_site: z.array(z.string()).optional(),
-        wound_depth: z.enum(["superficielle", "profonde"]).optional(),
-        function: z.array(z.string()).optional(),
-        danger_level: z.enum(["potentiellement_dangereux", "normal"]).optional(),
-        provided_sterile: z.boolean().optional(),
-        has_measuring_function: z.boolean().optional(),
-        reusable_surgical: z.boolean().optional(),
-        incorporates_drug: z.boolean().optional(),
-        incorporates_blood_derivative: z.boolean().optional(),
-        contains_absorbable_substance: z.boolean().optional(),
-        contains_nanomaterials: z.boolean().optional(),
-        high_internal_exposure: z.boolean().optional(),
-        contains_animal_tissue: z.boolean().optional(),
-        biological_effect: z.boolean().optional(),
-        software_purpose: z.array(z.string()).optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const { classifyDevice } = await import("./classification-engine");
-        const result = classifyDevice(input);
-        
-        const db = await getDb();
-        if (db && input.device_name) {
-          await db.insert(deviceClassifications).values({
-            userId: ctx.user.id,
-            deviceName: input.device_name,
-            deviceDescription: input.device_description || null,
-            resultingClass: result.resultingClass,
-            appliedRules: JSON.stringify(result.appliedRules.map(r => r.id)),
-            answers: JSON.stringify(input),
-            justification: result.justification,
-          });
-        }
-        
-        return result;
-      }),
-    
-    exportExcel: protectedProcedure
-      .input(z.object({
-        device_name: z.string().optional(),
-        device_description: z.string().optional(),
-        device_type: z.enum(["dm", "accessoire"]).optional(),
-        is_active: z.boolean().optional(),
-        is_software: z.boolean().optional(),
-        invasiveness: z.enum(["non-invasif", "invasif_orifice", "chirurgical"]).optional(),
-        implantable: z.boolean().optional(),
-        duration: z.enum(["transitoire", "court_terme", "long_terme"]).optional(),
-        contact_site: z.array(z.string()).optional(),
-        function: z.array(z.string()).optional(),
-        provided_sterile: z.boolean().optional(),
-        has_measuring_function: z.boolean().optional(),
-        reusable_surgical: z.boolean().optional(),
-        incorporates_drug: z.boolean().optional(),
-        incorporates_blood_derivative: z.boolean().optional(),
-        contains_absorbable_substance: z.boolean().optional(),
-        contains_nanomaterials: z.boolean().optional(),
-        high_internal_exposure: z.boolean().optional(),
-        contains_animal_tissue: z.boolean().optional(),
-        biological_effect: z.boolean().optional(),
-        software_purpose: z.array(z.string()).optional(),
+        referentialId: z.number(),
+        processId: z.number().optional(),
+        economicRole: z.string().optional(),
       }))
       .query(async ({ input }) => {
-        const { classifyDevice } = await import("./classification-engine");
-        const { generateClassificationExcel } = await import("./classification-exports");
-        
-        const result = classifyDevice(input);
-        const csv = generateClassificationExcel(input, result);
-        
-        return { csv, filename: `classification_${input.device_name || "dispositif"}_${Date.now()}.csv` };
+        return await db.getQuestions(input);
+      }),
+  }),
+
+  auditResponses: router({
+    save: protectedProcedure
+      .input(z.object({
+        auditId: z.number(),
+        questionId: z.number(),
+        answer: z.enum(["conforme", "nok", "na", "partial"]),
+        comment: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await db.saveAuditResponse({
+          ...input,
+          userId: ctx.user.id,
+        });
       }),
     
-    exportPDF: protectedProcedure
+    getByAudit: protectedProcedure
+      .input(z.object({ auditId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getAuditResponses(input.auditId);
+      }),
+  }),
+
+  classification: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const database = await getDb();
+      return await database
+        .select()
+        .from(deviceClassifications)
+        .where(eq(deviceClassifications.userId, ctx.user.id));
+    }),
+
+    save: protectedProcedure
+      .input(z.object({
+        deviceName: z.string(),
+        deviceDescription: z.string().optional(),
+        resultingClass: z.string(),
+        appliedRules: z.array(z.string()),
+        answers: z.record(z.any()),
+        justification: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        const [result] = await database.insert(deviceClassifications).values({
+          userId: ctx.user.id,
+          deviceName: input.deviceName,
+          deviceDescription: input.deviceDescription,
+          resultingClass: input.resultingClass,
+          appliedRules: JSON.stringify(input.appliedRules),
+          answers: JSON.stringify(input.answers),
+          justification: input.justification,
+        }).returning();
+        return result;
+      }),
+
+    generatePDF: protectedProcedure
       .input(z.object({
         device_name: z.string().optional(),
-        device_description: z.string().optional(),
-        device_type: z.enum(["dm", "accessoire"]).optional(),
+        intended_use: z.string().optional(),
+        is_invasive: z.boolean().optional(),
         is_active: z.boolean().optional(),
-        is_software: z.boolean().optional(),
-        invasiveness: z.enum(["non-invasif", "invasif_orifice", "chirurgical"]).optional(),
-        implantable: z.boolean().optional(),
-        duration: z.enum(["transitoire", "court_terme", "long_terme"]).optional(),
-        contact_site: z.array(z.string()).optional(),
-        function: z.array(z.string()).optional(),
-        provided_sterile: z.boolean().optional(),
-        has_measuring_function: z.boolean().optional(),
+        duration: z.enum(["transient", "short_term", "long_term"]).optional(),
+        body_contact: z.enum(["skin", "orifice", "surgical_invasive", "central_circulatory", "central_nervous"]).optional(),
         reusable_surgical: z.boolean().optional(),
+        implantable: z.boolean().optional(),
+        administers_energy: z.boolean().optional(),
+        administers_substance: z.boolean().optional(),
+        monitors_vital: z.boolean().optional(),
+        emits_radiation: z.boolean().optional(),
+        software_diagnostic: z.boolean().optional(),
+        software_therapeutic: z.boolean().optional(),
+        software_monitoring: z.boolean().optional(),
         incorporates_drug: z.boolean().optional(),
         incorporates_blood_derivative: z.boolean().optional(),
         contains_absorbable_substance: z.boolean().optional(),
@@ -498,7 +322,6 @@ Fournissez :
         documentId: z.number(),
       }))
       .query(async ({ input }) => {
-        const { checkDocumentCoherence } = await import("./document-ai");
         const document = await db.getDocumentById(input.documentId);
         
         if (!document) {
@@ -516,6 +339,7 @@ Fournissez :
           .slice(0, 5)
           .map(d => d.documentName);
         
+        const { checkDocumentCoherence } = await import("./document-ai");
         return await checkDocumentCoherence(document.documentName, relatedNames);
       }),
     
@@ -559,9 +383,6 @@ Fournissez :
         );
       }),
   }),
-
-  // MDR Router
-  mdr: mdrRouter,
 
   // FDA Classification router
   fdaClassification: router({
@@ -898,7 +719,6 @@ Fournissez :
         }).optional(),
         siteId: z.number().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
-        criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         return await dashboardV2.getDashboardRadar(ctx.user.id, input);
@@ -998,7 +818,6 @@ Fournissez :
       }))
       .mutation(async ({ ctx, input }) => {
         try {
-          // Generate PDF
           const pdfBuffer = await generateAuditReport(input);
 
           // Upload to S3

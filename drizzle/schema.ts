@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, tinyint, index, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, index, uniqueIndex } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -250,7 +250,6 @@ export const actions = mysqlTable("actions", {
   verifiedAt: timestamp("verifiedAt"),
   effectivenessVerified: boolean("effectivenessVerified").default(false),
   effectivenessNotes: text("effectivenessNotes"),
-  evidence: text("evidence"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
@@ -323,7 +322,100 @@ export const mdrEvidenceFiles = mysqlTable("mdr_evidence_files", {
   userAuditQuestionIdx: index("mdr_evidence_user_audit_question_idx").on(table.userId, table.auditId, table.questionKey),
 }));
 
-// Placeholder tables to satisfy imports while identifying their real structure
+/**
+ * Mandatory Documents for compliance
+ */
+export const mandatoryDocuments = mysqlTable("mandatory_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  referentialId: int("referentialId").notNull().references(() => referentials.id),
+  processId: int("processId").references(() => processes.id),
+  documentName: varchar("documentName", { length: 255 }).notNull(),
+  objective: text("objective"),
+  role: varchar("role", { length: 50 }),
+  isCritical: boolean("isCritical").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * User status for mandatory documents
+ */
+export const userDocumentStatus = mysqlTable("user_document_status", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  documentId: int("documentId").notNull().references(() => mandatoryDocuments.id),
+  status: mysqlEnum("status", ["manquant", "a_mettre_a_jour", "conforme"]).default("manquant"),
+  notes: text("notes"),
+  fileUrl: varchar("fileUrl", { length: 1000 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userDocIdx: uniqueIndex("user_doc_idx").on(table.userId, table.documentId),
+}));
+
+/**
+ * Audit reports metadata
+ */
+export const auditReports = mysqlTable("audit_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  auditId: int("auditId").notNull(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reportType: varchar("reportType", { length: 50 }).notNull(),
+  reportTitle: varchar("reportTitle", { length: 255 }).notNull(),
+  reportVersion: varchar("reportVersion", { length: 20 }).default("1.0"),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  fileUrl: varchar("fileUrl", { length: 1000 }).notNull(),
+  fileSize: int("fileSize"),
+  fileFormat: varchar("fileFormat", { length: 10 }).default("pdf"),
+  generatedBy: int("generatedBy").notNull().references(() => users.id),
+  generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+  metadata: text("metadata"), // JSON string
+});
+
+/**
+ * FDA specific tables
+ */
+export const fdaRoles = mysqlTable("fda_roles", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+});
+
+export const fdaRoleQualifications = mysqlTable("fda_role_qualifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  roleCode: varchar("roleCode", { length: 50 }).notNull(),
+  isQualified: boolean("isQualified").default(false),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const fdaQuestions = mysqlTable("fda_questions", {
+  id: int("id").autoincrement().primaryKey(),
+  category: varchar("category", { length: 100 }).notNull(),
+  questionText: text("questionText").notNull(),
+  requirement: text("requirement"),
+  helpText: text("helpText"),
+});
+
+export const fdaQuestionApplicability = mysqlTable("fda_question_applicability", {
+  id: int("id").autoincrement().primaryKey(),
+  questionId: int("questionId").notNull().references(() => fdaQuestions.id),
+  roleCode: varchar("roleCode", { length: 50 }).notNull(),
+});
+
+// MDR specific aliases and extra tables
+export const mdrAuditResponses = auditResponses;
+export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  siteId: int("siteId").references(() => sites.id),
+  economicRole: mysqlEnum("economicRole", ["fabricant", "importateur", "distributeur", "mandataire"]).notNull(),
+  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(false),
+  targetMarkets: text("targetMarkets"),
+  deviceClasses: text("deviceClasses"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// Other placeholders to satisfy imports
 export const evidenceFiles = mysqlTable("evidence_files", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -358,17 +450,4 @@ export const isoAuditResponses = mysqlTable("iso_audit_responses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   auditId: int("auditId").notNull(),
-});
-
-export const mdrAuditResponses = auditResponses;
-export const mdrQualification = mdrRoleQualifications; // Wait, I need to check the exact name
-export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
-  siteId: int("siteId").references(() => sites.id),
-  economicRole: mysqlEnum("economicRole", ["fabricant", "importateur", "distributeur", "mandataire"]).notNull(),
-  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(false),
-  targetMarkets: text("targetMarkets"),
-  deviceClasses: text("deviceClasses"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
