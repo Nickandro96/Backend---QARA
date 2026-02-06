@@ -974,7 +974,7 @@ Fournissez :
   // FDA Audit System
   fda: fdaRouter,
 
-  // MDR Audit System
+  // MDR Audit System (V5 - Canonical Processes & Dynamic Filtering)
   mdr: mdrRouter,
 
   // ISO Audit System (9001 + 13485)

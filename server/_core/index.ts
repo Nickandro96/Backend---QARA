@@ -33,6 +33,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  console.log("[Server] Starting MDR Compliance Platform Backend (v5.1 - Forced Deploy)...");
   // Initialize database on startup
   await initializeDatabase();
 
