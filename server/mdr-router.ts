@@ -9,8 +9,9 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-// import { FALLBACK_MDR_QUESTIONS, FALLBACK_PROCESSES } from "./fallback-data";
 import { normalizeMdrResponse } from "./mdr-validator";
+import fs from "fs";
+import path from "path";
 
 export const mdrRouter = router({
   /**
@@ -115,7 +116,6 @@ export const mdrRouter = router({
 
   /**
    * Get MDR questions for audit (filtered by user's role and processes)
-   * CRITICAL: Now normalized via mdr-validator to prevent frontend crash
    */
   getQuestions: protectedProcedure
     .input(z.object({
@@ -150,15 +150,20 @@ export const mdrRouter = router({
       
       let questions = [];
       try {
-        const allQuestions = await import("./all-questions-data.json");
-        questions = allQuestions.default;
-        console.log("[MDR] total questions loaded from JSON:", questions.length);
+        const jsonPath = path.join(process.cwd(), "server", "all-questions-data.json");
+        if (fs.existsSync(jsonPath)) {
+          const rawData = fs.readFileSync(jsonPath, "utf-8");
+          questions = JSON.parse(rawData);
+          console.log("[MDR] total questions loaded from JSON:", questions.length);
+        } else {
+          console.error("[MDR] all-questions-data.json NOT FOUND at:", jsonPath);
+        }
       } catch (e) {
         console.error("Error loading MDR questions from JSON:", e);
       }
       
       // Filter by role (Ultra-tolerant: if roles list is empty or role is 'tous', it's for everyone)
-      let filteredQuestions = questions.filter(q => {
+      let filteredQuestions = questions.filter((q: any) => {
         const roles = Array.isArray(q.roles) ? q.roles : [];
         const economicRole = String(q.economicRole || "tous").toLowerCase();
         
@@ -169,16 +174,9 @@ export const mdrRouter = router({
                economicRole === currentRole;
       });
 
-      // Fallback if no questions in DB
-      if (filteredQuestions.length === 0) {
-        // filteredQuestions = FALLBACK_MDR_QUESTIONS.filter(q => 
-        //   q.economicRole === "tous" || q.economicRole === currentRole
-        // ) as any; // Fallback removed for now;
-      }
-
       // Filter by processes if provided
       if (selectedProcesses.length > 0) {
-        filteredQuestions = filteredQuestions.filter(q => {
+        filteredQuestions = filteredQuestions.filter((q: any) => {
           const processes = Array.isArray(q.applicableProcesses) 
             ? q.applicableProcesses 
             : (typeof q.applicableProcesses === "string" && q.applicableProcesses.startsWith("[") 
@@ -192,10 +190,9 @@ export const mdrRouter = router({
         questions: filteredQuestions,
         userRole: currentRole,
         totalQuestions: filteredQuestions.length,
-        processes: [] // No longer using fallback processes, as they are now in the DB
+        processes: []
       };
 
-      // NORMALIZATION: Secure the data before sending to frontend
       return normalizeMdrResponse(response);
     }),
 
@@ -205,19 +202,21 @@ export const mdrRouter = router({
   saveResponse: protectedProcedure
     .input(z.object({
       auditId: z.number(),
-      questionKey: z.string(), // Utiliser questionKey au lieu de questionId
+      questionKey: z.string(),
       responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable", "in_progress"]),
       responseComment: z.string().optional(),
+      note: z.string().optional(),
+      role: z.string().optional(),
+      processId: z.string().optional(),
       evidenceFiles: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
         console.log("[MDR SAVE] input:", input);
-        console.log("[MDR SAVE] userId:", ctx.user?.id ?? ctx.session?.user?.id);
         const db = await getDb();
         if (!db) return { success: false, message: "Database not available" };
         
-        const { auditId, questionKey, responseValue, responseComment, evidenceFiles } = input;
+        const { auditId, questionKey, responseValue, responseComment, note, role, processId, evidenceFiles } = input;
         const userId = ctx.user.id;
 
         if (!questionKey || questionKey.length === 0) {
@@ -227,13 +226,16 @@ export const mdrRouter = router({
         const responseData = {
           responseValue: responseValue,
           responseComment: responseComment || null,
+          note: note || null,
+          role: role || null,
+          processId: processId || null,
           evidenceFiles: evidenceFiles ? JSON.stringify(evidenceFiles) : null,
           answeredBy: userId,
           answeredAt: new Date(),
           updatedAt: new Date(),
         };
 
-        // UPSERT logic
+        // UPSERT logic on audit_responses
         const [existing] = await db.select()
           .from(schema.auditResponses)
           .where(
@@ -281,12 +283,71 @@ export const mdrRouter = router({
       if (!db) return [];
       
       const responses = await db.select()
-        .from(schema.mdrAuditResponses)
-        .where(eq(schema.mdrAuditResponses.auditId, input.auditId));
+        .from(schema.auditResponses)
+        .where(
+          and(
+            eq(schema.auditResponses.userId, ctx.user.id),
+            eq(schema.auditResponses.auditId, input.auditId)
+          )
+        );
       
       return responses.map(r => ({
         ...r,
         evidenceFiles: r.evidenceFiles ? JSON.parse(r.evidenceFiles as string) : [],
       }));
+    }),
+
+  /**
+   * Save evidence file metadata
+   */
+  saveEvidenceFile: protectedProcedure
+    .input(z.object({
+      auditId: z.number(),
+      questionKey: z.string(),
+      fileName: z.string(),
+      fileKey: z.string(),
+      fileUrl: z.string(),
+      fileSize: z.number().optional(),
+      mimeType: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      
+      await db.insert(schema.mdrEvidenceFiles).values({
+        userId: ctx.user.id,
+        auditId: input.auditId,
+        questionKey: input.questionKey,
+        fileName: input.fileName,
+        fileKey: input.fileKey,
+        fileUrl: input.fileUrl,
+        fileSize: input.fileSize || null,
+        mimeType: input.mimeType || null,
+      });
+      
+      return { success: true };
+    }),
+
+  /**
+   * Get evidence files for a question
+   */
+  getEvidenceFiles: protectedProcedure
+    .input(z.object({
+      auditId: z.number(),
+      questionKey: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      
+      return await db.select()
+        .from(schema.mdrEvidenceFiles)
+        .where(
+          and(
+            eq(schema.mdrEvidenceFiles.userId, ctx.user.id),
+            eq(schema.mdrEvidenceFiles.auditId, input.auditId),
+            eq(schema.mdrEvidenceFiles.questionKey, input.questionKey)
+          )
+        );
     }),
 });
