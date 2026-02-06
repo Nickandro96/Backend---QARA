@@ -42,7 +42,8 @@ export function normalizeMdrQuestion(q: any, index: number): MdrQuestion {
     riskIfNonCompliant: String(q.riskIfNonCompliant ?? ""),
     guidanceNotes: String(q.guidanceNotes ?? ""),
     processId: q.processId ?? q.processus ?? "general",
-    applicableRoles: Array.isArray(q.applicableRoles || q.roles_applicables) 
+    economicRole: String(q.economicRole ?? q.roles_applicables?.[0] ?? "fabricant"),
+  applicableRoles: Array.isArray(q.applicableRoles || q.roles_applicables) 
       ? (q.applicableRoles || q.roles_applicables) 
       : ["fabricant"] // Default to fabricant if missing
   };
