@@ -157,10 +157,17 @@ export const mdrRouter = router({
         console.error("Error loading MDR questions from JSON:", e);
       }
       
-      // Filter by role
-      let filteredQuestions = questions.filter(q => 
-        q.economicRole === "tous" || q.economicRole === currentRole
-      );
+      // Filter by role (Ultra-tolerant: if roles list is empty or role is 'tous', it's for everyone)
+      let filteredQuestions = questions.filter(q => {
+        const roles = Array.isArray(q.roles) ? q.roles : [];
+        const economicRole = String(q.economicRole || "tous").toLowerCase();
+        
+        return roles.length === 0 || 
+               roles.includes(currentRole) || 
+               roles.includes("tous") ||
+               economicRole === "tous" || 
+               economicRole === currentRole;
+      });
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
