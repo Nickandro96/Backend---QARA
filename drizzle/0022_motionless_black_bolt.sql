@@ -1,1 +1,1 @@
-ALTER TABLE `audits` ADD `siteLocation` varchar(255);
+ALTER TABLE `audits` ADD COLUMN `siteLocation` varchar(255) IF NOT EXISTS;

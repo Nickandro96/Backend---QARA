@@ -1,4 +1,4 @@
-CREATE TABLE `mandatory_documents` (
+CREATE TABLE IF NOT EXISTS `mandatory_documents` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`referentialId` int NOT NULL,
 	`processId` int,
@@ -18,7 +18,7 @@ CREATE TABLE `mandatory_documents` (
 	CONSTRAINT `mandatory_documents_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `user_document_status` (
+CREATE TABLE IF NOT EXISTS `user_document_status` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`documentId` int NOT NULL,

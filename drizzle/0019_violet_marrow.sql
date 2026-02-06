@@ -1,4 +1,4 @@
-CREATE TABLE `iso_audit_responses` (
+CREATE TABLE IF NOT EXISTS `iso_audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE `iso_audit_responses` (
 	CONSTRAINT `iso_audit_responses_audit_question_idx` UNIQUE(`auditId`,`questionId`)
 );
 --> statement-breakpoint
-CREATE TABLE `iso_questions` (
+CREATE TABLE IF NOT EXISTS `iso_questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`externalId` varchar(64) NOT NULL,
 	`standard` enum('9001','13485') NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE `iso_questions` (
 	CONSTRAINT `iso_questions_externalId_unique` UNIQUE(`externalId`)
 );
 --> statement-breakpoint
-CREATE TABLE `iso_role_qualifications` (
+CREATE TABLE IF NOT EXISTS `iso_role_qualifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -51,7 +51,7 @@ CREATE TABLE `iso_role_qualifications` (
 	CONSTRAINT `iso_role_qualifications_user_site_idx` UNIQUE(`userId`,`siteId`)
 );
 --> statement-breakpoint
-CREATE TABLE `mdr_audit_responses` (
+CREATE TABLE IF NOT EXISTS `mdr_audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -66,7 +66,7 @@ CREATE TABLE `mdr_audit_responses` (
 	CONSTRAINT `mdr_audit_responses_audit_question_idx` UNIQUE(`auditId`,`questionId`)
 );
 --> statement-breakpoint
-CREATE TABLE `mdr_questions` (
+CREATE TABLE IF NOT EXISTS `mdr_questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`externalId` varchar(64) NOT NULL,
 	`article` varchar(100),
@@ -89,7 +89,7 @@ CREATE TABLE `mdr_questions` (
 	CONSTRAINT `mdr_questions_externalId_unique` UNIQUE(`externalId`)
 );
 --> statement-breakpoint
-CREATE TABLE `mdr_role_qualifications` (
+CREATE TABLE IF NOT EXISTS `mdr_role_qualifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,

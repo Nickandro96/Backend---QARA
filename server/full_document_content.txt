@@ -1,0 +1,610 @@
+[DEBUG] Line 56: Set processes: ['Affaires réglementaires', 'QMS', 'Acteur :\xa0Fabricant']
+[DEBUG] Line 57: Set criticality: ultra-critical
+[DEBUG] Line 68: Set processes: ['Achats', 'Supply Chain', 'Acteur :\xa0Fabricant']
+[DEBUG] Line 69: Set criticality: ultra-critical
+[DEBUG] Line 119: Set criticality: ultra-critical
+[DEBUG] Line 121: Set main MDR: MDR - ARTICLES 1 À 10
+[DEBUG] Line 123: Set sub-section: MDR - Objet et champ d’application
+[DEBUG] Line 126: Set processes: ['Gouvernance réglementaire', 'Affaires réglementaires (RA)']
+[DEBUG] Line 129: Set actors: ['Fabricant', 'Importateur', 'Distributeur (selon activité)']
+[DEBUG] Line 132: Set criticality: ultra-critical
+[DEBUG] Line 139: Set sub-section: MDR - Définitions
+[DEBUG] Line 142: Set processes: ['Gouvernance QMS', 'Documentation réglementaire']
+[DEBUG] Line 144: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 147: Set criticality: medium
+[DEBUG] Line 153: Set sub-section: MDR - Groupe de coordination DM
+[DEBUG] Line 155: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 157: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 160: Set criticality: medium
+[DEBUG] Line 165: Set sub-section: MDR - Statut réglementaire
+[DEBUG] Line 168: Set processes: ['RA', 'Change control']
+[DEBUG] Line 170: Set actors: ['Fabricant']
+[DEBUG] Line 173: Set criticality: medium
+[DEBUG] Line 179: Set sub-section: MDR - Mise sur le marché et mise en service
+[DEBUG] Line 183: Set processes: ['RA', 'QMS', 'Release produit']
+[DEBUG] Line 186: Set actors: ['Fabricant', 'Importateur', 'Distributeur (mise à disposition)']
+[DEBUG] Line 187: Set criticality: medium
+[DEBUG] Line 193: Set sub-section: MDR - Vente à distance
+[DEBUG] Line 196: Set processes: ['Distribution', 'Marketing', 'e-commerce']
+[DEBUG] Line 198: Set actors: ['Fabricant', 'Distributeur']
+[DEBUG] Line 199: Set criticality: medium
+[DEBUG] Line 205: Set sub-section: MDR - Allégations
+[DEBUG] Line 208: Set processes: ['Marketing', 'RA']
+[DEBUG] Line 210: Set actors: ['Tous']
+[DEBUG] Line 211: Set criticality: medium
+[DEBUG] Line 217: Set sub-section: MDR - Normes harmonisées
+[DEBUG] Line 220: Set processes: ['RA', 'Gestion des normes']
+[DEBUG] Line 222: Set actors: ['Fabricant']
+[DEBUG] Line 223: Set criticality: medium
+[DEBUG] Line 229: Set sub-section: MDR - Spécifications communes
+[DEBUG] Line 232: Set processes: ['RA', 'Gestion des exigences']
+[DEBUG] Line 234: Set actors: ['Fabricant']
+[DEBUG] Line 235: Set criticality: medium
+[DEBUG] Line 240: Set sub-section: MDR - Obligations générales du fabricant
+[DEBUG] Line 245: Set processes: ['QMS', 'RA', 'PMS', 'Gestion des risques']
+[DEBUG] Line 247: Set actors: ['Fabricant (central)']
+[DEBUG] Line 248: Set criticality: critical
+[DEBUG] Line 257: Set main ISO: ISO 13485 - CLAUSES 4 & 5
+[DEBUG] Line 259: Set sub-section: ISO 13485 - Système de management de la qualité
+[DEBUG] Line 262: Set processes: ['Gouvernance QMS', 'Pilotage des processus']
+[DEBUG] Line 264: Set actors: ['Fabricant (principal)']
+[DEBUG] Line 265: Set criticality: medium
+[DEBUG] Line 272: Set sub-section: ISO 13485 - Responsabilité de la direction
+[DEBUG] Line 275: Set processes: ['Gouvernance', 'Revue de direction']
+[DEBUG] Line 277: Set actors: ['Direction', 'Fabricant']
+[DEBUG] Line 278: Set criticality: medium
+[DEBUG] Line 306: Set main MDR: MDR - ARTICLES 11 À 20
+[DEBUG] Line 308: Set sub-section: MDR - Mandataire
+[DEBUG] Line 311: Set processes: ['Affaires réglementaires', 'Gouvernance des acteurs']
+[DEBUG] Line 314: Set actors: ['Fabricant (hors UE)', 'Mandataire']
+[DEBUG] Line 317: Set criticality: ultra-critical
+[DEBUG] Line 324: Set sub-section: MDR - Procédures nationales spécifiques
+[DEBUG] Line 327: Set processes: ['RA', 'Veille réglementaire']
+[DEBUG] Line 330: Set actors: ['Fabricant', 'Importateur', 'Distributeur (selon pays)']
+[DEBUG] Line 331: Set criticality: medium
+[DEBUG] Line 337: Set sub-section: MDR - Obligations générales de l’importateur
+[DEBUG] Line 341: Set processes: ['Importation', 'Supply chain', 'QMS étendu']
+[DEBUG] Line 343: Set actors: ['Importateur (central)']
+[DEBUG] Line 344: Set criticality: critical
+[DEBUG] Line 351: Set sub-section: MDR - Obligations générales du distributeur
+[DEBUG] Line 355: Set processes: ['Distribution', 'Logistique', 'Vigilance']
+[DEBUG] Line 357: Set actors: ['Distributeur (central)']
+[DEBUG] Line 358: Set criticality: critical
+[DEBUG] Line 365: Set sub-section: MDR - Personne chargée de veiller au respect de la réglementation (PRRC)
+[DEBUG] Line 369: Set processes: ['Gouvernance', 'RA', 'Ressources humaines']
+[DEBUG] Line 372: Set actors: ['Fabricant', 'Mandataire (le cas échéant)']
+[DEBUG] Line 373: Set criticality: critical
+[DEBUG] Line 380: Set sub-section: MDR - Cas dans lesquels les obligations du fabricant s’appliquent aux importateurs ou distributeurs
+[DEBUG] Line 384: Set processes: ['Change control', 'RA', 'Distribution']
+[DEBUG] Line 386: Set actors: ['Importateur', 'Distributeur']
+[DEBUG] Line 387: Set criticality: medium
+[DEBUG] Line 394: Set sub-section: MDR - Dispositifs remis à neuf / reconditionnés
+[DEBUG] Line 398: Set processes: ['Production', 'RA', 'Gestion des risques']
+[DEBUG] Line 401: Set actors: ['Fabricant', 'Reconditionneur']
+[DEBUG] Line 402: Set criticality: medium
+[DEBUG] Line 409: Set sub-section: MDR - Carte implant et informations patient
+[DEBUG] Line 413: Set processes: ['RA', 'PMS', 'Communication patient']
+[DEBUG] Line 416: Set actors: ['Fabricant', 'Établissements de santé (interface)']
+[DEBUG] Line 417: Set criticality: medium
+[DEBUG] Line 423: Set sub-section: MDR - Déclaration UE de conformité
+[DEBUG] Line 426: Set processes: ['RA', 'Libération réglementaire']
+[DEBUG] Line 428: Set actors: ['Fabricant']
+[DEBUG] Line 429: Set criticality: critical
+[DEBUG] Line 436: Set sub-section: MDR - Marquage CE
+[DEBUG] Line 440: Set processes: ['RA', 'Production', 'Distribution']
+[DEBUG] Line 443: Set actors: ['Fabricant', 'Importateur', 'Distributeur (vérification)']
+[DEBUG] Line 444: Set criticality: critical
+[DEBUG] Line 451: Set main ISO: ISO 13485 - CLAUSE 6 : RESSOURCES
+[DEBUG] Line 453: Set sub-section: ISO 13485 - Mise à disposition des ressources
+[DEBUG] Line 456: Set processes: ['Gouvernance', 'Planification stratégique']
+[DEBUG] Line 457: Set criticality: medium
+[DEBUG] Line 462: Set sub-section: ISO 13485 - Ressources humaines
+[DEBUG] Line 465: Set processes: ['RH', 'Compétences & formation']
+[DEBUG] Line 466: Set criticality: critical
+[DEBUG] Line 473: Set sub-section: ISO 13485 - Infrastructure
+[DEBUG] Line 477: Set processes: ['Production', 'IT', 'Environnement de travail']
+[DEBUG] Line 478: Set criticality: medium
+[DEBUG] Line 484: Set sub-section: ISO 13485 - Environnement de travail
+[DEBUG] Line 487: Set processes: ['Production', 'QHSE']
+[DEBUG] Line 488: Set criticality: medium
+[DEBUG] Line 515: Set main MDR: MDR - ARTICLES 21 À 30
+[DEBUG] Line 517: Set sub-section: MDR - Libre circulation
+[DEBUG] Line 520: Set processes: ['Gouvernance réglementaire', 'Distribution']
+[DEBUG] Line 523: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 524: Set criticality: ultra-critical
+[DEBUG] Line 530: Set sub-section: MDR - Groupe de coordination pour la vigilance et PMS
+[DEBUG] Line 534: Set processes: ['PMS', 'Vigilance', 'RA']
+[DEBUG] Line 536: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 537: Set criticality: medium
+[DEBUG] Line 542: Set sub-section: MDR - Tâches de la Commission
+[DEBUG] Line 544: Set processes: ['Veille réglementaire']
+[DEBUG] Line 546: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 547: Set criticality: medium
+[DEBUG] Line 552: Set sub-section: MDR - Identifiant unique du dispositif (UDI)
+[DEBUG] Line 556: Set processes: ['Traçabilité', 'Production', 'RA']
+[DEBUG] Line 559: Set actors: ['Fabricant (central)', 'Importateur', 'Distributeur (vérification)']
+[DEBUG] Line 560: Set criticality: critical
+[DEBUG] Line 567: Set sub-section: MDR - Système d’identification dans la chaîne d’approvisionnement
+[DEBUG] Line 570: Set processes: ['Supply chain', 'Traçabilité']
+[DEBUG] Line 574: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 575: Set criticality: medium
+[DEBUG] Line 581: Set sub-section: MDR - Base de données EUDAMED
+[DEBUG] Line 584: Set processes: ['RA', 'IT réglementaire']
+[DEBUG] Line 588: Set actors: ['Fabricant', 'Mandataire', 'Importateur']
+[DEBUG] Line 589: Set criticality: critical
+[DEBUG] Line 596: Set sub-section: MDR - Système UDI
+[DEBUG] Line 600: Set processes: ['Traçabilité', 'PMS', 'Vigilance']
+[DEBUG] Line 602: Set actors: ['Fabricant']
+[DEBUG] Line 603: Set criticality: critical
+[DEBUG] Line 609: Set sub-section: MDR - Enregistrement des opérateurs économiques
+[DEBUG] Line 612: Set processes: ['RA', 'Gouvernance des acteurs']
+[DEBUG] Line 616: Set actors: ['Fabricant', 'Importateur', 'Mandataire']
+[DEBUG] Line 617: Set criticality: medium
+[DEBUG] Line 623: Set sub-section: MDR - Enregistrement des dispositifs
+[DEBUG] Line 626: Set processes: ['RA', 'Documentation technique']
+[DEBUG] Line 628: Set actors: ['Fabricant']
+[DEBUG] Line 629: Set criticality: critical
+[DEBUG] Line 635: Set sub-section: MDR - Traçabilité
+[DEBUG] Line 639: Set processes: ['Traçabilité', 'PMS', 'Vigilance']
+[DEBUG] Line 643: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 644: Set criticality: critical
+[DEBUG] Line 650: Set main ISO: ISO 13485 - CLAUSES 7.1 & 7.2
+[DEBUG] Line 652: Set sub-section: ISO 13485 - Planification de la réalisation du produit
+[DEBUG] Line 656: Set processes: ['Conception', 'RA', 'Production']
+[DEBUG] Line 657: Set criticality: medium
+[DEBUG] Line 663: Set sub-section: ISO 13485 - Processus relatifs aux clients
+[DEBUG] Line 667: Set processes: ['Commercial', 'RA', 'Service client']
+[DEBUG] Line 668: Set criticality: critical
+[DEBUG] Line 696: Set main MDR: MDR - ARTICLES 31 À 40
+[DEBUG] Line 699: Set sub-section: MDR - Demande de désignation des organismes notifiés
+[DEBUG] Line 702: Set processes: ['Affaires réglementaires', 'Gouvernance conformité']
+[DEBUG] Line 705: Set actors: ['Organisme notifié (indirect)', 'Fabricant (impact)']
+[DEBUG] Line 706: Set criticality: medium
+[DEBUG] Line 712: Set sub-section: MDR - Désignation des organismes notifiés
+[DEBUG] Line 715: Set processes: ['RA', 'Gestion ON']
+[DEBUG] Line 717: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 718: Set criticality: medium
+[DEBUG] Line 724: Set sub-section: MDR - Identification des organismes notifiés
+[DEBUG] Line 727: Set processes: ['RA', 'Documentation réglementaire']
+[DEBUG] Line 729: Set actors: ['Fabricant']
+[DEBUG] Line 730: Set criticality: medium
+[DEBUG] Line 736: Set sub-section: MDR - Surveillance des organismes notifiés
+[DEBUG] Line 738: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 740: Set actors: ['Fabricant (veille)']
+[DEBUG] Line 741: Set criticality: medium
+[DEBUG] Line 747: Set sub-section: MDR - Évaluation des organismes notifiés
+[DEBUG] Line 750: Set processes: ['Gouvernance', 'Gestion des risques réglementaires']
+[DEBUG] Line 752: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 753: Set criticality: medium
+[DEBUG] Line 759: Set sub-section: MDR - Modifications de la désignation
+[DEBUG] Line 762: Set processes: ['Change control', 'RA']
+[DEBUG] Line 764: Set actors: ['Fabricant']
+[DEBUG] Line 765: Set criticality: critical
+[DEBUG] Line 771: Set sub-section: MDR - Contestation de la compétence d’un ON
+[DEBUG] Line 774: Set processes: ['Gouvernance', 'RA']
+[DEBUG] Line 776: Set actors: ['Fabricant']
+[DEBUG] Line 777: Set criticality: medium
+[DEBUG] Line 783: Set sub-section: MDR - Exigences générales pour l’évaluation de conformité
+[DEBUG] Line 787: Set processes: ['RA', 'QMS', 'Gestion des risques']
+[DEBUG] Line 789: Set actors: ['Fabricant']
+[DEBUG] Line 790: Set criticality: critical
+[DEBUG] Line 797: Set sub-section: MDR - Demande formelle d’évaluation de conformité
+[DEBUG] Line 800: Set processes: ['RA', 'Gestion ON']
+[DEBUG] Line 802: Set actors: ['Fabricant']
+[DEBUG] Line 803: Set criticality: medium
+[DEBUG] Line 809: Set sub-section: MDR - Certificats délivrés par l’organisme notifié
+[DEBUG] Line 812: Set processes: ['RA', 'Libération réglementaire']
+[DEBUG] Line 814: Set actors: ['Fabricant']
+[DEBUG] Line 815: Set criticality: critical
+[DEBUG] Line 822: Set main ISO: ISO 13485 - CLAUSE 7.3
+[DEBUG] Line 829: Set processes: ['Conception', 'RA', 'Gestion des risques']
+[DEBUG] Line 830: Set criticality: medium
+[DEBUG] Line 839: Set processes: ['Conception', 'Gestion des exigences']
+[DEBUG] Line 840: Set criticality: critical
+[DEBUG] Line 849: Set processes: ['Conception', 'Production']
+[DEBUG] Line 850: Set criticality: medium
+[DEBUG] Line 859: Set processes: ['Conception', 'Gouvernance projet']
+[DEBUG] Line 860: Set criticality: critical
+[DEBUG] Line 869: Set processes: ['Conception', 'Validation technique']
+[DEBUG] Line 870: Set criticality: medium
+[DEBUG] Line 880: Set processes: ['Conception', 'Clinique', 'RA']
+[DEBUG] Line 881: Set criticality: critical
+[DEBUG] Line 891: Set processes: ['Change control', 'RA', 'PMS']
+[DEBUG] Line 892: Set criticality: critical
+[DEBUG] Line 919: Set main MDR: MDR - ARTICLES 41 À 50
+[DEBUG] Line 922: Set sub-section: MDR - Évaluation clinique (principes généraux)
+[DEBUG] Line 926: Set processes: ['Évaluation clinique', 'Affaires réglementaires', 'Gestion des risques']
+[DEBUG] Line 928: Set actors: ['Fabricant']
+[DEBUG] Line 929: Set criticality: ultra-critical
+[DEBUG] Line 936: Set sub-section: MDR - Investigations cliniques (généralités)
+[DEBUG] Line 940: Set processes: ['Clinique', 'RA', 'Gouvernance projet']
+[DEBUG] Line 943: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 944: Set criticality: medium
+[DEBUG] Line 950: Set sub-section: MDR - Dispositifs de démonstration / investigation
+[DEBUG] Line 954: Set processes: ['Clinique', 'RA', 'Distribution contrôlée']
+[DEBUG] Line 956: Set actors: ['Fabricant']
+[DEBUG] Line 957: Set criticality: medium
+[DEBUG] Line 963: Set sub-section: MDR - Investigations cliniques et consentement
+[DEBUG] Line 967: Set processes: ['Clinique', 'Éthique', 'Données patients']
+[DEBUG] Line 969: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 970: Set criticality: critical
+[DEBUG] Line 976: Set sub-section: MDR - Investigations cliniques dans l’UE
+[DEBUG] Line 980: Set processes: ['Clinique', 'RA', 'Veille réglementaire']
+[DEBUG] Line 982: Set actors: ['Fabricant']
+[DEBUG] Line 983: Set criticality: medium
+[DEBUG] Line 989: Set sub-section: MDR - Investigations cliniques hors UE
+[DEBUG] Line 993: Set processes: ['Clinique', 'RA', 'Gouvernance internationale']
+[DEBUG] Line 995: Set actors: ['Fabricant']
+[DEBUG] Line 996: Set criticality: critical
+[DEBUG] Line 1002: Set sub-section: MDR - Rapports d’investigation clinique
+[DEBUG] Line 1005: Set processes: ['Clinique', 'Documentation technique']
+[DEBUG] Line 1007: Set actors: ['Fabricant']
+[DEBUG] Line 1008: Set criticality: medium
+[DEBUG] Line 1014: Set sub-section: MDR - Coordination des États membres (clinique)
+[DEBUG] Line 1017: Set processes: ['Veille réglementaire', 'Clinique']
+[DEBUG] Line 1019: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1020: Set criticality: medium
+[DEBUG] Line 1025: Set sub-section: MDR - PMS – obligations générales
+[DEBUG] Line 1029: Set processes: ['PMS', 'Vigilance', 'Amélioration continue']
+[DEBUG] Line 1031: Set actors: ['Fabricant (central)']
+[DEBUG] Line 1032: Set criticality: critical
+[DEBUG] Line 1038: Set sub-section: MDR - PMS – analyse des données
+[DEBUG] Line 1042: Set processes: ['PMS', 'Data', 'indicateurs', 'RA']
+[DEBUG] Line 1044: Set actors: ['Fabricant']
+[DEBUG] Line 1045: Set criticality: critical
+[DEBUG] Line 1051: Set main ISO: ISO 13485 - CLAUSE 7.4
+[DEBUG] Line 1058: Set processes: ['Achats', 'Supply chain', 'QMS']
+[DEBUG] Line 1059: Set criticality: critical
+[DEBUG] Line 1068: Set processes: ['Achats', 'RA']
+[DEBUG] Line 1069: Set criticality: medium
+[DEBUG] Line 1079: Set processes: ['Réception', 'Contrôle qualité', 'Production']
+[DEBUG] Line 1080: Set criticality: critical
+[DEBUG] Line 1107: Set main MDR: MDR - ARTICLES 51 À 60
+[DEBUG] Line 1110: Set sub-section: MDR - Système de vigilance (principes généraux)
+[DEBUG] Line 1114: Set processes: ['Vigilance', 'PMS', 'Affaires réglementaires']
+[DEBUG] Line 1117: Set actors: ['Fabricant (central)', 'Importateur', 'Distributeur (remontée info)']
+[DEBUG] Line 1118: Set criticality: ultra-critical
+[DEBUG] Line 1125: Set sub-section: MDR - Déclaration des incidents graves et actions correctives de sécurité (FSCA)
+[DEBUG] Line 1129: Set processes: ['Vigilance', 'RA', 'Communication autorités']
+[DEBUG] Line 1131: Set actors: ['Fabricant']
+[DEBUG] Line 1132: Set criticality: critical
+[DEBUG] Line 1139: Set sub-section: MDR - Analyse des incidents et actions correctives
+[DEBUG] Line 1143: Set processes: ['Vigilance', 'CAPA', 'Gestion des risques']
+[DEBUG] Line 1145: Set actors: ['Fabricant']
+[DEBUG] Line 1146: Set criticality: critical
+[DEBUG] Line 1153: Set sub-section: MDR - Tendances statistiques
+[DEBUG] Line 1157: Set processes: ['PMS', 'Data', 'indicateurs', 'Vigilance']
+[DEBUG] Line 1159: Set actors: ['Fabricant']
+[DEBUG] Line 1160: Set criticality: medium
+[DEBUG] Line 1166: Set sub-section: MDR - Coordination européenne vigilance
+[DEBUG] Line 1169: Set processes: ['Veille réglementaire', 'Vigilance']
+[DEBUG] Line 1171: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1172: Set criticality: medium
+[DEBUG] Line 1177: Set sub-section: MDR - Évaluation des systèmes de vigilance
+[DEBUG] Line 1180: Set processes: ['Audit interne', 'Revue de direction']
+[DEBUG] Line 1182: Set actors: ['Fabricant']
+[DEBUG] Line 1183: Set criticality: medium
+[DEBUG] Line 1189: Set sub-section: MDR - Mesures de surveillance du marché
+[DEBUG] Line 1193: Set processes: ['PMS', 'Vigilance', 'Relations autorités']
+[DEBUG] Line 1195: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1196: Set criticality: medium
+[DEBUG] Line 1201: Set sub-section: MDR - Évaluations et enquêtes autorités compétentes
+[DEBUG] Line 1205: Set processes: ['Gestion inspection', 'RA', 'Gouvernance']
+[DEBUG] Line 1208: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 1209: Set criticality: critical
+[DEBUG] Line 1215: Set sub-section: MDR - Mesures de protection de la santé publique
+[DEBUG] Line 1219: Set processes: ['Gestion de crise', 'RA', 'Communication']
+[DEBUG] Line 1221: Set actors: ['Fabricant']
+[DEBUG] Line 1222: Set criticality: medium
+[DEBUG] Line 1228: Set sub-section: MDR - Autres mesures de protection
+[DEBUG] Line 1231: Set processes: ['Gouvernance', 'Gestion des risques']
+[DEBUG] Line 1233: Set actors: ['Fabricant']
+[DEBUG] Line 1234: Set criticality: medium
+[DEBUG] Line 1239: Set main ISO: ISO 13485 - CLAUSE 7.5
+[DEBUG] Line 1246: Set processes: ['Production', 'Opérations', 'QMS']
+[DEBUG] Line 1247: Set criticality: critical
+[DEBUG] Line 1257: Set processes: ['Validation', 'Production', 'RA']
+[DEBUG] Line 1258: Set criticality: critical
+[DEBUG] Line 1268: Set processes: ['Traçabilité', 'Production', 'PMS']
+[DEBUG] Line 1269: Set criticality: medium
+[DEBUG] Line 1279: Set processes: ['Production', 'Logistique', 'Service client']
+[DEBUG] Line 1280: Set criticality: medium
+[DEBUG] Line 1289: Set processes: ['Stockage', 'Logistique', 'Distribution']
+[DEBUG] Line 1290: Set criticality: medium
+[DEBUG] Line 1299: Set processes: ['Service après-vente', 'PMS', 'Vigilance']
+[DEBUG] Line 1300: Set criticality: critical
+[DEBUG] Line 1327: Set main MDR: MDR - ARTICLES 61 À 70
+[DEBUG] Line 1330: Set sub-section: MDR - Évaluation clinique (approfondissement)
+[DEBUG] Line 1334: Set processes: ['Évaluation clinique', 'PMS', 'PMCF', 'Gestion des risques']
+[DEBUG] Line 1336: Set actors: ['Fabricant']
+[DEBUG] Line 1337: Set criticality: ultra-critical
+[DEBUG] Line 1344: Set sub-section: MDR - Investigations cliniques (principes généraux)
+[DEBUG] Line 1348: Set processes: ['Clinique', 'RA', 'Gouvernance projet']
+[DEBUG] Line 1350: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 1351: Set criticality: medium
+[DEBUG] Line 1357: Set sub-section: MDR - Investigations cliniques pour DM implantables et classe III
+[DEBUG] Line 1360: Set processes: ['Clinique', 'RA']
+[DEBUG] Line 1362: Set actors: ['Fabricant']
+[DEBUG] Line 1363: Set criticality: critical
+[DEBUG] Line 1369: Set sub-section: MDR - Soumission des investigations cliniques
+[DEBUG] Line 1373: Set processes: ['Clinique', 'RA', 'Autorités compétentes']
+[DEBUG] Line 1375: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 1376: Set criticality: medium
+[DEBUG] Line 1382: Set sub-section: MDR - Évaluation par les États membres
+[DEBUG] Line 1385: Set processes: ['Clinique', 'RA']
+[DEBUG] Line 1387: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1388: Set criticality: medium
+[DEBUG] Line 1393: Set sub-section: MDR - Investigations multi-États membres
+[DEBUG] Line 1396: Set processes: ['Clinique', 'Gouvernance internationale']
+[DEBUG] Line 1398: Set actors: ['Fabricant']
+[DEBUG] Line 1399: Set criticality: medium
+[DEBUG] Line 1404: Set sub-section: MDR - Modifications, suspension ou cessation d’investigation
+[DEBUG] Line 1408: Set processes: ['Clinique', 'Gestion des risques', 'Vigilance']
+[DEBUG] Line 1410: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 1411: Set criticality: critical
+[DEBUG] Line 1417: Set sub-section: MDR - Enregistrement et publication des investigations cliniques
+[DEBUG] Line 1421: Set processes: ['Clinique', 'RA', 'Transparence']
+[DEBUG] Line 1423: Set actors: ['Fabricant']
+[DEBUG] Line 1424: Set criticality: medium
+[DEBUG] Line 1429: Set sub-section: MDR - PMS spécifique aux implants
+[DEBUG] Line 1433: Set processes: ['PMS', 'PMCF', 'Vigilance']
+[DEBUG] Line 1435: Set actors: ['Fabricant (implants)']
+[DEBUG] Line 1436: Set criticality: critical
+[DEBUG] Line 1442: Set sub-section: MDR - Rapport périodique de sécurité (PSUR)
+[DEBUG] Line 1446: Set processes: ['PMS', 'Revue de direction', 'RA']
+[DEBUG] Line 1448: Set actors: ['Fabricant']
+[DEBUG] Line 1449: Set criticality: critical
+[DEBUG] Line 1456: Set main ISO: ISO 13485 - CLAUSE 7.6
+[DEBUG] Line 1463: Set processes: ['Métrologie', 'Production', 'Qualité']
+[DEBUG] Line 1464: Set criticality: critical
+[DEBUG] Line 1493: Set main MDR: MDR - ARTICLES 71 À 80
+[DEBUG] Line 1496: Set sub-section: MDR - Accès du public aux informations
+[DEBUG] Line 1500: Set processes: ['Transparence réglementaire', 'RA', 'Communication externe']
+[DEBUG] Line 1503: Set actors: ['Fabricant', 'Mandataire']
+[DEBUG] Line 1504: Set criticality: ultra-critical
+[DEBUG] Line 1510: Set sub-section: MDR - EUDAMED : données cliniques et vigilance
+[DEBUG] Line 1514: Set processes: ['EUDAMED', 'PMS', 'Vigilance', 'RA']
+[DEBUG] Line 1516: Set actors: ['Fabricant']
+[DEBUG] Line 1517: Set criticality: critical
+[DEBUG] Line 1523: Set sub-section: MDR - EUDAMED : base de données sur les certificats
+[DEBUG] Line 1527: Set processes: ['RA', 'Gestion ON', 'EUDAMED']
+[DEBUG] Line 1529: Set actors: ['Fabricant']
+[DEBUG] Line 1530: Set criticality: medium
+[DEBUG] Line 1536: Set sub-section: MDR - EUDAMED : données de surveillance du marché
+[DEBUG] Line 1540: Set processes: ['PMS', 'Vigilance', 'Data réglementaire']
+[DEBUG] Line 1542: Set actors: ['Fabricant']
+[DEBUG] Line 1543: Set criticality: critical
+[DEBUG] Line 1549: Set sub-section: MDR - EUDAMED : données des investigations cliniques
+[DEBUG] Line 1553: Set processes: ['Clinique', 'RA', 'Transparence']
+[DEBUG] Line 1555: Set actors: ['Fabricant', 'Promoteur']
+[DEBUG] Line 1556: Set criticality: medium
+[DEBUG] Line 1562: Set sub-section: MDR - Rapports et résumés publics (SSCP)
+[DEBUG] Line 1566: Set processes: ['Clinique', 'RA', 'Communication patient']
+[DEBUG] Line 1568: Set actors: ['Fabricant\xa0(classe III & implants)']
+[DEBUG] Line 1569: Set criticality: critical
+[DEBUG] Line 1576: Set sub-section: MDR - Comité d’experts
+[DEBUG] Line 1579: Set processes: ['Clinique', 'Gouvernance réglementaire']
+[DEBUG] Line 1581: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1582: Set criticality: medium
+[DEBUG] Line 1587: Set sub-section: MDR - Évaluation clinique par les autorités
+[DEBUG] Line 1591: Set processes: ['Clinique', 'RA', 'Gestion inspection']
+[DEBUG] Line 1593: Set actors: ['Fabricant']
+[DEBUG] Line 1594: Set criticality: critical
+[DEBUG] Line 1600: Set sub-section: MDR - Coordination des évaluations
+[DEBUG] Line 1603: Set processes: ['Clinique', 'Gouvernance UE']
+[DEBUG] Line 1605: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1606: Set criticality: medium
+[DEBUG] Line 1611: Set sub-section: MDR - Rôle de la Commission européenne
+[DEBUG] Line 1614: Set processes: ['Veille réglementaire', 'Gouvernance conformité']
+[DEBUG] Line 1616: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1617: Set criticality: medium
+[DEBUG] Line 1622: Set main ISO: ISO 13485 - CLAUSES 8.1 & 8.2
+[DEBUG] Line 1629: Set processes: ['Performance QMS', 'Pilotage', 'Amélioration continue']
+[DEBUG] Line 1630: Set criticality: medium
+[DEBUG] Line 1640: Set processes: ['Service client', 'PMS', 'Amélioration']
+[DEBUG] Line 1641: Set criticality: medium
+[DEBUG] Line 1650: Set processes: ['Audit interne', 'Gouvernance QMS']
+[DEBUG] Line 1651: Set criticality: critical
+[DEBUG] Line 1661: Set processes: ['Pilotage processus', 'Performance']
+[DEBUG] Line 1662: Set criticality: medium
+[DEBUG] Line 1671: Set processes: ['Contrôle qualité', 'Libération produit']
+[DEBUG] Line 1672: Set criticality: critical
+[DEBUG] Line 1699: Set main MDR: MDR - ARTICLES 81 À 90
+[DEBUG] Line 1702: Set sub-section: MDR - Sanctions
+[DEBUG] Line 1705: Set processes: ['Gouvernance conformité', 'Gestion des risques réglementaires']
+[DEBUG] Line 1709: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 1710: Set criticality: ultra-critical
+[DEBUG] Line 1716: Set sub-section: MDR - Coopération entre États membres
+[DEBUG] Line 1720: Set processes: ['Vigilance', 'PMS', 'Relations autorités']
+[DEBUG] Line 1722: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1723: Set criticality: medium
+[DEBUG] Line 1728: Set sub-section: MDR - Échange d’informations et assistance mutuelle
+[DEBUG] Line 1732: Set processes: ['Vigilance', 'RA', 'Gouvernance UE']
+[DEBUG] Line 1734: Set actors: ['Fabricant']
+[DEBUG] Line 1735: Set criticality: medium
+[DEBUG] Line 1740: Set sub-section: MDR - Mesures en cas de non-conformité avérée
+[DEBUG] Line 1744: Set processes: ['Gestion des non-conformités', 'CAPA', 'Gestion de crise']
+[DEBUG] Line 1748: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 1749: Set criticality: critical
+[DEBUG] Line 1755: Set sub-section: MDR - Évaluation de la non-conformité
+[DEBUG] Line 1759: Set processes: ['RA', 'Analyse des risques', 'CAPA']
+[DEBUG] Line 1761: Set actors: ['Fabricant']
+[DEBUG] Line 1762: Set criticality: medium
+[DEBUG] Line 1768: Set sub-section: MDR - Mesures restrictives et correctives
+[DEBUG] Line 1772: Set processes: ['Gestion de crise', 'Vigilance', 'Distribution']
+[DEBUG] Line 1776: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 1777: Set criticality: critical
+[DEBUG] Line 1783: Set sub-section: MDR - Signalement des tendances
+[DEBUG] Line 1787: Set processes: ['PMS', 'Data', 'Vigilance']
+[DEBUG] Line 1789: Set actors: ['Fabricant']
+[DEBUG] Line 1790: Set criticality: medium
+[DEBUG] Line 1796: Set sub-section: MDR - Analyse des données de vigilance
+[DEBUG] Line 1800: Set processes: ['Vigilance', 'PMS', 'Amélioration continue']
+[DEBUG] Line 1802: Set actors: ['Fabricant']
+[DEBUG] Line 1803: Set criticality: critical
+[DEBUG] Line 1808: Set sub-section: MDR - Mesures urgentes de protection de la santé
+[DEBUG] Line 1812: Set processes: ['Gestion de crise', 'Gouvernance', 'Communication']
+[DEBUG] Line 1814: Set actors: ['Fabricant']
+[DEBUG] Line 1815: Set criticality: medium
+[DEBUG] Line 1821: Set sub-section: MDR - Mesures de suivi et de coordination
+[DEBUG] Line 1825: Set processes: ['Gouvernance', 'Revue de direction', 'Amélioration']
+[DEBUG] Line 1827: Set actors: ['Fabricant']
+[DEBUG] Line 1828: Set criticality: medium
+[DEBUG] Line 1833: Set main ISO: ISO 13485 - CLAUSES 8.3 & 8.4
+[DEBUG] Line 1840: Set processes: ['Non-conformités', 'Production', 'Distribution']
+[DEBUG] Line 1841: Set criticality: critical
+[DEBUG] Line 1851: Set processes: ['Performance QMS', 'PMS', 'Pilotage']
+[DEBUG] Line 1852: Set criticality: critical
+[DEBUG] Line 1879: Set main MDR: MDR - ARTICLES 91 À 100
+[DEBUG] Line 1882: Set sub-section: MDR - Actes délégués
+[DEBUG] Line 1885: Set processes: ['Veille réglementaire', 'Gouvernance conformité']
+[DEBUG] Line 1887: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1888: Set criticality: ultra-critical
+[DEBUG] Line 1894: Set sub-section: MDR - Exercice de la délégation
+[DEBUG] Line 1896: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 1898: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1899: Set criticality: medium
+[DEBUG] Line 1904: Set sub-section: MDR - Procédure de comité
+[DEBUG] Line 1907: Set processes: ['Veille réglementaire', 'Gouvernance UE']
+[DEBUG] Line 1909: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1910: Set criticality: medium
+[DEBUG] Line 1915: Set sub-section: MDR - Exercice de la compétence d’exécution
+[DEBUG] Line 1917: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 1919: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1920: Set criticality: medium
+[DEBUG] Line 1925: Set sub-section: MDR - Rapport annuel de la Commission
+[DEBUG] Line 1928: Set processes: ['Veille réglementaire', 'Revue de direction']
+[DEBUG] Line 1930: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1931: Set criticality: medium
+[DEBUG] Line 1936: Set sub-section: MDR - Financement des activités
+[DEBUG] Line 1939: Set processes: ['Gouvernance', 'Gestion financière réglementaire']
+[DEBUG] Line 1941: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1942: Set criticality: medium
+[DEBUG] Line 1947: Set sub-section: MDR - Mesures transitoires
+[DEBUG] Line 1951: Set processes: ['Transition réglementaire', 'RA', 'Gouvernance']
+[DEBUG] Line 1953: Set actors: ['Fabricant']
+[DEBUG] Line 1954: Set criticality: critical
+[DEBUG] Line 1960: Set sub-section: MDR - Entrée en vigueur et application
+[DEBUG] Line 1962: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 1964: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1965: Set criticality: medium
+[DEBUG] Line 1970: Set sub-section: MDR - Abrogation
+[DEBUG] Line 1973: Set processes: ['Veille réglementaire', 'Gestion documentaire']
+[DEBUG] Line 1975: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1976: Set criticality: medium
+[DEBUG] Line 1981: Set sub-section: MDR - Destinataires
+[DEBUG] Line 1983: Set processes: ['Gouvernance réglementaire']
+[DEBUG] Line 1985: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 1986: Set criticality: medium
+[DEBUG] Line 1991: Set main ISO: ISO 13485 - CLAUSE 8.5
+[DEBUG] Line 1997: Set processes: ['Amélioration continue', 'Gouvernance QMS']
+[DEBUG] Line 1998: Set criticality: medium
+[DEBUG] Line 2007: Set processes: ['CAPA', 'Non-conformités', 'Vigilance']
+[DEBUG] Line 2008: Set criticality: critical
+[DEBUG] Line 2017: Set processes: ['Gestion des risques', 'Amélioration']
+[DEBUG] Line 2018: Set criticality: medium
+[DEBUG] Line 2048: Set main MDR: MDR - ARTICLES 101 À 113
+[DEBUG] Line 2050: Set sub-section: MDR - Groupe de coordination pour les dispositifs médicaux (MDCG)
+[DEBUG] Line 2053: Set processes: ['Veille réglementaire', 'Gouvernance conformité']
+[DEBUG] Line 2055: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2056: Set criticality: ultra-critical
+[DEBUG] Line 2062: Set sub-section: MDR - Soutien administratif du MDCG
+[DEBUG] Line 2064: Set processes: ['Veille réglementaire (indirect)']
+[DEBUG] Line 2066: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2067: Set criticality: medium
+[DEBUG] Line 2072: Set sub-section: MDR - Groupes d’experts
+[DEBUG] Line 2075: Set processes: ['Clinique', 'Affaires réglementaires']
+[DEBUG] Line 2077: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2078: Set criticality: medium
+[DEBUG] Line 2084: Set sub-section: MDR - Laboratoires de référence européens
+[DEBUG] Line 2087: Set processes: ['Clinique', 'Évaluation de conformité']
+[DEBUG] Line 2089: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2090: Set criticality: medium
+[DEBUG] Line 2096: Set sub-section: MDR - Laboratoires d’expertise
+[DEBUG] Line 2100: Set processes: ['Essais', 'Validation', 'Clinique']
+[DEBUG] Line 2102: Set actors: ['Fabricant']
+[DEBUG] Line 2103: Set criticality: medium
+[DEBUG] Line 2109: Set sub-section: MDR - Conférences des autorités compétentes
+[DEBUG] Line 2112: Set processes: ['Veille réglementaire', 'Gouvernance UE']
+[DEBUG] Line 2114: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2115: Set criticality: medium
+[DEBUG] Line 2120: Set sub-section: MDR - Système d’information et échanges électroniques
+[DEBUG] Line 2124: Set processes: ['IT réglementaire', 'EUDAMED', 'Sécurité de l’information']
+[DEBUG] Line 2128: Set actors: ['Fabricant', 'Mandataire', 'Importateur']
+[DEBUG] Line 2129: Set criticality: critical
+[DEBUG] Line 2135: Set sub-section: MDR - Confidentialité
+[DEBUG] Line 2139: Set processes: ['Gouvernance', 'Protection des données', 'Clinique', 'RA']
+[DEBUG] Line 2143: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 2144: Set criticality: critical
+[DEBUG] Line 2150: Set sub-section: MDR - Protection des données à caractère personnel
+[DEBUG] Line 2154: Set processes: ['Données personnelles', 'Clinique', 'IT', 'RGPD']
+[DEBUG] Line 2156: Set actors: ['Fabricant']
+[DEBUG] Line 2157: Set criticality: critical
+[DEBUG] Line 2163: Set sub-section: MDR - Redevances
+[DEBUG] Line 2166: Set processes: ['Gouvernance financière', 'RA']
+[DEBUG] Line 2168: Set actors: ['Fabricant']
+[DEBUG] Line 2169: Set criticality: medium
+[DEBUG] Line 2174: Set sub-section: MDR - Délégation de tâches aux autorités nationales
+[DEBUG] Line 2177: Set processes: ['Relations autorités', 'Gouvernance conformité']
+[DEBUG] Line 2179: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2180: Set criticality: medium
+[DEBUG] Line 2185: Set sub-section: MDR - Évaluation du règlement
+[DEBUG] Line 2188: Set processes: ['Revue de direction', 'Veille réglementaire']
+[DEBUG] Line 2190: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2191: Set criticality: medium
+[DEBUG] Line 2196: Set sub-section: MDR - Modifications futures du règlement
+[DEBUG] Line 2199: Set processes: ['Veille réglementaire', 'Gouvernance stratégique']
+[DEBUG] Line 2201: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2202: Set criticality: critical
+[DEBUG] Line 2234: Set main MDR: MDR - ARTICLES 114 À 123
+[DEBUG] Line 2237: Set sub-section: MDR - Dispositions administratives finales
+[DEBUG] Line 2240: Set processes: ['Gouvernance réglementaire', 'Veille juridique']
+[DEBUG] Line 2242: Set actors: ['Fabricant (indirect)']
+[DEBUG] Line 2243: Set criticality: medium
+[DEBUG] Line 2248: Set sub-section: MDR - Entrée en vigueur, langues, portée territoriale
+[DEBUG] Line 2251: Set processes: ['RA', 'Gouvernance internationale']
+[DEBUG] Line 2254: Set actors: ['Fabricant', 'Importateur', 'Distributeur']
+[DEBUG] Line 2255: Set criticality: medium
+[DEBUG] Line 2262: Set annex: MDR - Exigences générales de sécurité et de performance (GSPR)
+[DEBUG] Line 2267: Set processes: ['Conception', 'Gestion des risques', 'Clinique', 'PMS']
+[DEBUG] Line 2275: Set actors: ['Fabricant (central)', 'Structure type GSPR (applicable à chaque point)', 'Sécurité', 'Performance', 'Risques résiduels', 'Bénéfice', 'risque', 'Informations utilisateur']
+[DEBUG] Line 2276: Set criticality: medium
+[DEBUG] Line 2284: Set annex: MDR - Documentation technique
+[DEBUG] Line 2288: Set processes: ['RA', 'QMS', 'Conception']
+[DEBUG] Line 2297: Set actors: ['Fabricant', 'Contenu obligatoire', 'Description du DM', 'Spécifications', 'GSPR', 'Gestion des risques', 'Vérification & validation', 'Données cliniques']
+[DEBUG] Line 2298: Set criticality: medium
+[DEBUG] Line 2304: Set annex: MDR - Documentation PMS
+[DEBUG] Line 2308: Set processes: ['PMS', 'Vigilance', 'RA']
+[DEBUG] Line 2310: Set actors: ['Fabricant']
+[DEBUG] Line 2311: Set criticality: critical
+[DEBUG] Line 2317: Set annex: MDR - Déclaration UE de conformité
+[DEBUG] Line 2320: Set processes: ['RA', 'Libération réglementaire']
+[DEBUG] Line 2322: Set actors: ['Fabricant']
+[DEBUG] Line 2323: Set criticality: medium
+[DEBUG] Line 2329: Set annex: MDR - Évaluation de conformité
+[DEBUG] Line 2332: Set processes: ['RA', 'Gestion ON']
+[DEBUG] Line 2334: Set actors: ['Fabricant']
+[DEBUG] Line 2335: Set criticality: critical
+[DEBUG] Line 2341: Set annex: MDR - PMS & PSUR
+[DEBUG] Line 2344: Set processes: ['PMS', 'Revue de direction']
+[DEBUG] Line 2346: Set actors: ['Fabricant']
+[DEBUG] Line 2347: Set criticality: medium
+[DEBUG] Line 2352: Set annex: MDR - Certificats ON
+[DEBUG] Line 2355: Set processes: ['RA', 'Gouvernance conformité']
+[DEBUG] Line 2356: Set criticality: medium
+[DEBUG] Line 2361: Set annex: MDR - Investigations cliniques
+[DEBUG] Line 2364: Set processes: ['Clinique', 'RA']
+[DEBUG] Line 2365: Set criticality: medium
+[DEBUG] Line 2370: Set annex: MDR - Évaluation clinique & PMCF
+[DEBUG] Line 2374: Set processes: ['Clinique', 'PMS', 'Gestion des risques']
+[DEBUG] Line 2375: Set criticality: medium
+[DEBUG] Line 2380: Set annex: MDR - Investigations post-market
+[DEBUG] Line 2383: Set processes: ['PMCF', 'PMS']
+[DEBUG] Line 2384: Set criticality: medium
+[DEBUG] Line 2388: Set annex: MDR - DM sans finalité médicale
+[DEBUG] Line 2391: Set processes: ['RA', 'Conformité produit']
+[DEBUG] Line 2392: Set criticality: medium
+[DEBUG] Line 2396: Set annex: MDR - Table de correspondance
+[DEBUG] Line 2399: Set processes: ['RA', 'Gestion documentaire']
+[DEBUG] Line 2400: Set criticality: medium
+[]

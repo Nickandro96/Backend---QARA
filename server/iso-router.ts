@@ -9,7 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { FALLBACK_ISO_QUESTIONS } from "./fallback-data";
+// import { FALLBACK_ISO_QUESTIONS } from "./fallback-data";
 
 export const isoRouter = router({
   /**
@@ -254,7 +254,7 @@ export const isoRouter = router({
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
-        filteredQuestions = FALLBACK_ISO_QUESTIONS.filter(q => q.standard === input.standard) as any;
+        // filteredQuestions = FALLBACK_ISO_QUESTIONS.filter(q => q.standard === input.standard) as any; // Fallback removed for now;
       }
       
       // ISO questions use 'applicability' and 'processCategory' instead of 'economicRole' and 'businessProcess'

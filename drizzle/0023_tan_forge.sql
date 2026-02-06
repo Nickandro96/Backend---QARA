@@ -1,1 +1,1 @@
-ALTER TABLE `questions` ADD `businessProcess` varchar(100);
+ALTER TABLE `questions` ADD COLUMN `businessProcess` varchar(100) IF NOT EXISTS;

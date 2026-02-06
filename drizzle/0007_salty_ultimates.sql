@@ -1,3 +1,3 @@
-ALTER TABLE `user_profiles` ADD `subscriptionStatus` enum('active','canceled','past_due','trialing') DEFAULT 'active';--> statement-breakpoint
-ALTER TABLE `user_profiles` ADD `stripeCustomerId` varchar(255);--> statement-breakpoint
-ALTER TABLE `user_profiles` ADD `stripeSubscriptionId` varchar(255);
+ALTER TABLE `user_profiles` ADD COLUMN `subscriptionStatus` enum('active','canceled','past_due','trialing') DEFAULT 'active' IF NOT EXISTS;--> statement-breakpoint
+ALTER TABLE `user_profiles` ADD COLUMN `stripeCustomerId` varchar(255) IF NOT EXISTS;--> statement-breakpoint
+ALTER TABLE `user_profiles` ADD COLUMN `stripeSubscriptionId` varchar(255) IF NOT EXISTS;

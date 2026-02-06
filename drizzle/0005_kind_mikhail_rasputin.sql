@@ -1,4 +1,4 @@
-CREATE TABLE `fda_classifications` (
+CREATE TABLE IF NOT EXISTS `fda_classifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`deviceName` text NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE `fda_classifications` (
 	CONSTRAINT `fda_classifications_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_regulatory_updates` (
+CREATE TABLE IF NOT EXISTS `fda_regulatory_updates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`title` varchar(500) NOT NULL,
 	`content` text NOT NULL,

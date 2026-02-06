@@ -107,19 +107,21 @@ export type InsertProcess = typeof processes.$inferInsert;
 
 /**
  * Audit questions with full metadata
- */
-export const questions = mysqlTable("questions", {
+ */export const questions = mysqlTable("questions", {
   id: int("id").autoincrement().primaryKey(),
   referentialId: int("referentialId").notNull().references(() => referentials.id),
   processId: int("processId").notNull().references(() => processes.id),
   article: varchar("article", { length: 100 }), // "Art. 10", "Clause 7.3.4"
   annexe: varchar("annexe", { length: 100 }), // "Annexe I", "Annexe II"
+  title: varchar("title", { length: 500 }), // Title from Excel, e.g., "[Fabricant] Objet et champ d’application"
   economicRole: mysqlEnum("economicRole", ["fabricant", "importateur", "distributeur", "manufacturer_us", "specification_developer", "contract_manufacturer", "initial_importer", "tous"]).notNull(),
-  businessProcess: varchar("businessProcess", { length: 100 }), // "conception", "fabrication", "distribution", "stockage", "installation", "maintenance", "service_apres_vente", "tous"
+  applicableProcesses: text("applicableProcesses"), // JSON array of applicable processes
+  questionType: varchar("questionType", { length: 255 }), // Type from Excel, e.g., "Données / IT / cybersécurité"
   questionText: text("questionText").notNull(),
   expectedEvidence: text("expectedEvidence"), // JSON array of expected documents
   criticality: mysqlEnum("criticality", ["high", "medium", "low"]).notNull(),
   risks: text("risks"), // Risks if non-compliant
+  interviewFunctions: text("interviewFunctions"), // JSON array of interview functions
   actionPlan: text("actionPlan"), // Guided action plan if NOK
   aiPrompt: text("aiPrompt"), // Contextual AI prompt for this question
   displayOrder: int("displayOrder").notNull().default(0),
@@ -139,14 +141,17 @@ export type InsertQuestion = typeof questions.$inferInsert;
 export const auditResponses = mysqlTable("audit_responses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
-  questionId: int("questionId").notNull().references(() => questions.id, { onDelete: "cascade" }),
-  response: text("response"), // Réponse/note de l'utilisateur avant le statut
-  status: mysqlEnum("status", ["conforme", "nok", "na"]).notNull(),
-  comment: text("comment"),
-  respondedAt: timestamp("respondedAt").defaultNow().notNull(),
+  auditId: int("auditId").notNull(), // Ajout du champ auditId
+  questionKey: varchar("questionKey", { length: 255 }).notNull(), // Nouvelle colonne
+  responseValue: mysqlEnum("responseValue", ["compliant", "non_compliant", "partial", "not_applicable", "in_progress"]).notNull(), // Renommé de 'status' à 'responseValue'
+  responseComment: text("responseComment"), // Renommé de 'comment' à 'responseComment'
+  evidenceFiles: text("evidenceFiles"), // Ajout du champ evidenceFiles
+  answeredBy: int("answeredBy").notNull().references(() => users.id, { onDelete: "cascade" }), // Ajout du champ answeredBy
+  answeredAt: timestamp("answeredAt").defaultNow().notNull(), // Renommé de 'respondedAt' à 'answeredAt'
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
-  userQuestionIdx: index("user_question_idx").on(table.userId, table.questionId),
+  userAuditQuestionKeyIdx: uniqueIndex("user_audit_question_key_idx").on(table.userId, table.auditId, table.questionKey),
 }));
 
 export type AuditResponse = typeof auditResponses.$inferSelect;

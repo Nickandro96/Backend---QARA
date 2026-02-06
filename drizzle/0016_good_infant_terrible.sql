@@ -1,4 +1,4 @@
-CREATE TABLE `watch_alert_preferences` (
+CREATE TABLE IF NOT EXISTS `watch_alert_preferences` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`emailEnabled` boolean NOT NULL DEFAULT true,

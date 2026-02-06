@@ -1,4 +1,4 @@
-CREATE TABLE `demo_usage` (
+CREATE TABLE IF NOT EXISTS `demo_usage` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`hasUsedDemo` boolean NOT NULL DEFAULT false,

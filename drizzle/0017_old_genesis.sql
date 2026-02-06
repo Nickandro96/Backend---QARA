@@ -1,4 +1,4 @@
-CREATE TABLE `fda_audit_responses` (
+CREATE TABLE IF NOT EXISTS `fda_audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE `fda_audit_responses` (
 	CONSTRAINT `fda_audit_responses_audit_question_idx` UNIQUE(`auditId`,`questionId`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_question_applicability` (
+CREATE TABLE IF NOT EXISTS `fda_question_applicability` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`questionId` int NOT NULL,
 	`roleCode` varchar(32) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE `fda_question_applicability` (
 	CONSTRAINT `fda_question_applicability_question_role_idx` UNIQUE(`questionId`,`roleCode`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_questions` (
+CREATE TABLE IF NOT EXISTS `fda_questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`externalId` varchar(64) NOT NULL,
 	`frameworkCode` varchar(32) NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `fda_questions` (
 	CONSTRAINT `fda_questions_externalId_unique` UNIQUE(`externalId`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_role_qualifications` (
+CREATE TABLE IF NOT EXISTS `fda_role_qualifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -66,7 +66,7 @@ CREATE TABLE `fda_role_qualifications` (
 	CONSTRAINT `fda_role_qualifications_user_site_idx` UNIQUE(`userId`,`siteId`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_roles` (
+CREATE TABLE IF NOT EXISTS `fda_roles` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`roleCode` varchar(32) NOT NULL,
 	`roleName` varchar(255) NOT NULL,

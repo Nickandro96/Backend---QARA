@@ -1,4 +1,4 @@
-CREATE TABLE `actions` (
+CREATE TABLE IF NOT EXISTS `actions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`findingId` int NOT NULL,
 	`actionCode` varchar(50),
@@ -20,7 +20,7 @@ CREATE TABLE `actions` (
 	CONSTRAINT `actions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_monthly_process` (
+CREATE TABLE IF NOT EXISTS `agg_monthly_process` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`processId` int,
@@ -39,7 +39,7 @@ CREATE TABLE `agg_monthly_process` (
 	CONSTRAINT `agg_monthly_process_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_monthly_site` (
+CREATE TABLE IF NOT EXISTS `agg_monthly_site` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -60,7 +60,7 @@ CREATE TABLE `agg_monthly_site` (
 	CONSTRAINT `agg_monthly_site_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_requirement_pareto` (
+CREATE TABLE IF NOT EXISTS `agg_requirement_pareto` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int,
@@ -76,7 +76,7 @@ CREATE TABLE `agg_requirement_pareto` (
 	CONSTRAINT `agg_requirement_pareto_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_standard_clause` (
+CREATE TABLE IF NOT EXISTS `agg_standard_clause` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`referentialId` int,
@@ -94,7 +94,7 @@ CREATE TABLE `agg_standard_clause` (
 	CONSTRAINT `agg_standard_clause_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audit_checklist_answers` (
+CREATE TABLE IF NOT EXISTS `audit_checklist_answers` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE `audit_checklist_answers` (
 	CONSTRAINT `audit_checklist_answers_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audits` (
+CREATE TABLE IF NOT EXISTS `audits` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -130,7 +130,7 @@ CREATE TABLE `audits` (
 	CONSTRAINT `audits_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `findings` (
+CREATE TABLE IF NOT EXISTS `findings` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int,
@@ -154,7 +154,7 @@ CREATE TABLE `findings` (
 	CONSTRAINT `findings_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `sites` (
+CREATE TABLE IF NOT EXISTS `sites` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`name` varchar(255) NOT NULL,

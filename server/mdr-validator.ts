@@ -9,6 +9,7 @@ export interface MdrQuestion {
   questionShort?: string;
   article?: string;
   annexe?: string;
+  title?: string;
   chapter?: string;
   section?: string;
   criticality: string;
@@ -16,7 +17,10 @@ export interface MdrQuestion {
   riskIfNonCompliant?: string;
   guidanceNotes?: string;
   processId?: string | number;
+  questionType?: string;
+  interviewFunctions?: string[];
   applicableRoles?: string[];
+  applicableProcesses?: string[];
 }
 
 export function normalizeMdrQuestion(q: any, index: number): MdrQuestion {
@@ -37,15 +41,19 @@ export function normalizeMdrQuestion(q: any, index: number): MdrQuestion {
     annexe: String(q.annexe ?? ""),
     chapter: String(q.chapter ?? ""),
     section: String(q.section ?? ""),
+    title: String(q.title ?? ""),
     criticality: String(q.criticality ?? q.criticite ?? "medium").toLowerCase(),
     expectedEvidence: String(q.expectedEvidence ?? ""),
     riskIfNonCompliant: String(q.riskIfNonCompliant ?? ""),
     guidanceNotes: String(q.guidanceNotes ?? ""),
-    processId: q.processId ?? q.processus ?? "general",
+    processId: String(q.processId ?? q.processus ?? q.process ?? "general"),
+    questionType: String(q.questionType ?? ""),
+    interviewFunctions: Array.isArray(q.interviewFunctions) ? q.interviewFunctions : (q.interview_functions ? JSON.parse(q.interview_functions) : []),
     economicRole: String(q.economicRole ?? q.roles_applicables?.[0] ?? "fabricant"),
-  applicableRoles: Array.isArray(q.applicableRoles || q.roles_applicables) 
+    applicableRoles: Array.isArray(q.applicableRoles || q.roles_applicables) 
       ? (q.applicableRoles || q.roles_applicables) 
-      : ["fabricant"] // Default to fabricant if missing
+      : ["fabricant"], // Default to fabricant if missing
+    applicableProcesses: Array.isArray(q.applicableProcesses) ? q.applicableProcesses : (q.applicableProcesses ? JSON.parse(q.applicableProcesses) : [])
   };
 }
 

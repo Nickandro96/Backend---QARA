@@ -1,1 +1,1 @@
-ALTER TABLE `audit_responses` ADD `response` text;
+ALTER TABLE `audit_responses` ADD COLUMN `response` text IF NOT EXISTS;

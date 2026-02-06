@@ -1,4 +1,4 @@
-CREATE TABLE `audit_reports` (
+CREATE TABLE IF NOT EXISTS `audit_reports` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`userId` int NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE `audit_reports` (
 	CONSTRAINT `audit_reports_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `report_templates` (
+CREATE TABLE IF NOT EXISTS `report_templates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int,
 	`name` varchar(255) NOT NULL,

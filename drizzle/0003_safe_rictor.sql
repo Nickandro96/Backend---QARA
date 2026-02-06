@@ -1,4 +1,4 @@
-CREATE TABLE `device_classifications` (
+CREATE TABLE IF NOT EXISTS `device_classifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`deviceName` text NOT NULL,

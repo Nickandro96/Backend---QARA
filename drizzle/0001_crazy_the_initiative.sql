@@ -1,4 +1,4 @@
-CREATE TABLE `audit_responses` (
+CREATE TABLE IF NOT EXISTS `audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE `audit_responses` (
 	CONSTRAINT `audit_responses_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `badges` (
+CREATE TABLE IF NOT EXISTS `badges` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`badgeType` enum('audit_ready','pms_maitrisee','gspr_completes','first_audit','conformity_champion','evidence_master','sprint_achiever') NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE `badges` (
 	CONSTRAINT `badges_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `compliance_sprints` (
+CREATE TABLE IF NOT EXISTS `compliance_sprints` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE `compliance_sprints` (
 	CONSTRAINT `compliance_sprints_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `evidence_files` (
+CREATE TABLE IF NOT EXISTS `evidence_files` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE `evidence_files` (
 	CONSTRAINT `evidence_files_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `processes` (
+CREATE TABLE IF NOT EXISTS `processes` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`name` varchar(255) NOT NULL,
 	`description` text,
@@ -53,7 +53,7 @@ CREATE TABLE `processes` (
 	CONSTRAINT `processes_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `questions` (
+CREATE TABLE IF NOT EXISTS `questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`referentialId` int NOT NULL,
 	`processId` int NOT NULL,
@@ -71,7 +71,7 @@ CREATE TABLE `questions` (
 	CONSTRAINT `questions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `referentials` (
+CREATE TABLE IF NOT EXISTS `referentials` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`code` varchar(50) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE `referentials` (
 	CONSTRAINT `referentials_code_unique` UNIQUE(`code`)
 );
 --> statement-breakpoint
-CREATE TABLE `regulatory_updates` (
+CREATE TABLE IF NOT EXISTS `regulatory_updates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`title` varchar(500) NOT NULL,
 	`content` text NOT NULL,
@@ -96,7 +96,7 @@ CREATE TABLE `regulatory_updates` (
 	CONSTRAINT `regulatory_updates_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `user_profiles` (
+CREATE TABLE IF NOT EXISTS `user_profiles` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`economicRole` enum('fabricant','importateur','distributeur'),
@@ -121,12 +121,12 @@ ALTER TABLE `questions` ADD CONSTRAINT `questions_processId_processes_id_fk` FOR
 ALTER TABLE `regulatory_updates` ADD CONSTRAINT `regulatory_updates_referentialId_referentials_id_fk` FOREIGN KEY (`referentialId`) REFERENCES `referentials`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `regulatory_updates` ADD CONSTRAINT `regulatory_updates_processId_processes_id_fk` FOREIGN KEY (`processId`) REFERENCES `processes`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE `user_profiles` ADD CONSTRAINT `user_profiles_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX `user_question_idx` ON `audit_responses` (`userId`,`questionId`);--> statement-breakpoint
-CREATE INDEX `user_badge_idx` ON `badges` (`userId`,`badgeType`);--> statement-breakpoint
-CREATE INDEX `user_sprint_idx` ON `compliance_sprints` (`userId`);--> statement-breakpoint
-CREATE INDEX `evidence_user_question_idx` ON `evidence_files` (`userId`,`questionId`);--> statement-breakpoint
-CREATE INDEX `referential_idx` ON `questions` (`referentialId`);--> statement-breakpoint
-CREATE INDEX `process_idx` ON `questions` (`processId`);--> statement-breakpoint
-CREATE INDEX `role_idx` ON `questions` (`economicRole`);--> statement-breakpoint
-CREATE INDEX `published_idx` ON `regulatory_updates` (`publishedAt`);--> statement-breakpoint
-CREATE INDEX `user_id_idx` ON `user_profiles` (`userId`);
+CREATE INDEX IF NOT EXISTS `user_question_idx` ON `audit_responses` (`userId`,`questionId`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `user_badge_idx` ON `badges` (`userId`,`badgeType`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `user_sprint_idx` ON `compliance_sprints` (`userId`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `evidence_user_question_idx` ON `evidence_files` (`userId`,`questionId`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `referential_idx` ON `questions` (`referentialId`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `process_idx` ON `questions` (`processId`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `role_idx` ON `questions` (`economicRole`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `published_idx` ON `regulatory_updates` (`publishedAt`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `user_id_idx` ON `user_profiles` (`userId`);

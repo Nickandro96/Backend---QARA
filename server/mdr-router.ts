@@ -9,7 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-import { FALLBACK_MDR_QUESTIONS, FALLBACK_PROCESSES } from "./fallback-data";
+// import { FALLBACK_MDR_QUESTIONS, FALLBACK_PROCESSES } from "./fallback-data";
 import { normalizeMdrResponse } from "./mdr-validator";
 
 export const mdrRouter = router({
@@ -149,15 +149,12 @@ export const mdrRouter = router({
       const selectedProcesses = input.selectedProcesses || [];
       
       let questions = [];
-      if (db) {
-        try {
-          questions = await db.select()
-            .from(schema.mdrQuestions)
-            .where(eq(schema.mdrQuestions.isActive, true))
-            .orderBy(schema.mdrQuestions.displayOrder);
-        } catch (e) {
-          console.error("Error fetching MDR questions:", e);
-        }
+      try {
+        const allQuestions = await import("./all-questions-data.json");
+        questions = allQuestions.default;
+        console.log("[MDR] total questions loaded from JSON:", questions.length);
+      } catch (e) {
+        console.error("Error loading MDR questions from JSON:", e);
       }
       
       // Filter by role
@@ -167,16 +164,16 @@ export const mdrRouter = router({
 
       // Fallback if no questions in DB
       if (filteredQuestions.length === 0) {
-        filteredQuestions = FALLBACK_MDR_QUESTIONS.filter(q => 
-          q.economicRole === "tous" || q.economicRole === currentRole
-        ) as any;
+        // filteredQuestions = FALLBACK_MDR_QUESTIONS.filter(q => 
+        //   q.economicRole === "tous" || q.economicRole === currentRole
+        // ) as any; // Fallback removed for now;
       }
 
       // Filter by processes if provided
       if (selectedProcesses.length > 0) {
         filteredQuestions = filteredQuestions.filter(q => 
-          q.applicableProcesses && Array.isArray(q.applicableProcesses) && 
-          q.applicableProcesses.some((p: string) => selectedProcesses.includes(p))
+          q.applicableProcesses && Array.isArray(JSON.parse(q.applicableProcesses)) && 
+          JSON.parse(q.applicableProcesses).some((p: string) => selectedProcesses.includes(p))
         );
       }
       
@@ -184,7 +181,7 @@ export const mdrRouter = router({
         questions: filteredQuestions,
         userRole: currentRole,
         totalQuestions: filteredQuestions.length,
-        processes: FALLBACK_PROCESSES
+        processes: [] // No longer using fallback processes, as they are now in the DB
       };
 
       // NORMALIZATION: Secure the data before sending to frontend
@@ -197,53 +194,68 @@ export const mdrRouter = router({
   saveResponse: protectedProcedure
     .input(z.object({
       auditId: z.number(),
-      questionId: z.union([z.number(), z.string()]),
+      questionKey: z.string(), // Utiliser questionKey au lieu de questionId
       responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable", "in_progress"]),
       responseComment: z.string().optional(),
       evidenceFiles: z.array(z.string()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) return { success: false, message: "Database not available" };
-      
-      // Handle string IDs by converting them to number if possible, or using a hash
-      const qId = typeof input.questionId === 'number' ? input.questionId : 0;
-      
-      const [existing] = await db.select()
-        .from(schema.mdrAuditResponses)
-        .where(
-          and(
-            eq(schema.mdrAuditResponses.auditId, input.auditId),
-            eq(schema.mdrAuditResponses.questionId, qId)
+      try {
+        console.log("[MDR SAVE] input:", input);
+        console.log("[MDR SAVE] userId:", ctx.user?.id ?? ctx.session?.user?.id);
+        const db = await getDb();
+        if (!db) return { success: false, message: "Database not available" };
+        
+        const { auditId, questionKey, responseValue, responseComment, evidenceFiles } = input;
+        const userId = ctx.user.id;
+
+        if (!questionKey || questionKey.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "questionKey cannot be empty" });
+        }
+
+        const responseData = {
+          responseValue: responseValue,
+          responseComment: responseComment || null,
+          evidenceFiles: evidenceFiles ? JSON.stringify(evidenceFiles) : null,
+          answeredBy: userId,
+          answeredAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // UPSERT logic
+        const [existing] = await db.select()
+          .from(schema.auditResponses)
+          .where(
+            and(
+              eq(schema.auditResponses.userId, userId),
+              eq(schema.auditResponses.auditId, auditId),
+              eq(schema.auditResponses.questionKey, questionKey)
+            )
           )
-        )
-        .limit(1);
-      
-      const responseData = {
-        responseValue: input.responseValue,
-        responseComment: input.responseComment || null,
-        evidenceFiles: input.evidenceFiles ? JSON.stringify(input.evidenceFiles) : null,
-        answeredBy: ctx.user.id,
-        answeredAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      if (existing) {
-        await db.update(schema.mdrAuditResponses)
-          .set(responseData)
-          .where(eq(schema.mdrAuditResponses.id, existing.id));
-      } else {
-        await db.insert(schema.mdrAuditResponses).values({
-          auditId: input.auditId,
-          questionId: qId,
-          ...responseData,
-        });
+          .limit(1);
+
+        if (existing) {
+          await db.update(schema.auditResponses)
+            .set(responseData)
+            .where(eq(schema.auditResponses.id, existing.id));
+        } else {
+          await db.insert(schema.auditResponses).values({
+            userId: userId,
+            auditId: auditId,
+            questionKey: questionKey,
+            ...responseData,
+            createdAt: new Date(),
+          });
+        }
+        
+        return {
+          success: true,
+          message: "Réponse sauvegardée",
+        };
+      } catch (err) {
+        console.error("[MDR SAVE] ERROR:", err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: String(err?.message ?? err) });
       }
-      
-      return {
-        success: true,
-        message: "Réponse sauvegardée",
-      };
     }),
 
   /**

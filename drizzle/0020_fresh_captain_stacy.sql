@@ -1,2 +1,2 @@
-ALTER TABLE `iso_role_qualifications` ADD `economicRole` enum('fabricant','importateur','distributeur','mandataire');--> statement-breakpoint
-ALTER TABLE `iso_role_qualifications` ADD `processes` text;
+ALTER TABLE `iso_role_qualifications` ADD COLUMN `economicRole` enum(\'fabricant\',\'importateur\',\'distributeur\',\'mandataire\') IF NOT EXISTS;--> statement-breakpoint
+ALTER TABLE `iso_role_qualifications` ADD COLUMN `processes` text IF NOT EXISTS;

@@ -1,4 +1,4 @@
-CREATE TABLE `actions` (
+CREATE TABLE IF NOT EXISTS `actions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`findingId` int NOT NULL,
 	`actionCode` varchar(50),
@@ -20,7 +20,7 @@ CREATE TABLE `actions` (
 	CONSTRAINT `actions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_monthly_process` (
+CREATE TABLE IF NOT EXISTS `agg_monthly_process` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`processId` int,
@@ -39,7 +39,7 @@ CREATE TABLE `agg_monthly_process` (
 	CONSTRAINT `agg_monthly_process_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_monthly_site` (
+CREATE TABLE IF NOT EXISTS `agg_monthly_site` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -60,7 +60,7 @@ CREATE TABLE `agg_monthly_site` (
 	CONSTRAINT `agg_monthly_site_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_requirement_pareto` (
+CREATE TABLE IF NOT EXISTS `agg_requirement_pareto` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int,
@@ -76,7 +76,7 @@ CREATE TABLE `agg_requirement_pareto` (
 	CONSTRAINT `agg_requirement_pareto_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `agg_standard_clause` (
+CREATE TABLE IF NOT EXISTS `agg_standard_clause` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`referentialId` int,
@@ -94,7 +94,7 @@ CREATE TABLE `agg_standard_clause` (
 	CONSTRAINT `agg_standard_clause_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audit_checklist_answers` (
+CREATE TABLE IF NOT EXISTS `audit_checklist_answers` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE `audit_checklist_answers` (
 	CONSTRAINT `audit_checklist_answers_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audit_reports` (
+CREATE TABLE IF NOT EXISTS `audit_reports` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`userId` int NOT NULL,
@@ -132,7 +132,7 @@ CREATE TABLE `audit_reports` (
 	CONSTRAINT `audit_reports_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audit_responses` (
+CREATE TABLE IF NOT EXISTS `audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -144,7 +144,7 @@ CREATE TABLE `audit_responses` (
 	CONSTRAINT `audit_responses_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `audits` (
+CREATE TABLE IF NOT EXISTS `audits` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -168,7 +168,7 @@ CREATE TABLE `audits` (
 	CONSTRAINT `audits_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `badges` (
+CREATE TABLE IF NOT EXISTS `badges` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`badgeType` enum('audit_ready','pms_maitrisee','gspr_completes','first_audit','conformity_champion','evidence_master','sprint_achiever') NOT NULL,
@@ -176,7 +176,7 @@ CREATE TABLE `badges` (
 	CONSTRAINT `badges_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `compliance_sprints` (
+CREATE TABLE IF NOT EXISTS `compliance_sprints` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -189,7 +189,7 @@ CREATE TABLE `compliance_sprints` (
 	CONSTRAINT `compliance_sprints_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `contact_messages` (
+CREATE TABLE IF NOT EXISTS `contact_messages` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`name` varchar(255) NOT NULL,
 	`email` varchar(320) NOT NULL,
@@ -203,7 +203,7 @@ CREATE TABLE `contact_messages` (
 	CONSTRAINT `contact_messages_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `demo_usage` (
+CREATE TABLE IF NOT EXISTS `demo_usage` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`hasUsedDemo` boolean NOT NULL DEFAULT false,
@@ -213,7 +213,7 @@ CREATE TABLE `demo_usage` (
 	CONSTRAINT `demo_usage_userId_unique` UNIQUE(`userId`)
 );
 --> statement-breakpoint
-CREATE TABLE `device_classifications` (
+CREATE TABLE IF NOT EXISTS `device_classifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`deviceName` text NOT NULL,
@@ -227,7 +227,7 @@ CREATE TABLE `device_classifications` (
 	CONSTRAINT `device_classifications_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `evidence_files` (
+CREATE TABLE IF NOT EXISTS `evidence_files` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -240,7 +240,7 @@ CREATE TABLE `evidence_files` (
 	CONSTRAINT `evidence_files_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_audit_responses` (
+CREATE TABLE IF NOT EXISTS `fda_audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -255,7 +255,7 @@ CREATE TABLE `fda_audit_responses` (
 	CONSTRAINT `fda_audit_responses_audit_question_idx` UNIQUE(`auditId`,`questionId`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_classifications` (
+CREATE TABLE IF NOT EXISTS `fda_classifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`deviceName` text NOT NULL,
@@ -275,7 +275,7 @@ CREATE TABLE `fda_classifications` (
 	CONSTRAINT `fda_classifications_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_question_applicability` (
+CREATE TABLE IF NOT EXISTS `fda_question_applicability` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`questionId` int NOT NULL,
 	`roleCode` varchar(32) NOT NULL,
@@ -284,7 +284,7 @@ CREATE TABLE `fda_question_applicability` (
 	CONSTRAINT `fda_question_applicability_question_role_idx` UNIQUE(`questionId`,`roleCode`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_questions` (
+CREATE TABLE IF NOT EXISTS `fda_questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`externalId` varchar(64) NOT NULL,
 	`frameworkCode` varchar(32) NOT NULL,
@@ -308,7 +308,7 @@ CREATE TABLE `fda_questions` (
 	CONSTRAINT `fda_questions_externalId_unique` UNIQUE(`externalId`)
 );
 --> statement-breakpoint
-CREATE TABLE `fda_regulatory_updates` (
+CREATE TABLE IF NOT EXISTS `fda_regulatory_updates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`title` varchar(500) NOT NULL,
 	`content` text NOT NULL,
@@ -374,7 +374,7 @@ CREATE TABLE `fda_submissions` (
 	CONSTRAINT `fda_submissions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `findings` (
+CREATE TABLE IF NOT EXISTS `findings` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int,
@@ -453,7 +453,7 @@ CREATE TABLE `iso_role_qualifications` (
 	CONSTRAINT `iso_role_qualifications_user_site_idx` UNIQUE(`userId`,`siteId`)
 );
 --> statement-breakpoint
-CREATE TABLE `mandatory_documents` (
+CREATE TABLE IF NOT EXISTS `mandatory_documents` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`referentialId` int NOT NULL,
 	`processId` int,
@@ -473,7 +473,7 @@ CREATE TABLE `mandatory_documents` (
 	CONSTRAINT `mandatory_documents_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `mdr_audit_responses` (
+CREATE TABLE IF NOT EXISTS `mdr_audit_responses` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`auditId` int NOT NULL,
 	`questionId` int NOT NULL,
@@ -511,7 +511,7 @@ CREATE TABLE `mdr_questions` (
 	CONSTRAINT `mdr_questions_externalId_unique` UNIQUE(`externalId`)
 );
 --> statement-breakpoint
-CREATE TABLE `mdr_role_qualifications` (
+CREATE TABLE IF NOT EXISTS `mdr_role_qualifications` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`siteId` int,
@@ -525,7 +525,7 @@ CREATE TABLE `mdr_role_qualifications` (
 	CONSTRAINT `mdr_role_qualifications_user_site_idx` UNIQUE(`userId`,`siteId`)
 );
 --> statement-breakpoint
-CREATE TABLE `processes` (
+CREATE TABLE IF NOT EXISTS `processes` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`name` varchar(255) NOT NULL,
 	`description` text,
@@ -535,7 +535,7 @@ CREATE TABLE `processes` (
 	CONSTRAINT `processes_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `questions` (
+CREATE TABLE IF NOT EXISTS `questions` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`referentialId` int NOT NULL,
 	`processId` int NOT NULL,
@@ -554,7 +554,7 @@ CREATE TABLE `questions` (
 	CONSTRAINT `questions_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `referentials` (
+CREATE TABLE IF NOT EXISTS `referentials` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`code` varchar(50) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -565,7 +565,7 @@ CREATE TABLE `referentials` (
 	CONSTRAINT `referentials_code_unique` UNIQUE(`code`)
 );
 --> statement-breakpoint
-CREATE TABLE `regulatory_updates` (
+CREATE TABLE IF NOT EXISTS `regulatory_updates` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`title` varchar(500) NOT NULL,
 	`content` text NOT NULL,
@@ -594,7 +594,7 @@ CREATE TABLE `report_templates` (
 	CONSTRAINT `report_templates_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `sites` (
+CREATE TABLE IF NOT EXISTS `sites` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -607,7 +607,7 @@ CREATE TABLE `sites` (
 	CONSTRAINT `sites_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `user_document_status` (
+CREATE TABLE IF NOT EXISTS `user_document_status` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`documentId` int NOT NULL,
@@ -620,7 +620,7 @@ CREATE TABLE `user_document_status` (
 	CONSTRAINT `user_document_status_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `user_profiles` (
+CREATE TABLE IF NOT EXISTS `user_profiles` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`userId` int NOT NULL,
 	`economicRole` enum('fabricant','importateur','distributeur','manufacturer_us','specification_developer','contract_manufacturer','initial_importer'),
@@ -636,7 +636,7 @@ CREATE TABLE `user_profiles` (
 	CONSTRAINT `user_profiles_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `users` (
+CREATE TABLE IF NOT EXISTS `users` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`openId` varchar(64) NOT NULL,
 	`name` text,
