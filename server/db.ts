@@ -39,6 +39,29 @@ export async function getDb() {
           await runSafeAlter('answeredBy', 'INT');
           await runSafeAlter('answeredAt', 'DATETIME');
           
+          // Force sync for audits table
+          console.log("[Database] Running forced schema sync for audits...");
+          const runSafeAlterAudits = async (column: string, type: string) => {
+            try {
+              await _db!.execute(sql.raw(`ALTER TABLE audits ADD COLUMN ${column} ${type}`));
+            } catch (e: any) {
+              if (!e.message.includes("Duplicate column name")) {
+                console.warn(`[Database] Error adding column ${column} to audits:`, e.message);
+              }
+            }
+          };
+
+          await runSafeAlterAudits('siteLocation', 'VARCHAR(255)');
+          await runSafeAlterAudits('clientOrganization', 'VARCHAR(255)');
+          await runSafeAlterAudits('auditorName', 'VARCHAR(255)');
+          await runSafeAlterAudits('auditorEmail', 'VARCHAR(255)');
+          await runSafeAlterAudits('startDate', 'DATETIME');
+          await runSafeAlterAudits('endDate', 'DATETIME');
+          await runSafeAlterAudits('closedAt', 'DATETIME');
+          await runSafeAlterAudits('notes', 'TEXT');
+          await runSafeAlterAudits('score', 'VARCHAR(50)');
+          await runSafeAlterAudits('conformityRate', 'VARCHAR(50)');
+          
           // Add unique index using a safe approach
           try {
             await _db.execute(sql`CREATE UNIQUE INDEX user_audit_question_key_idx ON audit_responses (userId, auditId, questionKey)`);
