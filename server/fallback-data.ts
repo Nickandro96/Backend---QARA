@@ -1,7 +1,7 @@
-
 /**
  * Fallback data for the QARA platform
  * Fully aligned with the "RAPPORT-AUDIT-COMPLET" and user instructions.
+ * Structured to be ultra-tolerant and prevent frontend crashes.
  */
 
 export const FALLBACK_REFERENTIALS = [
@@ -28,17 +28,85 @@ export const FALLBACK_PROCESSES = [
   { id: 15, name: "IT / données / cybersécurité", description: "Sécurité des systèmes", displayOrder: 15, icon: "Shield" }
 ];
 
+// CRITICAL: Every question MUST have an ID (string or number)
 export const FALLBACK_MDR_QUESTIONS = [
-  // LOT 1
-  { id: 1, externalId: "MDR-Art1", article: "Art. 1", questionText: "Comment avez-vous déterminé que vos produits relèvent du champ MDR ?", criticality: "high", economicRole: "fabricant", processCategory: "Affaires réglementaires (RA)", displayOrder: 1, isActive: true },
-  { id: 2, externalId: "MDR-Art10", article: "Art. 10", questionText: "Votre QMS couvre-t-il l’intégralité des exigences MDR ?", criticality: "critical", economicRole: "fabricant", processCategory: "Système de management qualité (QMS)", displayOrder: 2, isActive: true },
-  // LOT 2
-  { id: 3, externalId: "MDR-Art13", article: "Art. 13", questionText: "Comment l’importateur vérifie-t-il la conformité MDR avant mise sur le marché ?", criticality: "high", economicRole: "importateur", processCategory: "Importation", displayOrder: 3, isActive: true },
-  { id: 4, externalId: "MDR-Art14", article: "Art. 14", questionText: "Comment le distributeur vérifie-t-il la conformité des DM reçus ?", criticality: "high", economicRole: "distributeur", processCategory: "Distribution & logistique", displayOrder: 4, isActive: true },
-  { id: 5, externalId: "MDR-Art15", article: "Art. 15", questionText: "Une PRRC est-elle formellement désignée ?", criticality: "critical", economicRole: "fabricant", processCategory: "Gouvernance & stratégie réglementaire", displayOrder: 5, isActive: true },
-  // ANNEXES
-  { id: 6, externalId: "MDR-Ann1", article: "Annexe I", questionText: "Disposez-vous d’une matrice GSPR complète et justifiée point par point ?", criticality: "critical", economicRole: "fabricant", processCategory: "Documentation technique", displayOrder: 6, isActive: true },
-  { id: 7, externalId: "MDR-Ann2", article: "Annexe II", questionText: "La documentation technique est-elle complète et cohérente ?", criticality: "critical", economicRole: "fabricant", processCategory: "Documentation technique", displayOrder: 7, isActive: true }
+  { 
+    id: "mdr-art1", 
+    article: "Article 1", 
+    questionText: "Comment avez-vous déterminé que vos produits relèvent du champ MDR ?", 
+    questionShort: "Qualification du champ",
+    criticality: "high", 
+    economicRole: "fabricant", 
+    processCategory: "Affaires réglementaires (RA)", 
+    displayOrder: 1, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-art10", 
+    article: "Article 10", 
+    questionText: "Votre QMS couvre-t-il l’intégralité des exigences MDR ?", 
+    questionShort: "Couverture QMS",
+    criticality: "critical", 
+    economicRole: "fabricant", 
+    processCategory: "Système de management qualité (QMS)", 
+    displayOrder: 2, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-art13", 
+    article: "Article 13", 
+    questionText: "Comment l’importateur vérifie-t-il la conformité MDR avant mise sur le marché ?", 
+    questionShort: "Vérification Importateur",
+    criticality: "high", 
+    economicRole: "importateur", 
+    processCategory: "Importation", 
+    displayOrder: 3, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-art14", 
+    article: "Article 14", 
+    questionText: "Comment le distributeur vérifie-t-il la conformité des DM reçus ?", 
+    questionShort: "Vérification Distributeur",
+    criticality: "high", 
+    economicRole: "distributeur", 
+    processCategory: "Distribution & logistique", 
+    displayOrder: 4, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-art15", 
+    article: "Article 15", 
+    questionText: "Une PRRC est-elle formellement désignée ?", 
+    questionShort: "Désignation PRRC",
+    criticality: "critical", 
+    economicRole: "fabricant", 
+    processCategory: "Gouvernance & stratégie réglementaire", 
+    displayOrder: 5, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-ann1", 
+    article: "Annexe I", 
+    questionText: "Disposez-vous d’une matrice GSPR complète et justifiée point par point ?", 
+    questionShort: "Matrice GSPR",
+    criticality: "critical", 
+    economicRole: "fabricant", 
+    processCategory: "Documentation technique", 
+    displayOrder: 6, 
+    isActive: true 
+  },
+  { 
+    id: "mdr-ann2", 
+    article: "Annexe II", 
+    questionText: "La documentation technique est-elle complète et cohérente ?", 
+    questionShort: "Documentation Technique",
+    criticality: "critical", 
+    economicRole: "fabricant", 
+    processCategory: "Documentation technique", 
+    displayOrder: 7, 
+    isActive: true 
+  }
 ];
 
 export const FALLBACK_ISO_QUESTIONS = [
