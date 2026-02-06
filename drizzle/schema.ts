@@ -134,10 +134,10 @@ export const audits = mysqlTable("audits", {
   name: varchar("name", { length: 255 }).notNull(),
   auditType: mysqlEnum("auditType", ["internal", "supplier", "mock"]).notNull(),
   status: mysqlEnum("status", ["planned", "in_progress", "completed", "cancelled"]).notNull().default("planned"),
-  startDate: timestamp("startDate"),
-  endDate: timestamp("endDate"),
-  score: decimal("score", { precision: 5, scale: 2 }),
-  conformityRate: decimal("conformityRate", { precision: 5, scale: 2 }),
+  startDate: timestamp("startDate").defaultNow().notNull(),
+  endDate: timestamp("endDate"), // Keep nullable
+  score: int("score").default(0),
+  conformityRate: decimal("conformityRate", { precision: 5, scale: 2 }).default(0),
   referentials: text("referentials"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -187,7 +187,7 @@ export type InsertQuestion = typeof questions.$inferInsert;
 export const auditResponses = mysqlTable("audit_responses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
-  auditId: int("auditId").notNull(),
+  auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
   questionKey: varchar("questionKey", { length: 255 }).notNull(),
   responseValue: mysqlEnum("responseValue", ["compliant", "non_compliant", "partial", "not_applicable", "in_progress"]).notNull(),
   responseComment: text("responseComment"),
@@ -310,7 +310,7 @@ export const aggMonthlySite = mysqlTable("agg_monthly_site", {
 export const mdrEvidenceFiles = mysqlTable("mdr_evidence_files", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
-  auditId: int("auditId").notNull(),
+  auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
   questionKey: varchar("questionKey", { length: 255 }).notNull(),
   fileName: varchar("fileName", { length: 255 }).notNull(),
   fileKey: varchar("fileKey", { length: 500 }).notNull(),
@@ -356,7 +356,7 @@ export const userDocumentStatus = mysqlTable("user_document_status", {
  */
 export const auditReports = mysqlTable("audit_reports", {
   id: int("id").autoincrement().primaryKey(),
-  auditId: int("auditId").notNull(),
+  auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   reportType: varchar("reportType", { length: 50 }).notNull(),
   reportTitle: varchar("reportTitle", { length: 255 }).notNull(),
@@ -449,5 +449,5 @@ export const watchAlertPreferences = mysqlTable("watch_alert_preferences", {
 export const isoAuditResponses = mysqlTable("iso_audit_responses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
-  auditId: int("auditId").notNull(),
+  auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
 });

@@ -4,104 +4,11 @@ import { InsertUser, users, userProfiles, demoUsage, referentials, processes, qu
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
-let _schemaSynced = false;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);
-      
-      // Force sync schema for audit_responses and audits if not done yet
-      if (!_schemaSynced && _db) {
-        console.log("[Database] Starting forced schema synchronization...");
-        try {
-          // --- audit_responses table synchronization ---
-          console.log("[Database] Running forced schema sync for audit_responses...");
-          
-          const runSafeAlter = async (table: string, column: string, type: string, modify = false) => {
-            let action = modify ? 'MODIFY' : 'ADD COLUMN';
-            try {
-              await _db!.execute(sql.raw(`ALTER TABLE ${table} ${action} ${column} ${type}`));
-              console.log(`[Database] Successfully ${action} column ${column} in ${table}.`);
-            } catch (e: any) {
-              if (e.message.includes("Duplicate column name") || e.message.includes("column exists")) {
-                console.log(`[Database] Column ${column} already exists in ${table}. Skipping.`);
-              } else if (e.message.includes("Can't DROP 'PRIMARY'; check that it exists")) {
-                console.log(`[Database] PRIMARY KEY already exists or cannot be dropped for ${table}. Skipping.`);
-              } else {
-                console.warn(`[Database] Error ${action} column ${column} in ${table}:`, e.message);
-              }
-            }
-          };
-
-          // Ensure audit_responses columns
-          await runSafeAlter('audit_responses', 'auditId', 'INT NULL', false); // Changed to NULL as per user request
-          await runSafeAlter('audit_responses', 'questionKey', 'VARCHAR(255) NOT NULL DEFAULT ""', false);
-          await runSafeAlter('audit_responses', 'note', 'TEXT', false);
-          await runSafeAlter('audit_responses', 'role', 'VARCHAR(50)', false);
-          await runSafeAlter('audit_responses', 'processId', 'VARCHAR(50)', false);
-          await runSafeAlter('audit_responses', 'responseValue', "ENUM('compliant', 'non_compliant', 'partial', 'not_applicable', 'in_progress') NOT NULL DEFAULT 'in_progress'", false);
-          await runSafeAlter('audit_responses', 'responseComment', 'TEXT', false);
-          await runSafeAlter('audit_responses', 'evidenceFiles', 'JSON', false);
-          await runSafeAlter('audit_responses', 'answeredBy', 'INT', false);
-          await runSafeAlter('audit_responses', 'answeredAt', 'DATETIME', false);
-          
-          // --- audits table synchronization ---
-          console.log("[Database] Running forced schema sync for audits...");
-
-          // Ensure ID is AUTO_INCREMENT PRIMARY KEY
-          // This is tricky to alter if it's already a PK without dropping and re-adding. 
-          // Assuming it's either already correct or needs to be added/modified carefully.
-          // A direct MODIFY for AUTO_INCREMENT PRIMARY KEY might fail if it's already PK.
-          // We'll try to modify it, and if it fails, we assume it's already set or handled.
-          try {
-            console.log("[Database] Attempting to ensure 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits'...");
-            await _db!.execute(sql.raw(`ALTER TABLE audits MODIFY id INT AUTO_INCREMENT PRIMARY KEY`));
-            console.log("[Database] Successfully ensured 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits'.");
-          } catch (e: any) {
-            if (e.message.includes("Multiple primary key defined")) {
-              console.log("[Database] 'id' is already PRIMARY KEY for 'audits'. Skipping AUTO_INCREMENT modification.");
-            } else {
-              console.warn("[Database] Error ensuring 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits':", e.message);
-            }
-          }
-
-          // Ensure audits columns and nullability
-          await runSafeAlter('audits', 'siteId', 'INT NULL', false); // Add if not exists
-          await runSafeAlter('audits', 'siteId', 'INT NULL', true); // Modify to ensure nullability if exists
-          await runSafeAlter('audits', 'clientOrganization', 'VARCHAR(255)', false);
-          await runSafeAlter('audits', 'auditorName', 'VARCHAR(255)', false);
-          await runSafeAlter('audits', 'auditorEmail', 'VARCHAR(255)', false);
-          await runSafeAlter('audits', 'startDate', 'DATETIME', false);
-          await runSafeAlter('audits', 'endDate', 'DATETIME NULL', false); // Add if not exists
-          await runSafeAlter('audits', 'endDate', 'DATETIME NULL', true); // Modify to ensure nullability if exists
-          await runSafeAlter('audits', 'closedAt', 'DATETIME', false);
-          await runSafeAlter('audits', 'notes', 'TEXT', false);
-          await runSafeAlter('audits', 'score', 'INT NULL', false); // Changed to INT NULL as per user request
-          await runSafeAlter('audits', 'score', 'INT NULL', true); // Modify to ensure nullability if exists
-          await runSafeAlter('audits', 'conformityRate', 'FLOAT NULL', false); // Changed to FLOAT NULL as per user request
-          await runSafeAlter('audits', 'conformityRate', 'FLOAT NULL', true); // Modify to ensure nullability if exists
-
-          // Add unique index using a safe approach for audit_responses
-          try {
-            console.log("[Database] Attempting to create unique index 'user_audit_question_key_idx' on 'audit_responses'...");
-            await _db.execute(sql`CREATE UNIQUE INDEX user_audit_question_key_idx ON audit_responses (userId, auditId, questionKey)`);
-            console.log("[Database] Successfully created unique index 'user_audit_question_key_idx'.");
-          } catch (idxError: any) {
-            if (idxError.message.includes("Duplicate key name")) {
-              console.log("[Database] Index 'user_audit_question_key_idx' already exists. Skipping.");
-            } else {
-              console.warn("[Database] Error creating index 'user_audit_question_key_idx':", idxError.message);
-            }
-          }
-          
-          _schemaSynced = true;
-          console.log("[Database] Schema synchronization completed.");
-        } catch (syncError: any) {
-          console.warn("[Database] Schema synchronization critical error:", syncError.message);
-          _schemaSynced = true; // Don't retry every time if it fails
-        }
-      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -628,6 +535,8 @@ export async function createSite(siteData: {
 
   try {
     await db.insert(sites).values(siteData);
+    const [result] = await db.select({ id: sites.id }).from(sites).where(eq(sites.userId, siteData.userId)).orderBy(desc(sites.createdAt)).limit(1);
+    return result;
   } catch (error) {
     console.error("[Database] Failed to create site:", error);
     throw error;
