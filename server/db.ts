@@ -4,11 +4,57 @@ import { InsertUser, users, userProfiles, demoUsage, referentials, processes, qu
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _schemaSynced = false;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);
+      
+      // Force sync schema for audit_responses if not done yet
+      if (!_schemaSynced && _db) {
+        try {
+          console.log("[Database] Running forced schema sync for audit_responses...");
+          
+          // Use safe ALTER TABLE statements (MySQL 8.0.19+ supports IF NOT EXISTS for columns, 
+          // but for older versions we catch the error)
+          const runSafeAlter = async (column: string, type: string) => {
+            try {
+              await _db!.execute(sql.raw(`ALTER TABLE audit_responses ADD COLUMN ${column} ${type}`));
+            } catch (e: any) {
+              if (!e.message.includes("Duplicate column name")) {
+                console.warn(`[Database] Error adding column ${column}:`, e.message);
+              }
+            }
+          };
+
+          await runSafeAlter('auditId', 'INT NOT NULL DEFAULT 0');
+          await runSafeAlter('questionKey', 'VARCHAR(255) NOT NULL DEFAULT ""');
+          await runSafeAlter('note', 'TEXT');
+          await runSafeAlter('role', 'VARCHAR(50)');
+          await runSafeAlter('processId', 'VARCHAR(50)');
+          await runSafeAlter('responseValue', "ENUM('compliant', 'non_compliant', 'partial', 'not_applicable', 'in_progress') NOT NULL DEFAULT 'in_progress'");
+          await runSafeAlter('responseComment', 'TEXT');
+          await runSafeAlter('evidenceFiles', 'JSON');
+          await runSafeAlter('answeredBy', 'INT');
+          await runSafeAlter('answeredAt', 'DATETIME');
+          
+          // Add unique index using a safe approach
+          try {
+            await _db.execute(sql`CREATE UNIQUE INDEX user_audit_question_key_idx ON audit_responses (userId, auditId, questionKey)`);
+          } catch (idxError: any) {
+            if (!idxError.message.includes("Duplicate key name")) {
+              console.warn("[Database] Error creating index:", idxError.message);
+            }
+          }
+          
+          _schemaSynced = true;
+          console.log("[Database] Schema sync completed.");
+        } catch (syncError: any) {
+          console.warn("[Database] Schema sync critical error:", syncError.message);
+          _schemaSynced = true; // Don't retry every time if it fails
+        }
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
