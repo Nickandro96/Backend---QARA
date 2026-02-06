@@ -178,10 +178,14 @@ export const mdrRouter = router({
 
       // Filter by processes if provided
       if (selectedProcesses.length > 0) {
-        filteredQuestions = filteredQuestions.filter(q => 
-          q.applicableProcesses && Array.isArray(JSON.parse(q.applicableProcesses)) && 
-          JSON.parse(q.applicableProcesses).some((p: string) => selectedProcesses.includes(p))
-        );
+        filteredQuestions = filteredQuestions.filter(q => {
+          const processes = Array.isArray(q.applicableProcesses) 
+            ? q.applicableProcesses 
+            : (typeof q.applicableProcesses === "string" && q.applicableProcesses.startsWith("[") 
+                ? JSON.parse(q.applicableProcesses) 
+                : []);
+          return processes.some((p: string) => selectedProcesses.includes(p));
+        });
       }
       
       const response = {

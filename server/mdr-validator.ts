@@ -48,12 +48,24 @@ export function normalizeMdrQuestion(q: any, index: number): MdrQuestion {
     guidanceNotes: String(q.guidanceNotes ?? ""),
     processId: String(q.processId ?? q.processus ?? q.process ?? "general"),
     questionType: String(q.questionType ?? ""),
-    interviewFunctions: Array.isArray(q.interviewFunctions) ? q.interviewFunctions : (q.interview_functions ? JSON.parse(q.interview_functions) : []),
-    economicRole: String(q.economicRole ?? q.roles_applicables?.[0] ?? "fabricant"),
-    applicableRoles: Array.isArray(q.applicableRoles || q.roles_applicables) 
-      ? (q.applicableRoles || q.roles_applicables) 
-      : ["fabricant"], // Default to fabricant if missing
-    applicableProcesses: Array.isArray(q.applicableProcesses) ? q.applicableProcesses : (q.applicableProcesses ? JSON.parse(q.applicableProcesses) : [])
+    interviewFunctions: Array.isArray(q.interviewFunctions) 
+      ? q.interviewFunctions 
+      : (Array.isArray(q.interview_functions) 
+          ? q.interview_functions 
+          : (typeof q.interview_functions === "string" && q.interview_functions.startsWith("[") 
+              ? JSON.parse(q.interview_functions) 
+              : [])),
+    economicRole: String(q.economicRole ?? (Array.isArray(q.roles_applicables) ? q.roles_applicables[0] : (q.roles && q.roles[0] ? q.roles[0] : "fabricant"))),
+    applicableRoles: Array.isArray(q.applicableRoles) 
+      ? q.applicableRoles 
+      : (Array.isArray(q.roles_applicables) 
+          ? q.roles_applicables 
+          : (Array.isArray(q.roles) ? q.roles : ["fabricant"])),
+    applicableProcesses: Array.isArray(q.applicableProcesses) 
+      ? q.applicableProcesses 
+      : (typeof q.applicableProcesses === "string" && q.applicableProcesses.startsWith("[") 
+          ? JSON.parse(q.applicableProcesses) 
+          : [])
   };
 }
 
