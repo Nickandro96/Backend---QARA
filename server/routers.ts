@@ -58,21 +58,27 @@ export const appRouter = router({
 
   referentials: router({
     list: publicProcedure.query(async () => {
-      const results = await db.getAllReferentials();
-      if (results.length > 0) return results;
-      
-      // Fallback data if DB is empty
-      return FALLBACK_REFERENTIALS;
+      try {
+        const results = await db.getAllReferentials();
+        if (results.length > 0) return results;
+        throw new Error('Empty referentials');
+      } catch (e) {
+        console.error("Using fallback referentials:", e);
+        return FALLBACK_REFERENTIALS;
+      }
     }),
   }),
 
   processes: router({
     list: publicProcedure.query(async () => {
-      const results = await db.getAllProcesses();
-      if (results.length > 0) return results;
-
-      // Fallback data if DB is empty
-      return FALLBACK_PROCESSES;
+      try {
+        const results = await db.getAllProcesses();
+        if (results.length > 0) return results;
+        throw new Error('Empty processes');
+      } catch (e) {
+        console.error("Using fallback processes:", e);
+        return FALLBACK_PROCESSES;
+      }
     }),
   }),
 
