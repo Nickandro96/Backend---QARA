@@ -11,70 +11,94 @@ export async function getDb() {
     try {
       _db = drizzle(process.env.DATABASE_URL);
       
-      // Force sync schema for audit_responses if not done yet
+      // Force sync schema for audit_responses and audits if not done yet
       if (!_schemaSynced && _db) {
+        console.log("[Database] Starting forced schema synchronization...");
         try {
+          // --- audit_responses table synchronization ---
           console.log("[Database] Running forced schema sync for audit_responses...");
           
-          // Use safe ALTER TABLE statements (MySQL 8.0.19+ supports IF NOT EXISTS for columns, 
-          // but for older versions we catch the error)
-          const runSafeAlter = async (column: string, type: string) => {
+          const runSafeAlter = async (table: string, column: string, type: string, modify = false) => {
             try {
-              await _db!.execute(sql.raw(`ALTER TABLE audit_responses ADD COLUMN ${column} ${type}`));
+              const action = modify ? 'MODIFY' : 'ADD COLUMN';
+              await _db!.execute(sql.raw(`ALTER TABLE ${table} ${action} ${column} ${type}`));
+              console.log(`[Database] Successfully ${action} column ${column} in ${table}.`);
             } catch (e: any) {
-              if (!e.message.includes("Duplicate column name")) {
-                console.warn(`[Database] Error adding column ${column}:`, e.message);
+              if (e.message.includes("Duplicate column name") || e.message.includes("column exists")) {
+                console.log(`[Database] Column ${column} already exists in ${table}. Skipping.`);
+              } else if (e.message.includes("Can't DROP 'PRIMARY'; check that it exists")) {
+                console.log(`[Database] PRIMARY KEY already exists or cannot be dropped for ${table}. Skipping.`);
+              } else {
+                console.warn(`[Database] Error ${action} column ${column} in ${table}:`, e.message);
               }
             }
           };
 
-          await runSafeAlter('auditId', 'INT NOT NULL DEFAULT 0');
-          await runSafeAlter('questionKey', 'VARCHAR(255) NOT NULL DEFAULT ""');
-          await runSafeAlter('note', 'TEXT');
-          await runSafeAlter('role', 'VARCHAR(50)');
-          await runSafeAlter('processId', 'VARCHAR(50)');
-          await runSafeAlter('responseValue', "ENUM('compliant', 'non_compliant', 'partial', 'not_applicable', 'in_progress') NOT NULL DEFAULT 'in_progress'");
-          await runSafeAlter('responseComment', 'TEXT');
-          await runSafeAlter('evidenceFiles', 'JSON');
-          await runSafeAlter('answeredBy', 'INT');
-          await runSafeAlter('answeredAt', 'DATETIME');
+          // Ensure audit_responses columns
+          await runSafeAlter('audit_responses', 'auditId', 'INT NULL', false); // Changed to NULL as per user request
+          await runSafeAlter('audit_responses', 'questionKey', 'VARCHAR(255) NOT NULL DEFAULT ""', false);
+          await runSafeAlter('audit_responses', 'note', 'TEXT', false);
+          await runSafeAlter('audit_responses', 'role', 'VARCHAR(50)', false);
+          await runSafeAlter('audit_responses', 'processId', 'VARCHAR(50)', false);
+          await runSafeAlter('audit_responses', 'responseValue', "ENUM('compliant', 'non_compliant', 'partial', 'not_applicable', 'in_progress') NOT NULL DEFAULT 'in_progress'", false);
+          await runSafeAlter('audit_responses', 'responseComment', 'TEXT', false);
+          await runSafeAlter('audit_responses', 'evidenceFiles', 'JSON', false);
+          await runSafeAlter('audit_responses', 'answeredBy', 'INT', false);
+          await runSafeAlter('audit_responses', 'answeredAt', 'DATETIME', false);
           
-          // Force sync for audits table
+          // --- audits table synchronization ---
           console.log("[Database] Running forced schema sync for audits...");
-          const runSafeAlterAudits = async (column: string, type: string) => {
-            try {
-              await _db!.execute(sql.raw(`ALTER TABLE audits ADD COLUMN ${column} ${type}`));
-            } catch (e: any) {
-              if (!e.message.includes("Duplicate column name")) {
-                console.warn(`[Database] Error adding column ${column} to audits:`, e.message);
-              }
-            }
-          };
 
-          await runSafeAlterAudits('siteLocation', 'VARCHAR(255)');
-          await runSafeAlterAudits('clientOrganization', 'VARCHAR(255)');
-          await runSafeAlterAudits('auditorName', 'VARCHAR(255)');
-          await runSafeAlterAudits('auditorEmail', 'VARCHAR(255)');
-          await runSafeAlterAudits('startDate', 'DATETIME');
-          await runSafeAlterAudits('endDate', 'DATETIME');
-          await runSafeAlterAudits('closedAt', 'DATETIME');
-          await runSafeAlterAudits('notes', 'TEXT');
-          await runSafeAlterAudits('score', 'VARCHAR(50)');
-          await runSafeAlterAudits('conformityRate', 'VARCHAR(50)');
-          
-          // Add unique index using a safe approach
+          // Ensure ID is AUTO_INCREMENT PRIMARY KEY
+          // This is tricky to alter if it's already a PK without dropping and re-adding. 
+          // Assuming it's either already correct or needs to be added/modified carefully.
+          // A direct MODIFY for AUTO_INCREMENT PRIMARY KEY might fail if it's already PK.
+          // We'll try to modify it, and if it fails, we assume it's already set or handled.
           try {
+            console.log("[Database] Attempting to ensure 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits'...");
+            await _db!.execute(sql.raw(`ALTER TABLE audits MODIFY id INT AUTO_INCREMENT PRIMARY KEY`));
+            console.log("[Database] Successfully ensured 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits'.");
+          } catch (e: any) {
+            if (e.message.includes("Multiple primary key defined")) {
+              console.log("[Database] 'id' is already PRIMARY KEY for 'audits'. Skipping AUTO_INCREMENT modification.");
+            } else {
+              console.warn("[Database] Error ensuring 'id' is AUTO_INCREMENT PRIMARY KEY for 'audits':", e.message);
+            }
+          }
+
+          // Ensure audits columns and nullability
+          await runSafeAlter('audits', 'siteId', 'INT NULL', false); // Add if not exists
+          await runSafeAlter('audits', 'siteId', 'INT NULL', true); // Modify to ensure nullability if exists
+          await runSafeAlter('audits', 'clientOrganization', 'VARCHAR(255)', false);
+          await runSafeAlter('audits', 'auditorName', 'VARCHAR(255)', false);
+          await runSafeAlter('audits', 'auditorEmail', 'VARCHAR(255)', false);
+          await runSafeAlter('audits', 'startDate', 'DATETIME', false);
+          await runSafeAlter('audits', 'endDate', 'DATETIME NULL', false); // Add if not exists
+          await runSafeAlter('audits', 'endDate', 'DATETIME NULL', true); // Modify to ensure nullability if exists
+          await runSafeAlter('audits', 'closedAt', 'DATETIME', false);
+          await runSafeAlter('audits', 'notes', 'TEXT', false);
+          await runSafeAlter('audits', 'score', 'INT NULL', false); // Changed to INT NULL as per user request
+          await runSafeAlter('audits', 'score', 'INT NULL', true); // Modify to ensure nullability if exists
+          await runSafeAlter('audits', 'conformityRate', 'FLOAT NULL', false); // Changed to FLOAT NULL as per user request
+          await runSafeAlter('audits', 'conformityRate', 'FLOAT NULL', true); // Modify to ensure nullability if exists
+
+          // Add unique index using a safe approach for audit_responses
+          try {
+            console.log("[Database] Attempting to create unique index 'user_audit_question_key_idx' on 'audit_responses'...");
             await _db.execute(sql`CREATE UNIQUE INDEX user_audit_question_key_idx ON audit_responses (userId, auditId, questionKey)`);
+            console.log("[Database] Successfully created unique index 'user_audit_question_key_idx'.");
           } catch (idxError: any) {
-            if (!idxError.message.includes("Duplicate key name")) {
-              console.warn("[Database] Error creating index:", idxError.message);
+            if (idxError.message.includes("Duplicate key name")) {
+              console.log("[Database] Index 'user_audit_question_key_idx' already exists. Skipping.");
+            } else {
+              console.warn("[Database] Error creating index 'user_audit_question_key_idx':", idxError.message);
             }
           }
           
           _schemaSynced = true;
-          console.log("[Database] Schema sync completed.");
+          console.log("[Database] Schema synchronization completed.");
         } catch (syncError: any) {
-          console.warn("[Database] Schema sync critical error:", syncError.message);
+          console.warn("[Database] Schema synchronization critical error:", syncError.message);
           _schemaSynced = true; // Don't retry every time if it fails
         }
       }
@@ -300,977 +324,370 @@ export async function getQuestions(filters: {
   // Parse JSON fields
   return results.map(q => {
     let parsedEvidence = null;
-    if (q.expectedEvidence) {
-      try {
-        parsedEvidence = JSON.parse(q.expectedEvidence);
-      } catch (e) {
-        console.warn(`Failed to parse expectedEvidence for question ${q.id}:`, q.expectedEvidence);
-        parsedEvidence = [q.expectedEvidence]; // Fallback: wrap in array
-      }
+    try {
+      parsedEvidence = q.evidence ? JSON.parse(q.evidence as string) : null;
+    } catch (e) {
+      console.error("Error parsing evidence JSON for question", q.id, e);
     }
-    return {
-      ...q,
-      expectedEvidence: parsedEvidence
-    };
+    return { ...q, evidence: parsedEvidence };
   });
 }
 
-export async function getQuestionById(questionId: number) {
+// Audit queries
+export async function getAuditById(auditId: number) {
   const db = await getDb();
   if (!db) return undefined;
 
-  const result = await db.select().from(questions).where(eq(questions.id, questionId)).limit(1);
+  const result = await db.select().from(audits).where(eq(audits.id, auditId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-// Audit Responses queries
-export async function getUserResponse(userId: number, questionId: number) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const result = await db.select().from(auditResponses)
-    .where(and(
-      eq(auditResponses.userId, userId),
-      eq(auditResponses.questionId, questionId)
-    ))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : null;
-}
-
-export async function upsertAuditResponse(userId: number, questionId: number, data: {
-  response?: string;
-  status: "conforme" | "nok" | "na";
-  comment?: string;
-}) {
-  const db = await getDb();
-  if (!db) return;
-
-  const existing = await getUserResponse(userId, questionId);
-  
-  if (existing) {
-    await db.update(auditResponses)
-      .set({ ...data, updatedAt: new Date() })
-      .where(and(
-        eq(auditResponses.userId, userId),
-        eq(auditResponses.questionId, questionId)
-      ));
-  } else {
-    await db.insert(auditResponses).values({
-      userId,
-      questionId,
-      ...data,
-    });
-  }
-}
-
-export async function getUserResponses(userId: number, questionIds?: number[]) {
+export async function getAuditsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  const conditions = [eq(auditResponses.userId, userId)];
-  
-  if (questionIds && questionIds.length > 0) {
-    conditions.push(inArray(auditResponses.questionId, questionIds));
+  return await db.select().from(audits).where(eq(audits.userId, userId)).orderBy(desc(audits.createdAt));
+}
+
+export async function createAudit(auditData: {
+  userId: number;
+  siteId?: number;
+  name: string;
+  auditType: string;
+  status?: "IN_PROGRESS" | "COMPLETED" | "ARCHIVED";
+  startDate?: Date;
+  endDate?: Date | null;
+  score?: number | null;
+  conformityRate?: number | null;
+  referentials: string; // JSON string
+  siteLocation?: string;
+  clientOrganization?: string;
+  auditorName?: string;
+  auditorEmail?: string;
+  closedAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot create audit: database not available");
+    throw new Error("Database not available");
   }
 
-  return await db.select().from(auditResponses)
-    .where(and(...conditions));
+  console.log("CREATE AUDIT PAYLOAD:", auditData); // Log payload
+  console.log("USER:", auditData.userId); // Log user ID
+
+  const newAudit = {
+    ...auditData,
+    status: auditData.status || "IN_PROGRESS",
+    startDate: auditData.startDate || new Date(),
+    endDate: auditData.endDate === undefined ? null : auditData.endDate,
+    score: auditData.score === undefined ? 0 : auditData.score,
+    conformityRate: auditData.conformityRate === undefined ? 0 : auditData.conformityRate,
+    // referentials is already a JSON string from input
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  try {
+    const result = await db.insert(audits).values(newAudit);
+    console.log("[AUDIT CREATE] Audit created successfully", result);
+    // The insert result for MySQL with drizzle-orm typically contains insertId
+    // which is the auto-generated ID for the new row.
+    // result[0].insertId is common for mysql2 driver
+    return result[0].insertId;
+  } catch (error) {
+    console.error("[Database] Failed to create audit:", error);
+    throw error;
+  }
+}
+
+export async function updateAudit(auditId: number, auditData: {
+  siteId?: number;
+  name?: string;
+  auditType?: string;
+  status?: "IN_PROGRESS" | "COMPLETED" | "ARCHIVED";
+  startDate?: Date;
+  endDate?: Date | null;
+  score?: number | null;
+  conformityRate?: number | null;
+  referentials?: string; // JSON string
+  siteLocation?: string;
+  clientOrganization?: string;
+  auditorName?: string;
+  auditorEmail?: string;
+  closedAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update audit: database not available");
+    throw new Error("Database not available");
+  }
+
+  const updatedAudit = {
+    ...auditData,
+    updatedAt: new Date(),
+  };
+
+  try {
+    await db.update(audits).set(updatedAudit).where(eq(audits.id, auditId));
+  } catch (error) {
+    console.error("[Database] Failed to update audit:", error);
+    throw error;
+  }
+}
+
+// Audit Responses queries
+export async function saveAuditResponse(response: {
+  userId: number;
+  auditId: number;
+  questionKey: string;
+  responseValue: "compliant" | "non_compliant" | "partial" | "not_applicable" | "in_progress";
+  responseComment?: string;
+  evidenceFiles?: any; // JSON
+  answeredBy?: number;
+  answeredAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save audit response: database not available");
+    throw new Error("Database not available");
+  }
+
+  const newResponse = {
+    ...response,
+    answeredAt: response.answeredAt || new Date(),
+  };
+
+  try {
+    await db.insert(auditResponses).values(newResponse).onDuplicateKeyUpdate({
+      set: newResponse,
+    });
+  } catch (error) {
+    console.error("[Database] Failed to save audit response:", error);
+    throw error;
+  }
+}
+
+export async function getAuditResponses(auditId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(auditResponses).where(and(eq(auditResponses.auditId, auditId), eq(auditResponses.userId, userId)));
 }
 
 // Evidence Files queries
-export async function getEvidenceFiles(userId: number, questionId: number) {
+export async function saveEvidenceFile(fileData: {
+  auditResponseId: number;
+  fileName: string;
+  fileType: string;
+  filePath: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot save evidence file: database not available");
+    throw new Error("Database not available");
+  }
+
+  try {
+    await db.insert(evidenceFiles).values(fileData);
+  } catch (error) {
+    console.error("[Database] Failed to save evidence file:", error);
+    throw error;
+  }
+}
+
+export async function getEvidenceFilesByAuditResponseId(auditResponseId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(evidenceFiles)
-    .where(and(
-      eq(evidenceFiles.userId, userId),
-      eq(evidenceFiles.questionId, questionId)
-    ))
-    .orderBy(desc(evidenceFiles.uploadedAt));
-}
-
-export async function addEvidenceFile(data: {
-  userId: number;
-  questionId: number;
-  fileName: string;
-  fileKey: string;
-  fileUrl: string;
-  fileSize?: number;
-  mimeType?: string;
-}) {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.insert(evidenceFiles).values(data);
-}
-
-export async function deleteEvidenceFile(fileId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return;
-
-  await db.delete(evidenceFiles)
-    .where(and(
-      eq(evidenceFiles.id, fileId),
-      eq(evidenceFiles.userId, userId)
-    ));
+  return await db.select().from(evidenceFiles).where(eq(evidenceFiles.auditResponseId, auditResponseId));
 }
 
 // Badges queries
-export async function getUserBadges(userId: number) {
+export async function getBadgesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(badges)
-    .where(eq(badges.userId, userId))
-    .orderBy(desc(badges.earnedAt));
+  return await db.select().from(badges).where(eq(badges.userId, userId));
 }
 
-export async function awardBadge(userId: number, badgeType: string) {
+export async function upsertBadge(badgeData: {
+  userId: number;
+  badgeType: string;
+  earnedAt: Date;
+}) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.warn("[Database] Cannot upsert badge: database not available");
+    throw new Error("Database not available");
+  }
 
-  // Check if badge already exists
-  const existing = await db.select().from(badges)
-    .where(and(
-      eq(badges.userId, userId),
-      eq(badges.badgeType, badgeType as any)
-    ))
-    .limit(1);
-
-  if (existing.length === 0) {
-    await db.insert(badges).values({
-      userId,
-      badgeType: badgeType as any,
+  try {
+    await db.insert(badges).values(badgeData).onDuplicateKeyUpdate({
+      set: badgeData,
     });
+  } catch (error) {
+    console.error("[Database] Failed to upsert badge:", error);
+    throw error;
   }
 }
 
 // Regulatory Updates queries
-export async function getRegulatoryUpdates(filters?: {
-  referentialId?: number;
-  processId?: number;
-  impactLevel?: 'high' | 'medium' | 'low';
-  status?: 'acte' | 'a_venir' | 'en_consultation';
-  region?: 'EU' | 'US';
-  search?: string;
-  limit?: number;
-}) {
+export async function getAllRegulatoryUpdates() {
   const db = await getDb();
   if (!db) return [];
 
-  const conditions = [];
-  
-  if (filters?.referentialId) {
-    conditions.push(eq(regulatoryUpdates.referentialId, filters.referentialId));
-  }
-  
-  if (filters?.processId) {
-    conditions.push(eq(regulatoryUpdates.processId, filters.processId));
-  }
-
-  if (filters?.impactLevel) {
-    conditions.push(eq(regulatoryUpdates.impactLevel, filters.impactLevel));
-  }
-
-  if (filters?.status) {
-    conditions.push(eq(regulatoryUpdates.status, filters.status));
-  }
-
-  // Filter by region (EU or US) based on referential codes
-  if (filters?.region) {
-    const { referentials } = await import('../drizzle/schema');
-    if (filters.region === 'EU') {
-      // EU: MDR, IVDR, ISO
-      const euRefs = await db.select().from(referentials)
-        .where(or(
-          like(referentials.code, 'MDR%'),
-          like(referentials.code, 'IVDR%'),
-          like(referentials.code, 'ISO%')
-        ));
-      const euRefIds = euRefs.map(r => r.id);
-      if (euRefIds.length > 0) {
-        conditions.push(inArray(regulatoryUpdates.referentialId, euRefIds));
-      }
-    } else if (filters.region === 'US') {
-      // US: FDA
-      const usRefs = await db.select().from(referentials)
-        .where(or(
-          like(referentials.code, 'FDA%'),
-          like(referentials.code, '21_CFR%'),
-          like(referentials.code, '510K%')
-        ));
-      const usRefIds = usRefs.map(r => r.id);
-      if (usRefIds.length > 0) {
-        conditions.push(inArray(regulatoryUpdates.referentialId, usRefIds));
-      }
-    }
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  let query = db.select().from(regulatoryUpdates)
-    .where(whereClause)
-    .orderBy(desc(regulatoryUpdates.publishedAt));
-
-  if (filters?.limit) {
-    query = query.limit(filters.limit) as any;
-  }
-
-  const results = await query;
-
-  // Apply search filter in memory (since SQL LIKE is not easily supported in Drizzle for text columns)
-  if (filters?.search && results.length > 0) {
-    const searchLower = filters.search.toLowerCase();
-    return results.filter(update => 
-      update.title.toLowerCase().includes(searchLower) ||
-      update.content.toLowerCase().includes(searchLower)
-    );
-  }
-
-  return results;
+  return await db.select().from(regulatoryUpdates).orderBy(desc(regulatoryUpdates.publishedDate));
 }
 
 // Compliance Sprints queries
-export async function getUserSprints(userId: number) {
+export async function getComplianceSprintsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select().from(complianceSprints)
-    .where(eq(complianceSprints.userId, userId))
-    .orderBy(desc(complianceSprints.createdAt));
+  return await db.select().from(complianceSprints).where(eq(complianceSprints.userId, userId)).orderBy(desc(complianceSprints.createdAt));
 }
 
-export async function createSprint(data: {
+export async function createComplianceSprint(sprintData: {
   userId: number;
   name: string;
-  targetScore: string;
+  description?: string;
   startDate: Date;
   endDate: Date;
-  processId?: number;
+  status: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 }) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.warn("[Database] Cannot create compliance sprint: database not available");
+    throw new Error("Database not available");
+  }
 
-  await db.insert(complianceSprints).values(data);
+  try {
+    await db.insert(complianceSprints).values(sprintData);
+  } catch (error) {
+    console.error("[Database] Failed to create compliance sprint:", error);
+    throw error;
+  }
 }
 
-// Mandatory Documents queries
-export async function getMandatoryDocuments(filters?: {
-  referentialId?: number;
-  processId?: number;
-  role?: string;
-  status?: string;
-}) {
-  const db = await getDb();
-  if (!db) return [];
-
-  const { mandatoryDocuments } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-
-  const conditions = [];
-  if (filters?.referentialId) {
-    conditions.push(eq(mandatoryDocuments.referentialId, filters.referentialId));
-  }
-  if (filters?.processId) {
-    conditions.push(eq(mandatoryDocuments.processId, filters.processId));
-  }
-  if (filters?.role) {
-    // Include documents for the specific role AND documents marked as "tous"
-    const { or } = await import("drizzle-orm");
-    conditions.push(
-      or(
-        eq(mandatoryDocuments.role, filters.role as any),
-        eq(mandatoryDocuments.role, "tous" as any)
-      )!
-    );
-  }
-  if (filters?.status) {
-    conditions.push(eq(mandatoryDocuments.status, filters.status as any));
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  return await db.select().from(mandatoryDocuments)
-    .where(whereClause)
-    .orderBy(mandatoryDocuments.referentialId, mandatoryDocuments.processId);
-}
-
-export async function getDocumentById(documentId: number) {
+// Watch Alert Preferences queries
+export async function getWatchAlertPreferencesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
 
-  const { mandatoryDocuments } = await import("../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-
-  const result = await db.select().from(mandatoryDocuments)
-    .where(eq(mandatoryDocuments.id, documentId))
-    .limit(1);
-
+  const result = await db.select().from(watchAlertPreferences).where(eq(watchAlertPreferences.userId, userId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getUserDocumentStatus(userId: number, documentId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const { userDocumentStatus } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-
-  const result = await db.select().from(userDocumentStatus)
-    .where(and(
-      eq(userDocumentStatus.userId, userId),
-      eq(userDocumentStatus.documentId, documentId)
-    ))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function updateDocumentStatus(data: {
+export async function upsertWatchAlertPreferences(preferencesData: {
   userId: number;
-  documentId: number;
-  status: "manquant" | "a_mettre_a_jour" | "conforme";
-  notes?: string;
-  fileUrl?: string;
+  alertOnNewRegulatoryUpdates?: boolean;
+  alertOnNewFindings?: boolean;
+  alertOnNewActions?: boolean;
 }) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.warn("[Database] Cannot upsert watch alert preferences: database not available");
+    throw new Error("Database not available");
+  }
 
-  const { userDocumentStatus } = await import("../drizzle/schema");
-  const { eq, and } = await import("drizzle-orm");
-
-  // Check if record exists
-  const existing = await getUserDocumentStatus(data.userId, data.documentId);
+  const existing = await getWatchAlertPreferencesByUserId(preferencesData.userId);
 
   if (existing) {
-    // Update existing record
-    await db.update(userDocumentStatus)
-      .set({
-        status: data.status,
-        notes: data.notes,
-        fileUrl: data.fileUrl,
-        lastReviewDate: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(userDocumentStatus.userId, data.userId),
-        eq(userDocumentStatus.documentId, data.documentId)
-      ));
+    await db.update(watchAlertPreferences)
+      .set({ ...preferencesData, updatedAt: new Date() })
+      .where(eq(watchAlertPreferences.userId, preferencesData.userId));
   } else {
-    // Insert new record
-    await db.insert(userDocumentStatus).values({
-      userId: data.userId,
-      documentId: data.documentId,
-      status: data.status,
-      notes: data.notes,
-      fileUrl: data.fileUrl,
-      lastReviewDate: new Date(),
+    await db.insert(watchAlertPreferences).values({
+      ...preferencesData,
+      userId: preferencesData.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
   }
 }
 
-export async function getDocumentStats(userId: number, role?: string) {
+// Sites queries
+export async function getSitesByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return { total: 0, conforme: 0, a_mettre_a_jour: 0, manquant: 0, percentage: 0 };
+  if (!db) return [];
 
-  const { mandatoryDocuments, userDocumentStatus } = await import("../drizzle/schema");
-  const { eq, and, or, sql } = await import("drizzle-orm");
-
-  // Get all documents for the role
-  const allDocs = await getMandatoryDocuments({ role });
-  const total = allDocs.length;
-
-  if (total === 0) return { total: 0, conforme: 0, a_mettre_a_jour: 0, manquant: 0, percentage: 0 };
-
-  // Get user statuses
-  const { userDocumentStatus: userDocStatus } = await import("../drizzle/schema");
-  const statuses = await db.select().from(userDocStatus)
-    .where(eq(userDocStatus.userId, userId));
-
-  const conforme = statuses.filter(s => s.status === "conforme").length;
-  const a_mettre_a_jour = statuses.filter(s => s.status === "a_mettre_a_jour").length;
-  const manquant = total - conforme - a_mettre_a_jour;
-
-  const percentage = Math.round((conforme / total) * 100);
-
-  return { total, conforme, a_mettre_a_jour, manquant, percentage };
+  return await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(desc(sites.createdAt));
 }
 
-
-// FDA Classification functions
-export async function saveFdaClassification(data: {
+export async function createSite(siteData: {
   userId: number;
-  deviceName: string;
-  deviceDescription: string;
-  intendedUse: string;
-  deviceClass: string;
-  pathway: string;
-  predicateDevice: string | null;
-  predicate510k: string | null;
-  justification: string;
-  answers: string;
-}): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not available");
-  }
-
-  const { fdaClassifications } = await import("../drizzle/schema");
-
-  // Map pathway values to enum
-  const pathwayMap: Record<string, "exempt" | "510k" | "de_novo" | "pma"> = {
-    "Exempt": "exempt",
-    "510(k)": "510k",
-    "De Novo": "de_novo",
-    "PMA": "pma",
-  };
-
-  await db.insert(fdaClassifications).values({
-    userId: data.userId,
-    deviceName: data.deviceName,
-    deviceDescription: data.deviceDescription,
-    intendedUse: data.intendedUse,
-    resultingClass: data.deviceClass as "I" | "II" | "III",
-    controlLevel: "general" as const,
-    pathway: pathwayMap[data.pathway] || "exempt",
-    justification: data.justification,
-    answers: data.answers,
-  });
-}
-
-export async function getFdaClassifications(userId: number) {
-  const db = await getDb();
-  if (!db) {
-    return [];
-  }
-
-  const { fdaClassifications } = await import("../drizzle/schema");
-  const { eq, desc } = await import("drizzle-orm");
-
-  return await db
-    .select()
-    .from(fdaClassifications)
-    .where(eq(fdaClassifications.userId, userId))
-    .orderBy(desc(fdaClassifications.createdAt));
-}
-
-
-export async function getFdaRegulatoryUpdates(filters: {
-  category?: string;
-  impactLevel?: string;
-}) {
-  const db = await getDb();
-  if (!db) {
-    return [];
-  }
-
-  const { fdaRegulatoryUpdates } = await import("../drizzle/schema");
-  const { eq, desc, and } = await import("drizzle-orm");
-
-  const conditions = [];
-  
-  if (filters.category && filters.category !== "all") {
-    conditions.push(eq(fdaRegulatoryUpdates.category, filters.category as any));
-  }
-  
-  if (filters.impactLevel && filters.impactLevel !== "all") {
-    conditions.push(eq(fdaRegulatoryUpdates.impactLevel, filters.impactLevel as any));
-  }
-
-  const query = db
-    .select()
-    .from(fdaRegulatoryUpdates)
-    .orderBy(desc(fdaRegulatoryUpdates.publishedAt));
-
-  if (conditions.length > 0) {
-    return await query.where(and(...conditions));
-  }
-
-  return await query;
-}
-
-
-// Contact Messages functions
-export async function createContactMessage(data: {
   name: string;
-  email: string;
-  company?: string;
-  subject: "demo" | "support" | "partnership" | "pricing" | "other";
-  message: string;
-  userId?: number;
+  location: string;
+  description?: string;
 }) {
   const db = await getDb();
   if (!db) {
+    console.warn("[Database] Cannot create site: database not available");
     throw new Error("Database not available");
   }
 
-  const { contactMessages } = await import("../drizzle/schema");
-
-  const result = await db.insert(contactMessages).values({
-    name: data.name,
-    email: data.email,
-    company: data.company || null,
-    subject: data.subject,
-    message: data.message,
-    userId: data.userId || null,
-  });
-
-  return result;
+  try {
+    await db.insert(sites).values(siteData);
+  } catch (error) {
+    console.error("[Database] Failed to create site:", error);
+    throw error;
+  }
 }
 
-export async function getContactMessages(filters?: {
-  status?: string;
-  limit?: number;
+// Findings queries
+export async function getFindingsByAuditId(auditId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(findings).where(eq(findings.auditId, auditId)).orderBy(desc(findings.createdAt));
+}
+
+export async function createFinding(findingData: {
+  auditId: number;
+  questionKey: string;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  description: string;
+  status: "OPEN" | "CLOSED";
 }) {
-  const db = await getDb();
-  if (!db) return [];
-
-  const { contactMessages } = await import("../drizzle/schema");
-  const { eq, desc } = await import("drizzle-orm");
-
-  let query = db.select().from(contactMessages)
-    .orderBy(desc(contactMessages.createdAt));
-
-  if (filters?.status) {
-    query = query.where(eq(contactMessages.status, filters.status as any)) as any;
-  }
-
-  if (filters?.limit) {
-    query = query.limit(filters.limit) as any;
-  }
-
-  return await query;
-}
-
-export async function updateContactMessageStatus(id: number, status: "new" | "read" | "replied" | "archived") {
-  const db = await getDb();
-  if (!db) return;
-
-  const { contactMessages } = await import("../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-
-  await db.update(contactMessages)
-    .set({ status })
-    .where(eq(contactMessages.id, id));
-}
-
-
-// Watch Alert Preferences queries
-export async function getWatchAlertPreferences(userId: number) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const results = await db.select().from(watchAlertPreferences)
-    .where(eq(watchAlertPreferences.userId, userId))
-    .limit(1);
-
-  return results[0] || null;
-}
-
-export async function upsertWatchAlertPreferences(data: {
-  userId: number;
-  emailEnabled: boolean;
-  minImpactLevel: 'high' | 'medium' | 'low';
-  regions: string[]; // Will be JSON stringified
-  referentialIds?: number[];
-  processIds?: number[];
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const existing = await getWatchAlertPreferences(data.userId);
-
-  const payload = {
-    userId: data.userId,
-    emailEnabled: data.emailEnabled,
-    minImpactLevel: data.minImpactLevel,
-    regions: JSON.stringify(data.regions),
-    referentialIds: data.referentialIds ? JSON.stringify(data.referentialIds) : null,
-    processIds: data.processIds ? JSON.stringify(data.processIds) : null,
-  };
-
-  if (existing) {
-    await db.update(watchAlertPreferences)
-      .set(payload)
-      .where(eq(watchAlertPreferences.userId, data.userId));
-  } else {
-    await db.insert(watchAlertPreferences).values(payload);
-  }
-
-  return await getWatchAlertPreferences(data.userId);
-}
-
-
-export async function getRegulatoryStats() {
-  const db = await getDb();
-  if (!db) return null;
-
-  const updates = await db.select().from(regulatoryUpdates);
-
-  // Count by impact level
-  const byImpact = {
-    high: updates.filter(u => u.impactLevel === 'high').length,
-    medium: updates.filter(u => u.impactLevel === 'medium').length,
-    low: updates.filter(u => u.impactLevel === 'low').length,
-  };
-
-  // Count by status
-  const byStatus = {
-    acte: updates.filter(u => u.status === 'acte').length,
-    en_consultation: updates.filter(u => u.status === 'en_consultation').length,
-    a_venir: updates.filter(u => u.status === 'a_venir').length,
-  };
-
-  // Count by month (last 12 months)
-  const byMonth: Record<string, number> = {};
-  updates.forEach(update => {
-    const month = new Date(update.publishedAt).toISOString().slice(0, 7); // YYYY-MM
-    byMonth[month] = (byMonth[month] || 0) + 1;
-  });
-
-  // Get referentials to determine region
-  const allRefs = await db.select().from(referentials);
-  const euRefIds = allRefs.filter(r => 
-    r.code.startsWith('MDR') || r.code.startsWith('IVDR') || r.code.startsWith('ISO')
-  ).map(r => r.id);
-  const usRefIds = allRefs.filter(r => 
-    r.code.startsWith('FDA') || r.code.startsWith('21_CFR') || r.code.startsWith('510K')
-  ).map(r => r.id);
-
-  const byRegion = {
-    EU: updates.filter(u => euRefIds.includes(u.referentialId)).length,
-    US: updates.filter(u => usRefIds.includes(u.referentialId)).length,
-  };
-
-  return {
-    total: updates.length,
-    byImpact,
-    byStatus,
-    byMonth,
-    byRegion,
-  };
-}
-
-// ============================================================================
-// AUDIT DETAIL FUNCTIONS
-// ============================================================================
-
-/**
- * Get audit by ID with all details
- */
-export async function getAuditById(auditId: number, userId: number, userRole?: string) {
-  const db = await getDb();
-  if (!db) return null;
-
-  // Build where conditions
-  const conditions = [eq(audits.id, auditId)];
-  
-  // Only filter by userId if not admin
-  if (userRole !== 'admin') {
-    conditions.push(eq(audits.userId, userId));
-  }
-
-  const [audit] = await db
-    .select({
-      id: audits.id,
-      name: audits.name,
-      auditType: audits.auditType,
-      status: audits.status,
-      startDate: audits.startDate,
-      endDate: audits.endDate,
-      auditorName: audits.auditorName,
-      auditorEmail: audits.auditorEmail,
-      siteId: audits.siteId,
-      siteName: sites.name,
-      conformityRate: audits.conformityRate,
-      score: audits.score,
-      notes: audits.notes,
-      createdAt: audits.createdAt,
-    })
-    .from(audits)
-    .leftJoin(sites, eq(audits.siteId, sites.id))
-    .where(and(...conditions));
-
-  return audit || null;
-}
-
-/**
- * Get findings by audit ID
- */
-export async function getFindingsByAudit(auditId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-
-  const findingsList = await db
-    .select({
-      id: findings.id,
-      title: findings.title,
-      description: findings.description,
-      criticality: findings.criticality,
-      status: findings.status,
-      processId: findings.processId,
-      processName: processes.name,
-      createdAt: findings.createdAt,
-    })
-    .from(findings)
-    .leftJoin(processes, eq(findings.processId, processes.id))
-    .leftJoin(audits, eq(findings.auditId, audits.id))
-    .where(and(
-      eq(findings.auditId, auditId),
-      eq(audits.userId, userId)
-    ))
-    .orderBy(findings.createdAt);
-
-  return findingsList;
-}
-
-/**
- * Get actions by audit ID
- */
-export async function getActionsByAudit(auditId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-
-  const actionsList = await db
-    .select({
-      id: actions.id,
-      title: actions.title,
-      description: actions.description,
-      status: actions.status,
-      responsible: actions.responsible,
-      dueDate: actions.dueDate,
-      completedAt: actions.completedAt,
-      createdAt: actions.createdAt,
-    })
-    .from(actions)
-    .leftJoin(findings, eq(actions.findingId, findings.id))
-    .leftJoin(audits, eq(findings.auditId, audits.id))
-    .where(and(
-      eq(findings.auditId, auditId),
-      eq(audits.userId, userId)
-    ))
-    .orderBy(actions.createdAt);
-
-  return actionsList;
-}
-
-/**
- * Get recent audits for a user
- */
-export async function getRecentAudits(userId: number, limit: number = 5, userRole?: string) {
-  const db = await getDb();
-  if (!db) return [];
-
-  let query = db
-    .select({
-      id: audits.id,
-      name: audits.name,
-      auditType: audits.auditType,
-      status: audits.status,
-      startDate: audits.startDate,
-      endDate: audits.endDate,
-      siteName: sites.name,
-      conformityRate: audits.conformityRate,
-      createdAt: audits.createdAt,
-    })
-    .from(audits)
-    .leftJoin(sites, eq(audits.siteId, sites.id));
-  
-  // Only filter by userId if not admin
-  if (userRole !== 'admin') {
-    query = query.where(eq(audits.userId, userId));
-  }
-  
-  const auditsList = await query
-    .orderBy(desc(audits.createdAt))
-    .limit(limit);
-
-  return auditsList;
-}
-
-/**
- * Get all audits for a user with optional filters
- */
-export async function getAuditsList(userId: number, userRole?: string, filters?: {
-  status?: string;
-  siteId?: number;
-  startDate?: Date;
-  endDate?: Date;
-  search?: string;
-}) {
-  const db = await getDb();
-  if (!db) return [];
-
-  // Build base query
-  let query = db
-    .select({
-      id: audits.id,
-      name: audits.name,
-      auditType: audits.auditType,
-      status: audits.status,
-      startDate: audits.startDate,
-      endDate: audits.endDate,
-      siteName: sites.name,
-      conformityRate: audits.conformityRate,
-      createdAt: audits.createdAt,
-    })
-    .from(audits)
-    .leftJoin(sites, eq(audits.siteId, sites.id));
-  
-  // Only filter by userId if not admin
-  if (userRole !== 'admin') {
-    query = query.where(eq(audits.userId, userId));
-  }
-
-  // Apply filters
-  if (filters?.status) {
-    query = query.where(eq(audits.status, filters.status as any));
-  }
-  if (filters?.siteId) {
-    query = query.where(eq(audits.siteId, filters.siteId));
-  }
-  if (filters?.startDate) {
-    query = query.where(gte(audits.startDate, filters.startDate));
-  }
-  if (filters?.endDate) {
-    query = query.where(lte(audits.endDate, filters.endDate));
-  }
-  if (filters?.search) {
-    query = query.where(like(audits.name, `%${filters.search}%`));
-  }
-
-  const auditsList = await query.orderBy(desc(audits.createdAt));
-
-  return auditsList;
-}
-
-/**
- * Compare two audits and return delta metrics
- */
-export async function compareAudits(audit1Id: number, audit2Id: number, userId: number) {
-  const db = await getDb();
-  if (!db) return null;
-
-  // Get both audits
-  const audit1 = await getAuditById(audit1Id, userId);
-  const audit2 = await getAuditById(audit2Id, userId);
-
-  if (!audit1 || !audit2) {
-    return null;
-  }
-
-  // Get findings for both audits
-  const findings1 = await getFindingsByAudit(audit1Id, userId);
-  const findings2 = await getFindingsByAudit(audit2Id, userId);
-
-  // Get actions for both audits
-  const actions1 = await getActionsByAudit(audit1Id, userId);
-  const actions2 = await getActionsByAudit(audit2Id, userId);
-
-  // Calculate metrics
-  const audit1ConformityRate = parseFloat(audit1.conformityRate || "0");
-  const audit2ConformityRate = parseFloat(audit2.conformityRate || "0");
-  const conformityRateDelta = audit2ConformityRate - audit1ConformityRate;
-
-  const audit1TotalFindings = findings1.length;
-  const audit2TotalFindings = findings2.length;
-  const totalFindingsDelta = audit2TotalFindings - audit1TotalFindings;
-
-  const audit1CompletedActions = actions1.filter(a => a.status === "completed").length;
-  const audit2CompletedActions = actions2.filter(a => a.status === "completed").length;
-  const completedActionsDelta = audit2CompletedActions - audit1CompletedActions;
-
-  // Findings by criticality
-  const audit1FindingsByCriticality: Record<string, number> = {
-    critical: findings1.filter(f => f.criticality === "critical").length,
-    high: findings1.filter(f => f.criticality === "high").length,
-    medium: findings1.filter(f => f.criticality === "medium").length,
-    low: findings1.filter(f => f.criticality === "low").length,
-  };
-
-  const audit2FindingsByCriticality: Record<string, number> = {
-    critical: findings2.filter(f => f.criticality === "critical").length,
-    high: findings2.filter(f => f.criticality === "high").length,
-    medium: findings2.filter(f => f.criticality === "medium").length,
-    low: findings2.filter(f => f.criticality === "low").length,
-  };
-
-  // Identify closed findings (in audit1 but not in audit2 - by title similarity)
-  const closedFindings = findings1.filter(f1 => 
-    !findings2.some(f2 => f2.title === f1.title)
-  );
-
-  // Identify new findings (in audit2 but not in audit1)
-  const newFindings = findings2.filter(f2 => 
-    !findings1.some(f1 => f1.title === f2.title)
-  );
-
-  return {
-    audit1: {
-      id: audit1.id,
-      name: audit1.name,
-      startDate: audit1.startDate,
-    },
-    audit2: {
-      id: audit2.id,
-      name: audit2.name,
-      startDate: audit2.startDate,
-    },
-    conformityRateDelta,
-    audit1ConformityRate,
-    audit2ConformityRate,
-    totalFindingsDelta,
-    audit1TotalFindings,
-    audit2TotalFindings,
-    completedActionsDelta,
-    audit1CompletedActions,
-    audit2CompletedActions,
-    audit1FindingsByCriticality,
-    audit2FindingsByCriticality,
-    closedFindings,
-    newFindings,
-  };
-}
-
-
-// Password management (stored in memory for now, should be in a separate table)
-const passwordHashStore = new Map<string, string>();
-
-export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
+    console.warn("[Database] Cannot create finding: database not available");
+    throw new Error("Database not available");
   }
 
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  try {
+    await db.insert(findings).values(findingData);
+  } catch (error) {
+    console.error("[Database] Failed to create finding:", error);
+    throw error;
+  }
 }
 
-export async function storePasswordHash(openId: string, hash: string): Promise<void> {
-  passwordHashStore.set(openId, hash);
-}
-
-export async function getPasswordHash(openId: string): Promise<string | undefined> {
-  return passwordHashStore.get(openId);
-}
-
-export async function listAllUsers() {
+// Actions queries
+export async function getActionsByFindingId(findingId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users).orderBy(desc(users.createdAt));
+
+  return await db.select().from(actions).where(eq(actions.findingId, findingId)).orderBy(desc(actions.createdAt));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin") {
+export async function createAction(actionData: {
+  findingId: number;
+  description: string;
+  assignedTo?: string;
+  dueDate?: Date;
+  status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+}) {
   const db = await getDb();
-  if (!db) return;
-  await db.update(users).set({ role }).where(eq(users.id, userId));
-}
+  if (!db) {
+    console.warn("[Database] Cannot create action: database not available");
+    throw new Error("Database not available");
+  }
 
-export async function listAllUserProfiles() {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(userProfiles);
+  try {
+    await db.insert(actions).values(actionData);
+  } catch (error) {
+    console.error("[Database] Failed to create action:", error);
+    throw error;
+  }
 }
