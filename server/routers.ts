@@ -801,7 +801,7 @@ export const appRouter = router({
   iso: isoRouter,
 
   // Audit Management (create, list, update audits)
-  auditManagement: auditRouter,
+  audit: auditRouter,
 
   // Audit Reports Generation
   reports: router({
