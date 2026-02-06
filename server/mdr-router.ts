@@ -9,7 +9,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-import { FALLBACK_MDR_QUESTIONS } from "./fallback-data";
+import { FALLBACK_MDR_QUESTIONS, FALLBACK_PROCESSES } from "./fallback-data";
 import { normalizeMdrResponse } from "./mdr-validator";
 
 export const mdrRouter = router({
@@ -26,6 +26,7 @@ export const mdrRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
+      if (!db) return { success: false, message: "Database not available" };
       
       const [existing] = await db.select()
         .from(schema.mdrRoleQualifications)
@@ -77,21 +78,23 @@ export const mdrRouter = router({
       const db = await getDb();
       
       let qualification = null;
-      try {
-        const results = await db.select()
-          .from(schema.mdrRoleQualifications)
-          .where(
-            input.siteId
-              ? and(
-                  eq(schema.mdrRoleQualifications.userId, ctx.user.id),
-                  eq(schema.mdrRoleQualifications.siteId, input.siteId)
-                )
-              : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
-          )
-          .limit(1);
-        qualification = results[0];
-      } catch (e) {
-        console.error("Error fetching MDR qualification:", e);
+      if (db) {
+        try {
+          const results = await db.select()
+            .from(schema.mdrRoleQualifications)
+            .where(
+              input.siteId
+                ? and(
+                    eq(schema.mdrRoleQualifications.userId, ctx.user.id),
+                    eq(schema.mdrRoleQualifications.siteId, input.siteId)
+                  )
+                : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
+            )
+            .limit(1);
+          qualification = results[0];
+        } catch (e) {
+          console.error("Error fetching MDR qualification:", e);
+        }
       }
       
       if (!qualification) {
@@ -111,44 +114,50 @@ export const mdrRouter = router({
     }),
 
   /**
-   * Get MDR questions for audit (filtered by user's role)
+   * Get MDR questions for audit (filtered by user's role and processes)
    * CRITICAL: Now normalized via mdr-validator to prevent frontend crash
    */
   getQuestions: protectedProcedure
     .input(z.object({
       siteId: z.number().optional(),
+      selectedProcesses: z.array(z.string()).optional(),
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       
       let qualificationProfile = null;
-      try {
-        const [q] = await db.select()
-          .from(schema.mdrRoleQualifications)
-          .where(
-            input.siteId
-              ? and(
-                  eq(schema.mdrRoleQualifications.userId, ctx.user.id),
-                  eq(schema.mdrRoleQualifications.siteId, input.siteId)
-                )
-              : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
-          )
-          .limit(1);
-        qualificationProfile = q;
-      } catch (e) {
-        console.error("Error fetching qualification:", e);
+      if (db) {
+        try {
+          const [q] = await db.select()
+            .from(schema.mdrRoleQualifications)
+            .where(
+              input.siteId
+                ? and(
+                    eq(schema.mdrRoleQualifications.userId, ctx.user.id),
+                    eq(schema.mdrRoleQualifications.siteId, input.siteId)
+                  )
+                : eq(schema.mdrRoleQualifications.userId, ctx.user.id)
+            )
+            .limit(1);
+          qualificationProfile = q;
+        } catch (e) {
+          console.error("Error fetching qualification:", e);
+        }
       }
       
       const currentRole = qualificationProfile?.economicRole || "fabricant";
+      const selectedProcesses = input.selectedProcesses || [];
       
       let questions = [];
-      try {
-        questions = await db.select()
-          .from(schema.mdrQuestions)
-          .where(eq(schema.mdrQuestions.isActive, true))
-          .orderBy(schema.mdrQuestions.displayOrder);
-      } catch (e) {
-        console.error("Error fetching MDR questions:", e);
+      if (db) {
+        try {
+          questions = await db.select()
+            .from(schema.mdrQuestions)
+            .where(eq(schema.mdrQuestions.isActive, true))
+            .orderBy(schema.mdrQuestions.displayOrder);
+        } catch (e) {
+          console.error("Error fetching MDR questions:", e);
+        }
       }
       
       // Filter by role
@@ -162,11 +171,20 @@ export const mdrRouter = router({
           q.economicRole === "tous" || q.economicRole === currentRole
         ) as any;
       }
+
+      // Filter by processes if provided
+      if (selectedProcesses.length > 0) {
+        filteredQuestions = filteredQuestions.filter(q => 
+          q.applicableProcesses && Array.isArray(q.applicableProcesses) && 
+          q.applicableProcesses.some((p: string) => selectedProcesses.includes(p))
+        );
+      }
       
       const response = {
         questions: filteredQuestions,
         userRole: currentRole,
         totalQuestions: filteredQuestions.length,
+        processes: FALLBACK_PROCESSES
       };
 
       // NORMALIZATION: Secure the data before sending to frontend
@@ -186,6 +204,7 @@ export const mdrRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
+      if (!db) return { success: false, message: "Database not available" };
       
       // Handle string IDs by converting them to number if possible, or using a hash
       const qId = typeof input.questionId === 'number' ? input.questionId : 0;
@@ -236,6 +255,7 @@ export const mdrRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
+      if (!db) return [];
       
       const responses = await db.select()
         .from(schema.mdrAuditResponses)
