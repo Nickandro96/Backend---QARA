@@ -12,8 +12,18 @@ import { eq, and } from "drizzle-orm";
 import { normalizeMdrResponse } from "./mdr-validator";
 import fs from "fs";
 import path from "path";
+import { MDR_PROCESSES } from "./constants/processes";
 
 export const mdrRouter = router({
+  /**
+   * Get canonical list of MDR processes
+   */
+  getProcesses: protectedProcedure
+    .query(() => {
+      console.log("[MDR] processes returned:", MDR_PROCESSES.length);
+      return { processes: MDR_PROCESSES };
+    }),
+
   /**
    * Save MDR Role Qualification
    */
@@ -177,12 +187,18 @@ export const mdrRouter = router({
       // Filter by processes if provided
       if (selectedProcesses.length > 0) {
         filteredQuestions = filteredQuestions.filter((q: any) => {
-          const processes = Array.isArray(q.applicableProcesses) 
+          // Check processId or process field
+          const qProcessId = q.processId || q.process;
+          
+          // Check applicableProcesses array
+          const applicableProcesses = Array.isArray(q.applicableProcesses) 
             ? q.applicableProcesses 
             : (typeof q.applicableProcesses === "string" && q.applicableProcesses.startsWith("[") 
                 ? JSON.parse(q.applicableProcesses) 
                 : []);
-          return processes.some((p: string) => selectedProcesses.includes(p));
+          
+          return selectedProcesses.includes(qProcessId) || 
+                 applicableProcesses.some((p: string) => selectedProcesses.includes(p));
         });
       }
       
@@ -190,7 +206,7 @@ export const mdrRouter = router({
         questions: filteredQuestions,
         userRole: currentRole,
         totalQuestions: filteredQuestions.length,
-        processes: []
+        processes: MDR_PROCESSES
       };
 
       return normalizeMdrResponse(response);
