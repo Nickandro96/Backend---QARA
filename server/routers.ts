@@ -179,14 +179,56 @@ export const appRouter = router({
         economicRole: z.string().optional(),
         referentialIds: z.array(z.number()).default([1]),
         processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        plannedStartDate: z.string().optional(),
-        plannedEndDate: z.string().optional(),
-        actualStartDate: z.string().optional(),
-        actualEndDate: z.string().optional(),
-        openingMeetingAt: z.string().optional(),
-        closingMeetingAt: z.string().optional(),
+        startDate: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
+        endDate: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
+        plannedStartDate: z.preprocess(
+          (arg) => {
+            if (typeof arg === 'string' || arg instanceof Date) {
+              try {
+                return new Date(arg);
+              } catch (e) {
+                return null; // Invalid date string
+              }
+            }
+            return arg; // Pass through if not string or Date
+          },
+          z.date().optional()
+        ),
+        plannedEndDate: z.preprocess(
+          (arg) => {
+            if (typeof arg === 'string' || arg instanceof Date) {
+              try {
+                return new Date(arg);
+              } catch (e) {
+                return null; // Invalid date string
+              }
+            }
+            return arg; // Pass through if not string or Date
+          },
+          z.date().optional()
+        ),
+        actualStartDate: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
+        actualEndDate: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
+        openingMeetingAt: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
+        closingMeetingAt: z.preprocess(
+          (arg) => (arg instanceof Date ? arg.toISOString() : arg),
+          z.string().optional()
+        ),
         auditedEntityName: z.string().optional(),
         auditedEntityAddress: z.string().optional(),
         leadAuditorName: z.string().optional(),

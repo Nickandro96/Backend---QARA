@@ -451,3 +451,16 @@ export const isoAuditResponses = mysqlTable("iso_audit_responses", {
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
 });
+
+export const organizations = mysqlTable("organizations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: varchar("address", { length: 255 }),
+  siret: varchar("siret", { length: 14 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;

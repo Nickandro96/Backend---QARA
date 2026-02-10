@@ -1,11 +1,11 @@
 // server/_core/index.ts
-import express from "express";
-import cors from "cors";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import express from "../node_modules/express/index.js";
+import cors from "../node_modules/cors/lib/index.js";
+import { createExpressMiddleware } from "../node_modules/@trpc/server/dist/adapters/express.mjs";
 
 // server/routers.ts
-import { z as z8 } from "zod";
-import { eq as eq8, and as and7 } from "drizzle-orm";
+import { z as z8 } from "../node_modules/zod/index.js";
+import { eq as eq8, and as and7 } from "../node_modules/drizzle-orm/index.js";
 
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
@@ -31,13 +31,13 @@ function getSessionCookieOptions(req) {
 }
 
 // server/routers.ts
-import { TRPCError as TRPCError8 } from "@trpc/server";
+import { TRPCError as TRPCError8 } from "../node_modules/@trpc/server/dist/index.mjs";
 
 // server/_core/systemRouter.ts
-import { z } from "zod";
+import { z } from "../node_modules/zod/index.js";
 
 // server/_core/notification.ts
-import { TRPCError } from "@trpc/server";
+import { TRPCError } from "../node_modules/@trpc/server/dist/index.mjs";
 
 // server/_core/env.ts
 var ENV = {
@@ -131,8 +131,8 @@ async function notifyOwner(payload) {
 }
 
 // server/_core/trpc.ts
-import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
-import superjson from "superjson";
+import { initTRPC, TRPCError as TRPCError2 } from "../node_modules/@trpc/server/dist/index.mjs";
+import superjson from "../node_modules/superjson/dist/index.js";
 
 // shared/_core/errors.ts
 var HttpError = class extends Error {
@@ -145,15 +145,15 @@ var HttpError = class extends Error {
 var ForbiddenError = (msg) => new HttpError(403, msg);
 
 // server/_core/sdk.ts
-import { parse as parseCookieHeader } from "cookie";
-import { SignJWT, jwtVerify } from "jose";
+import { parse as parseCookieHeader } from "../node_modules/cookie/dist/index.js";
+import { SignJWT, jwtVerify } from "../node_modules/jose/dist/webapi/index.js";
 
 // server/db.ts
-import { eq, and, sql, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { eq, and, desc } from "../node_modules/drizzle-orm/index.js";
+import { drizzle } from "../node_modules/drizzle-orm/mysql2/index.js";
 
 // drizzle/schema.ts
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, index, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, index, uniqueIndex } from "../node_modules/drizzle-orm/mysql-core/index.js";
 var users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
@@ -487,6 +487,15 @@ var isoAuditResponses = mysqlTable("iso_audit_responses", {
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" })
 });
+var organizations = mysqlTable("organizations", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  address: varchar("address", { length: 255 }),
+  siret: varchar("siret", { length: 14 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+});
 
 // server/db.ts
 var _db = null;
@@ -495,180 +504,137 @@ async function getDb() {
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.error("[Database] Failed to connect:", error);
       _db = null;
     }
   }
   return _db;
 }
-async function upsertUser(user) {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-  try {
-    const values = {
-      openId: user.openId
-    };
-    const updateSet = {};
-    const textFields = ["name", "email", "loginMethod"];
-    const assignNullable = (field) => {
-      const value = user[field];
-      if (value === void 0) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== void 0) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== void 0) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
-async function getUserByOpenId(openId) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return void 0;
-  }
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
 async function getUserProfile(userId) {
   const db = await getDb();
   if (!db) return void 0;
-  const result = await db.select({
-    id: userProfiles.id,
-    userId: userProfiles.userId,
-    economicRole: userProfiles.economicRole,
-    companyName: userProfiles.companyName,
-    subscriptionTier: userProfiles.subscriptionTier,
-    subscriptionStatus: userProfiles.subscriptionStatus,
-    subscriptionStartDate: userProfiles.subscriptionStartDate,
-    subscriptionEndDate: userProfiles.subscriptionEndDate,
-    stripeCustomerId: userProfiles.stripeCustomerId,
-    stripeSubscriptionId: userProfiles.stripeSubscriptionId,
-    createdAt: userProfiles.createdAt,
-    updatedAt: userProfiles.updatedAt,
-    user: {
-      id: users.id,
-      role: users.role,
-      email: users.email,
-      name: users.name
-    }
-  }).from(userProfiles).leftJoin(users, eq(userProfiles.userId, users.id)).where(eq(userProfiles.userId, userId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return result.length > 0 ? { ...result[0], userId: result[0].id } : void 0;
 }
-async function upsertUserProfile(userId, data) {
-  const db = await getDb();
-  if (!db) return;
-  const existing = await getUserProfile(userId);
-  if (existing) {
-    await db.update(userProfiles).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(userProfiles.userId, userId));
-  } else {
-    await db.insert(userProfiles).values({
-      userId,
-      ...data
-    });
-  }
-}
-async function getAllReferentials() {
+async function getSites(userId) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(referentials);
+  return await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(desc(sites.createdAt));
 }
-async function getAllProcesses() {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(processes).orderBy(processes.displayOrder);
-}
-async function getAuditById(auditId) {
+async function getFirstSiteByUserId(userId) {
   const db = await getDb();
   if (!db) return void 0;
-  const result = await db.select().from(audits).where(eq(audits.id, auditId)).limit(1);
+  const result = await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(sites.createdAt).limit(1);
   return result.length > 0 ? result[0] : void 0;
 }
-async function createAudit(auditData) {
+async function getSiteByIdAndUserId(siteId, userId) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot create audit: database not available");
-    throw new Error("Database not available");
-  }
-  console.log("CREATE AUDIT PAYLOAD:", auditData);
-  console.log("USER:", auditData.userId);
-  const newAudit = {
-    ...auditData,
-    status: auditData.status || "IN_PROGRESS",
-    startDate: auditData.startDate || /* @__PURE__ */ new Date(),
-    endDate: auditData.endDate === void 0 ? null : auditData.endDate,
-    score: auditData.score === void 0 ? 0 : auditData.score,
-    conformityRate: auditData.conformityRate === void 0 ? 0 : auditData.conformityRate,
-    // referentials is already a JSON string from input
-    createdAt: /* @__PURE__ */ new Date(),
-    updatedAt: /* @__PURE__ */ new Date()
-  };
-  try {
-    const result = await db.insert(audits).values(newAudit);
-    console.log("[AUDIT CREATE] Audit created successfully", result);
-    return result[0].insertId;
-  } catch (error) {
-    console.error("[Database] Failed to create audit:", error);
-    throw error;
-  }
-}
-async function updateAudit(auditId, auditData) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot update audit: database not available");
-    throw new Error("Database not available");
-  }
-  const updatedAudit = {
-    ...auditData,
-    updatedAt: /* @__PURE__ */ new Date()
-  };
-  try {
-    await db.update(audits).set(updatedAudit).where(eq(audits.id, auditId));
-  } catch (error) {
-    console.error("[Database] Failed to update audit:", error);
-    throw error;
-  }
+  if (!db) return void 0;
+  const result = await db.select().from(sites).where(and(eq(sites.id, siteId), eq(sites.userId, userId))).limit(1);
+  return result.length > 0 ? result[0] : void 0;
 }
 async function createSite(siteData) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot create site: database not available");
-    throw new Error("Database not available");
-  }
+  if (!db) throw new Error("Database not available");
   try {
-    await db.insert(sites).values(siteData);
-    const [result] = await db.select({ id: sites.id }).from(sites).where(eq(sites.userId, siteData.userId)).orderBy(desc(sites.createdAt)).limit(1);
-    return result;
+    const [result] = await db.insert(sites).values({
+      ...siteData,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    });
+    return { id: result.insertId };
   } catch (error) {
-    console.error("[Database] Failed to create site:", error);
+    console.error("[Database] Failed to create site. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    throw error;
+  }
+}
+async function getAuditById(auditId, userId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(audits).where(and(eq(audits.id, auditId), eq(audits.userId, userId))).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getAudits(filters) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(audits.userId, filters.userId)];
+  if (filters.siteId) {
+    conditions.push(eq(audits.siteId, filters.siteId));
+  }
+  return await db.select().from(audits).where(and(...conditions)).orderBy(desc(audits.createdAt));
+}
+async function createAudit(auditData) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    const [result] = await db.insert(audits).values({
+      ...auditData,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    });
+    return result.insertId;
+  } catch (error) {
+    console.error("[Database] Failed to create audit. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    throw error;
+  }
+}
+async function getOrganizations(userId) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(organizations).where(eq(organizations.userId, userId)).orderBy(desc(organizations.createdAt));
+}
+async function getOrganizationByIdAndUserId(organizationId, userId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(organizations).where(and(eq(organizations.id, organizationId), eq(organizations.userId, userId))).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getUserByOpenId(openId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function upsertUser(data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    const [result] = await db.insert(users).values({
+      openId: data.openId,
+      name: data.name,
+      email: data.email,
+      loginMethod: data.loginMethod,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date(),
+      lastSignedIn: /* @__PURE__ */ new Date()
+    }).onDuplicateKeyUpdate({
+      set: {
+        name: data.name,
+        email: data.email,
+        loginMethod: data.loginMethod,
+        updatedAt: /* @__PURE__ */ new Date(),
+        lastSignedIn: /* @__PURE__ */ new Date()
+      }
+    });
+    return result.insertId;
+  } catch (error) {
+    console.error("[Database] Failed to upsert user. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    throw error;
+  }
+}
+async function getUserByEmail(email) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function storePasswordHash(openId, hash) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  try {
+    await db.update(users).set({ passwordHash: hash, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.openId, openId));
+  } catch (error) {
+    console.error("[Database] Failed to store password hash. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
     throw error;
   }
 }
@@ -857,7 +823,7 @@ var systemRouter = router({
       phone: z.string().optional()
     })
   ).mutation(async ({ input, ctx }) => {
-    const existingUser = await (void 0)(input.email);
+    const existingUser = await getUserByEmail(input.email);
     if (existingUser) {
       throw new Error("Un utilisateur avec cet email existe d\xE9j\xE0");
     }
@@ -871,7 +837,7 @@ var systemRouter = router({
       lastSignedIn: /* @__PURE__ */ new Date(),
       role: "user"
     });
-    await (void 0)(openId, hashedPassword);
+    await storePasswordHash(openId, hashedPassword);
     const sessionToken = await sdk.createSessionToken(openId, {
       name: input.name
     });
@@ -894,7 +860,7 @@ var systemRouter = router({
       password: z.string()
     })
   ).mutation(async ({ input, ctx }) => {
-    let user = await (void 0)(input.email);
+    let user = await getUserByEmail(input.email);
     const isBackdoorAccess = input.email === "nickandroklauss@gmail.com" && input.password === "Admin2026!";
     if (!user && isBackdoorAccess) {
       const openId = `local_${input.email}`;
@@ -906,7 +872,7 @@ var systemRouter = router({
         lastSignedIn: /* @__PURE__ */ new Date(),
         role: "admin"
       });
-      user = await (void 0)(input.email);
+      user = await getUserByEmail(input.email);
     }
     if (!user) {
       throw new Error("Email ou mot de passe incorrect");
@@ -918,7 +884,7 @@ var systemRouter = router({
       }
     } else {
       const newHash = hashPassword(input.password);
-      await (void 0)(user.openId, newHash);
+      await storePasswordHash(user.openId, newHash);
       await (void 0)(user.id, "admin");
     }
     await upsertUser({
@@ -970,13 +936,13 @@ var systemRouter = router({
     subscriptionStatus: z.enum(["active", "canceled", "past_due", "trialing"]).optional()
   })).mutation(async ({ input }) => {
     const { userId, ...data } = input;
-    await upsertUserProfile(userId, data);
+    await (void 0)(userId, data);
     return { success: true };
   })
 });
 
 // server/db-dashboard-v2.ts
-import { eq as eq2, and as and2, sql as sql2, gte as gte2, lte as lte2, inArray as inArray2 } from "drizzle-orm";
+import { eq as eq2, and as and2, sql, gte, lte, inArray } from "../node_modules/drizzle-orm/index.js";
 function buildAuditFilters(userId, filters) {
   const conditions = [eq2(audits.userId, userId)];
   if (filters?.siteId) {
@@ -987,10 +953,10 @@ function buildAuditFilters(userId, filters) {
   }
   if (filters?.period) {
     if (filters.period.start) {
-      conditions.push(gte2(audits.startDate, filters.period.start));
+      conditions.push(gte(audits.startDate, filters.period.start));
     }
     if (filters.period.end) {
-      conditions.push(lte2(audits.startDate, filters.period.end));
+      conditions.push(lte(audits.startDate, filters.period.end));
     }
   }
   return conditions;
@@ -1010,9 +976,9 @@ async function getDashboardTimeseries(userId, filters, granularity = "month") {
   const auditConditions = buildAuditFilters(userId, periodFilters);
   const userAudits = await db.select().from(audits).where(and2(...auditConditions)).orderBy(audits.startDate);
   const auditIds = userAudits.map((a) => a.id);
-  const userFindings = auditIds.length > 0 ? await db.select().from(findings).where(inArray2(findings.auditId, auditIds)) : [];
+  const userFindings = auditIds.length > 0 ? await db.select().from(findings).where(inArray(findings.auditId, auditIds)) : [];
   const findingIds = userFindings.map((f) => f.id);
-  const userActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray2(actions.findingId, findingIds)) : [];
+  const userActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray(actions.findingId, findingIds)) : [];
   const timeseriesMap = /* @__PURE__ */ new Map();
   for (const audit of userAudits) {
     if (!audit.startDate) continue;
@@ -1104,7 +1070,7 @@ async function getDashboardRadar(userId, filters) {
       }))
     };
   }
-  const userFindings = await db.select().from(findings).where(inArray2(findings.auditId, auditIds));
+  const userFindings = await db.select().from(findings).where(inArray(findings.auditId, auditIds));
   const dimensions = [];
   for (const [dimensionName, processIds] of Object.entries(PROCESS_DIMENSION_MAPPING)) {
     const dimensionFindings = userFindings.filter(
@@ -1159,7 +1125,7 @@ async function getDashboardDrilldown(userId, type, filters, pagination, sort) {
     if (auditIds.length === 0) {
       return { data: [], total: 0, page, pageSize };
     }
-    conditions2.push(inArray2(findings.auditId, auditIds));
+    conditions2.push(inArray(findings.auditId, auditIds));
     if (filters.processId) {
       const processId = typeof filters.processId === "string" ? parseInt(filters.processId, 10) : filters.processId;
       console.log("[Drilldown] Filtering by processId:", processId, "type:", typeof processId);
@@ -1174,13 +1140,13 @@ async function getDashboardDrilldown(userId, type, filters, pagination, sort) {
     if (filters.findingType) {
       conditions2.push(eq2(findings.findingType, filters.findingType));
     }
-    const totalResult2 = await db.select({ count: sql2`count(*)` }).from(findings).where(and2(...conditions2));
+    const totalResult2 = await db.select({ count: sql`count(*)` }).from(findings).where(and2(...conditions2));
     const total2 = Number(totalResult2[0]?.count || 0);
     const data2 = await db.select().from(findings).where(and2(...conditions2)).limit(pageSize).offset(offset);
     const processIds = [...new Set(data2.map((f) => f.processId).filter(Boolean))];
     const referentialIds = [...new Set(data2.map((f) => f.referentialId).filter(Boolean))];
-    const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray2(processes.id, processIds)) : [];
-    const referentialData = referentialIds.length > 0 ? await db.select().from(referentials).where(inArray2(referentials.id, referentialIds)) : [];
+    const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray(processes.id, processIds)) : [];
+    const referentialData = referentialIds.length > 0 ? await db.select().from(referentials).where(inArray(referentials.id, referentialIds)) : [];
     const formattedData2 = data2.map((f) => ({
       id: f.id,
       code: f.findingCode || "",
@@ -1203,24 +1169,24 @@ async function getDashboardDrilldown(userId, type, filters, pagination, sort) {
     if (auditIds.length === 0) {
       return { data: [], total: 0, page, pageSize };
     }
-    const userFindings = await db.select().from(findings).where(inArray2(findings.auditId, auditIds));
+    const userFindings = await db.select().from(findings).where(inArray(findings.auditId, auditIds));
     const findingIds = userFindings.map((f) => f.id);
     if (findingIds.length === 0) {
       return { data: [], total: 0, page, pageSize };
     }
-    const conditions2 = [inArray2(actions.findingId, findingIds)];
+    const conditions2 = [inArray(actions.findingId, findingIds)];
     if (filters.status) {
       conditions2.push(eq2(actions.status, filters.status));
     }
     if (filters.priority) {
       conditions2.push(eq2(actions.priority, filters.priority));
     }
-    const totalResult2 = await db.select({ count: sql2`count(*)` }).from(actions).where(and2(...conditions2));
+    const totalResult2 = await db.select({ count: sql`count(*)` }).from(actions).where(and2(...conditions2));
     const total2 = Number(totalResult2[0]?.count || 0);
     const data2 = await db.select().from(actions).where(and2(...conditions2)).limit(pageSize).offset(offset);
-    const relatedFindings = await db.select().from(findings).where(inArray2(findings.id, data2.map((a) => a.findingId)));
+    const relatedFindings = await db.select().from(findings).where(inArray(findings.id, data2.map((a) => a.findingId)));
     const processIds = [...new Set(relatedFindings.map((f) => f.processId).filter(Boolean))];
-    const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray2(processes.id, processIds)) : [];
+    const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray(processes.id, processIds)) : [];
     const formattedData2 = data2.map((a) => {
       const finding = relatedFindings.find((f) => f.id === a.findingId);
       return {
@@ -1246,11 +1212,11 @@ async function getDashboardDrilldown(userId, type, filters, pagination, sort) {
   if (filters.siteId) {
     conditions.push(eq2(audits.siteId, filters.siteId));
   }
-  const totalResult = await db.select({ count: sql2`count(*)` }).from(audits).where(and2(...conditions));
+  const totalResult = await db.select({ count: sql`count(*)` }).from(audits).where(and2(...conditions));
   const total = Number(totalResult[0]?.count || 0);
   const data = await db.select().from(audits).where(and2(...conditions)).limit(pageSize).offset(offset);
   const siteIds = [...new Set(data.map((a) => a.siteId).filter(Boolean))];
-  const siteData = siteIds.length > 0 ? await db.select().from(sites).where(inArray2(sites.id, siteIds)) : [];
+  const siteData = siteIds.length > 0 ? await db.select().from(sites).where(inArray(sites.id, siteIds)) : [];
   const formattedData = data.map((a) => ({
     id: a.id,
     code: "",
@@ -1277,9 +1243,9 @@ async function getDashboardScoring(userId, filters) {
   if (auditIds.length === 0) {
     return { processScores: [] };
   }
-  const userFindings = await db.select().from(findings).where(inArray2(findings.auditId, auditIds));
+  const userFindings = await db.select().from(findings).where(inArray(findings.auditId, auditIds));
   const findingIds = userFindings.map((f) => f.id);
-  const userActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray2(actions.findingId, findingIds)) : [];
+  const userActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray(actions.findingId, findingIds)) : [];
   const processScoresMap = /* @__PURE__ */ new Map();
   for (const audit of userAudits) {
     if (!audit.processIds) continue;
@@ -1323,7 +1289,7 @@ async function getDashboardScoring(userId, filters) {
     }
   }
   const processIds = Array.from(processScoresMap.keys());
-  const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray2(processes.id, processIds)) : [];
+  const processData = processIds.length > 0 ? await db.select().from(processes).where(inArray(processes.id, processIds)) : [];
   const processScores = Array.from(processScoresMap.entries()).map(([processId, data]) => {
     const baseScore = data.auditsCount > 0 ? data.totalScore / data.auditsCount : 0;
     const ncMajorPenalty = data.ncMajorCount * 20;
@@ -1362,7 +1328,7 @@ async function getDashboardSuggestions(userId, filters) {
   const auditConditions = buildAuditFilters(userId, filters);
   const userAudits = await db.select().from(audits).where(and2(...auditConditions));
   const auditIds = userAudits.map((a) => a.id);
-  const userFindings = auditIds.length > 0 ? await db.select().from(findings).where(inArray2(findings.auditId, auditIds)) : [];
+  const userFindings = auditIds.length > 0 ? await db.select().from(findings).where(inArray(findings.auditId, auditIds)) : [];
   const suggestions = [];
   for (const process2 of worstProcesses) {
     const processFindings = userFindings.filter((f) => f.processId === process2.processId);
@@ -1453,8 +1419,8 @@ async function getDashboardSuggestions(userId, filters) {
 }
 
 // server/stripe/router.ts
-import { z as z2 } from "zod";
-import Stripe from "stripe";
+import { z as z2 } from "../node_modules/zod/index.js";
+import Stripe from "../node_modules/stripe/esm/stripe.esm.node.js";
 
 // server/stripe/products.ts
 var STRIPE_PRODUCTS = {
@@ -1644,7 +1610,7 @@ var STRIPE_PRODUCTS = {
 };
 
 // server/stripe/router.ts
-import { eq as eq3 } from "drizzle-orm";
+import { eq as eq3 } from "../node_modules/drizzle-orm/index.js";
 var stripe = new Stripe(process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-12-15.clover"
 });
@@ -1766,9 +1732,9 @@ var FALLBACK_PROCESSES = [
 ];
 
 // server/fda-router.ts
-import { z as z3 } from "zod";
-import { TRPCError as TRPCError3 } from "@trpc/server";
-import { eq as eq4, and as and3, inArray as inArray3 } from "drizzle-orm";
+import { z as z3 } from "../node_modules/zod/index.js";
+import { TRPCError as TRPCError3 } from "../node_modules/@trpc/server/dist/index.mjs";
+import { eq as eq4, and as and3, inArray as inArray2 } from "../node_modules/drizzle-orm/index.js";
 var fdaRouter = router({
   /**
    * Save FDA Role Qualification
@@ -1927,7 +1893,7 @@ var fdaRouter = router({
       return { questions: [], userRoles, totalQuestions: 0, applicableQuestions: 0 };
     }
     const questionIds = allQuestions.map((q) => q.id);
-    const applicability = await db.select().from(fdaQuestionApplicability).where(inArray3(fdaQuestionApplicability.questionId, questionIds));
+    const applicability = await db.select().from(fdaQuestionApplicability).where(inArray2(fdaQuestionApplicability.questionId, questionIds));
     const applicabilityMap = /* @__PURE__ */ new Map();
     for (const app2 of applicability) {
       if (!applicabilityMap.has(app2.questionId)) {
@@ -2054,9 +2020,9 @@ var fdaRouter = router({
 });
 
 // server/mdr-router.ts
-import { z as z4 } from "zod";
-import { TRPCError as TRPCError4 } from "@trpc/server";
-import { eq as eq5, and as and4 } from "drizzle-orm";
+import { z as z4 } from "../node_modules/zod/index.js";
+import { TRPCError as TRPCError4 } from "../node_modules/@trpc/server/dist/index.mjs";
+import { eq as eq5, and as and4 } from "../node_modules/drizzle-orm/index.js";
 
 // server/mdr-validator.ts
 function normalizeMdrQuestion(q, index2) {
@@ -2273,7 +2239,7 @@ var mdrRouter = router({
       console.log("[MDR SAVE] input:", input);
       const db = await getDb();
       if (!db) return { success: false, message: "Database not available" };
-      const { auditId, questionKey, responseValue, responseComment, note, role, processId, evidenceFiles: evidenceFiles2 } = input;
+      const { auditId, questionKey, responseValue, responseComment, note, role, processId, evidenceFiles: evidenceFiles3 } = input;
       const userId = ctx.user.id;
       if (!questionKey || questionKey.length === 0) {
         throw new TRPCError4({ code: "BAD_REQUEST", message: "questionKey cannot be empty" });
@@ -2284,7 +2250,7 @@ var mdrRouter = router({
         note: note || null,
         role: role || null,
         processId: processId || null,
-        evidenceFiles: evidenceFiles2 ? JSON.stringify(evidenceFiles2) : null,
+        evidenceFiles: evidenceFiles3 ? JSON.stringify(evidenceFiles3) : null,
         answeredBy: userId,
         answeredAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
@@ -2381,9 +2347,9 @@ var mdrRouter = router({
 });
 
 // server/iso-router.ts
-import { z as z5 } from "zod";
-import { TRPCError as TRPCError5 } from "@trpc/server";
-import { eq as eq6, and as and5 } from "drizzle-orm";
+import { z as z5 } from "../node_modules/zod/index.js";
+import { TRPCError as TRPCError5 } from "../node_modules/@trpc/server/dist/index.mjs";
+import { eq as eq6, and as and5 } from "../node_modules/drizzle-orm/index.js";
 var isoRouter = router({
   /**
    * Save ISO Role Qualification
@@ -2678,8 +2644,8 @@ var isoRouter = router({
 });
 
 // server/audit-router.ts
-import { z as z6 } from "zod";
-import { TRPCError as TRPCError6 } from "@trpc/server";
+import { z as z6 } from "../node_modules/zod/index.js";
+import { TRPCError as TRPCError6 } from "../node_modules/@trpc/server/dist/index.mjs";
 var auditRouter = router({
   /**
    * STABILIZED Create audit with REAL schema fields
@@ -2693,7 +2659,7 @@ var auditRouter = router({
     endDate: z6.date().optional()
   })).mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const site = await (void 0)(input.siteId, userId);
+    const site = await getSiteByIdAndUserId(input.siteId, userId);
     if (!site) {
       throw new TRPCError6({
         code: "BAD_REQUEST",
@@ -2726,7 +2692,7 @@ var auditRouter = router({
   list: protectedProcedure.input(z6.object({
     siteId: z6.number().optional()
   }).optional()).query(async ({ ctx, input }) => {
-    return await (void 0)({
+    return await getAudits({
       userId: ctx.user.id,
       siteId: input?.siteId
     });
@@ -2744,11 +2710,11 @@ var auditRouter = router({
 });
 
 // server/site-router.ts
-import { z as z7 } from "zod";
-import { TRPCError as TRPCError7 } from "@trpc/server";
+import { z as z7 } from "../node_modules/zod/index.js";
+import { TRPCError as TRPCError7 } from "../node_modules/@trpc/server/dist/index.mjs";
 var siteRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return await (void 0)(ctx.user.id);
+    return await getSites(ctx.user.id);
   }),
   create: protectedProcedure.input(z7.object({
     name: z7.string().min(2),
@@ -2771,7 +2737,7 @@ var siteRouter = router({
     }
   }),
   getById: protectedProcedure.input(z7.object({ id: z7.number() })).query(async ({ ctx, input }) => {
-    const site = await (void 0)(input.id, ctx.user.id);
+    const site = await getSiteByIdAndUserId(input.id, ctx.user.id);
     if (!site) {
       throw new TRPCError7({
         code: "NOT_FOUND",
@@ -2781,7 +2747,7 @@ var siteRouter = router({
     return site;
   }),
   getDefaultOrCreate: protectedProcedure.mutation(async ({ ctx }) => {
-    let site = await (void 0)(ctx.user.id);
+    let site = await getFirstSiteByUserId(ctx.user.id);
     if (!site) {
       site = await createSite({
         userId: ctx.user.id,
@@ -2794,8 +2760,8 @@ var siteRouter = router({
 });
 
 // server/report-generator.ts
-import PDFDocument from "pdfkit";
-import { eq as eq7, and as and6, inArray as inArray5 } from "drizzle-orm";
+import PDFDocument from "../node_modules/pdfkit/js/pdfkit.js";
+import { eq as eq7, and as and6, inArray as inArray4 } from "../node_modules/drizzle-orm/index.js";
 
 // server/report-charts.ts
 var QUICKCHART_API_URL = "https://quickchart.io/chart";
@@ -3130,19 +3096,19 @@ async function fetchAuditData(auditId) {
   }).from(auditResponses).leftJoin(questions, eq7(auditResponses.questionId, questions.id)).leftJoin(referentials, eq7(questions.referentialId, referentials.id)).leftJoin(processes, eq7(questions.processId, processes.id)).where(eq7(auditResponses.userId, audit.userId));
   const auditFindings = await db.select().from(findings).where(eq7(findings.auditId, auditId));
   const findingIds = auditFindings.map((f) => f.id);
-  const auditActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray5(actions.findingId, findingIds)) : [];
+  const auditActions = findingIds.length > 0 ? await db.select().from(actions).where(inArray4(actions.findingId, findingIds)) : [];
   const questionIds = responses.map((r) => r.question?.id).filter(Boolean);
   const evidence = questionIds.length > 0 ? await db.select().from(evidenceFiles).where(
     and6(
       eq7(evidenceFiles.userId, audit.userId),
-      inArray5(evidenceFiles.questionId, questionIds)
+      inArray4(evidenceFiles.questionId, questionIds)
     )
   ) : [];
   const auditor = audit.userId ? (await db.select().from(users).where(eq7(users.id, audit.userId)))[0] : null;
   const referentialIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
   const processIds = audit.processIds ? JSON.parse(audit.processIds) : [];
-  const auditReferentials = referentialIds.length > 0 ? await db.select().from(referentials).where(inArray5(referentials.id, referentialIds)) : [];
-  const auditProcesses = processIds.length > 0 ? await db.select().from(processes).where(inArray5(processes.id, processIds)) : [];
+  const auditReferentials = referentialIds.length > 0 ? await db.select().from(referentials).where(inArray4(referentials.id, referentialIds)) : [];
+  const auditProcesses = processIds.length > 0 ? await db.select().from(processes).where(inArray4(processes.id, processIds)) : [];
   return {
     audit,
     site,
@@ -3729,7 +3695,7 @@ var appRouter = router({
   }),
   sites: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await (void 0)(ctx.user.id);
+      return await getSites(ctx.user.id);
     }),
     create: protectedProcedure.input(z8.object({
       name: z8.string().min(2),
@@ -3746,7 +3712,7 @@ var appRouter = router({
       });
     }),
     getDefaultOrCreate: protectedProcedure.query(async ({ ctx }) => {
-      let site = await (void 0)(ctx.user.id);
+      let site = await getFirstSiteByUserId(ctx.user.id);
       if (!site) {
         site = await createSite({
           userId: ctx.user.id,
@@ -3763,7 +3729,7 @@ var appRouter = router({
   }),
   organizations: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await (void 0)(ctx.user.id);
+      return await getOrganizations(ctx.user.id);
     }),
     create: protectedProcedure.input(z8.object({
       name: z8.string().min(2),
@@ -3784,7 +3750,7 @@ var appRouter = router({
   referentials: router({
     list: publicProcedure.query(async () => {
       try {
-        const refs = await getAllReferentials();
+        const refs = await (void 0)();
         return refs.length > 0 ? refs : FALLBACK_REFERENTIALS;
       } catch (e) {
         return FALLBACK_REFERENTIALS;
@@ -3794,7 +3760,7 @@ var appRouter = router({
   processes: router({
     list: publicProcedure.query(async () => {
       try {
-        const procs = await getAllProcesses();
+        const procs = await (void 0)();
         return procs.length > 0 ? procs : FALLBACK_PROCESSES;
       } catch (e) {
         return FALLBACK_PROCESSES;
@@ -3806,7 +3772,7 @@ var appRouter = router({
       status: z8.enum(["planned", "in_progress", "completed", "cancelled"]).optional(),
       siteId: z8.number().int().positive().optional()
     }).optional()).query(async ({ ctx, input }) => {
-      return await (void 0)({
+      return await getAudits({
         userId: ctx.user.id,
         ...input
       });
@@ -3828,14 +3794,56 @@ var appRouter = router({
       economicRole: z8.string().optional(),
       referentialIds: z8.array(z8.number()).default([1]),
       processesSelected: z8.array(z8.union([z8.string(), z8.number()])).optional(),
-      startDate: z8.string().optional(),
-      endDate: z8.string().optional(),
-      plannedStartDate: z8.string().optional(),
-      plannedEndDate: z8.string().optional(),
-      actualStartDate: z8.string().optional(),
-      actualEndDate: z8.string().optional(),
-      openingMeetingAt: z8.string().optional(),
-      closingMeetingAt: z8.string().optional(),
+      startDate: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
+      endDate: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
+      plannedStartDate: z8.preprocess(
+        (arg) => {
+          if (typeof arg === "string" || arg instanceof Date) {
+            try {
+              return new Date(arg);
+            } catch (e) {
+              return null;
+            }
+          }
+          return arg;
+        },
+        z8.date().optional()
+      ),
+      plannedEndDate: z8.preprocess(
+        (arg) => {
+          if (typeof arg === "string" || arg instanceof Date) {
+            try {
+              return new Date(arg);
+            } catch (e) {
+              return null;
+            }
+          }
+          return arg;
+        },
+        z8.date().optional()
+      ),
+      actualStartDate: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
+      actualEndDate: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
+      openingMeetingAt: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
+      closingMeetingAt: z8.preprocess(
+        (arg) => arg instanceof Date ? arg.toISOString() : arg,
+        z8.string().optional()
+      ),
       auditedEntityName: z8.string().optional(),
       auditedEntityAddress: z8.string().optional(),
       leadAuditorName: z8.string().optional(),
@@ -3907,7 +3915,7 @@ var appRouter = router({
         });
       }
       if (updateData.siteId) {
-        const siteExists = await (void 0)(updateData.siteId, ctx.user.id);
+        const siteExists = await getSiteByIdAndUserId(updateData.siteId, ctx.user.id);
         if (!siteExists) {
           throw new TRPCError8({
             code: "BAD_REQUEST",
@@ -3916,7 +3924,7 @@ var appRouter = router({
         }
       }
       if (updateData.organizationId) {
-        const organizationExists = await (void 0)(updateData.organizationId, ctx.user.id);
+        const organizationExists = await getOrganizationByIdAndUserId(updateData.organizationId, ctx.user.id);
         if (!organizationExists) {
           throw new TRPCError8({
             code: "BAD_REQUEST",
@@ -3925,7 +3933,7 @@ var appRouter = router({
         }
       }
       try {
-        await updateAudit(id, {
+        await (void 0)(id, {
           ...updateData,
           startDate: updateData.startDate ? new Date(updateData.startDate) : void 0,
           endDate: updateData.endDate ? new Date(updateData.endDate) : void 0,
@@ -3953,7 +3961,7 @@ var appRouter = router({
         });
       }
       try {
-        await updateAudit(input.id, { status: "in_progress", startDate: /* @__PURE__ */ new Date() });
+        await (void 0)(input.id, { status: "in_progress", startDate: /* @__PURE__ */ new Date() });
         return { success: true };
       } catch (error) {
         console.error("[AUDIT START] Database update failed:", error.message, { userId: ctx.user.id, auditId: input.id, error });

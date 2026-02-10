@@ -1,0 +1,146 @@
+diff --git a/drizzle/schema.ts b/drizzle/schema.ts
+index 1785230f..af5b2f1e 100644
+--- a/drizzle/schema.ts
++++ b/drizzle/schema.ts
+@@ -13,6 +13,7 @@ export const users = mysqlTable("users", {
+   createdAt: timestamp("createdAt").defaultNow().notNull(),
+   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
++  passwordHash: varchar("passwordHash", { length: 255 }),
+ });
+ 
+ export type User = typeof users.$inferSelect;
+@@ -153,8 +154,7 @@ export type InsertAudit = typeof audits.$inferInsert;
+ /**
+  * Audit questions
+  */
+-export const questions = mysqlTable("questions", {
+-  id: int("id").autoincrement().primaryKey(),
++int("id").autoincrement().primaryKey(),
+   referentialId: int("referentialId").notNull().references(() => referentials.id),
+   processId: int("processId").notNull().references(() => processes.id),
+   article: varchar("article", { length: 100 }),
+@@ -388,13 +388,7 @@ export const fdaRoleQualifications = mysqlTable("fda_role_qualifications", {
+   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+ });
+ 
+-export const fdaQuestions = mysqlTable("fda_questions", {
+-  id: int("id").autoincrement().primaryKey(),
+-  category: varchar("category", { length: 100 }).notNull(),
+-  questionText: text("questionText").notNull(),
+-  requirement: text("requirement"),
+-  helpText: text("helpText"),
+-});
++
+ 
+ export const fdaQuestionApplicability = mysqlTable("fda_question_applicability", {
+   id: int("id").autoincrement().primaryKey(),
+@@ -451,3 +445,51 @@ export const isoAuditResponses = mysqlTable("iso_audit_responses", {
+   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+   auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
+ });
++
++
++export const organizations = mysqlTable("organizations", {
++  id: int("id").autoincrement().primaryKey(),
++  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
++  name: varchar("name", { length: 255 }).notNull(),
++  address: varchar("address", { length: 255 }),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
++});
++
++
++export const fdaAuditResponses = mysqlTable("fda_audit_responses", {
++  id: int("id").autoincrement().primaryKey(),
++  auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
++  questionId: int("questionId").notNull().references(() => fdaQuestions.id, { onDelete: "cascade" }),
++  
++  // Response
++  responseValue: varchar("responseValue", { length: 32 }), // 'compliant', 'non_compliant', 'not_applicable', 'in_progress'
++  responseComment: text("responseComment"),
++  evidenceFiles: text("evidenceFiles"), // JSON array of file URLs
++  
++  // Metadata
++  answeredBy: int("answeredBy").references(() => users.id),
++  answeredAt: timestamp("answeredAt"),
++  
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
++}, (table) => ({
++  auditQuestionIdx: uniqueIndex("fda_audit_responses_audit_question_idx").on(table.auditId, table.questionId),
++  auditIdx: index("fda_audit_responses_audit_idx").on(table.auditId),
++  questionIdx: index("fda_audit_responses_question_idx").on(table.questionId),
++}));
++
++
++
++export const organizations = mysqlTable("organizations", {
++  id: int("id").autoincrement().primaryKey(),
++  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
++  name: varchar("name", { length: 255 }).notNull(),
++  address: varchar("address", { length: 255 }),
++  siret: varchar("siret", { length: 14 }),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
++});
++
++export type Organization = typeof organizations.$inferSelect;
++export type InsertOrganization = typeof organizations.$inferInsert;
+diff --git a/server/db.ts b/server/db.ts
+index e3ad350f..6f5adc56 100644
+--- a/server/db.ts
++++ b/server/db.ts
+@@ -33,13 +33,7 @@ export async function getSites(userId: number) {
+   return await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(desc(sites.createdAt));
+ }
+ 
+-export async function getFirstSiteByUserId(userId: number) {
+-  const db = await getDb();
+-  if (!db) return undefined;
+-  const result = await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(sites.createdAt).limit(1);
+-  return result.length > 0 ? result[0] : undefined;
+-}
+-
++export async function getFirstS
+ export async function getSiteByIdAndUserId(siteId: number, userId: number) {
+   const db = await getDb();
+   if (!db) return undefined;
+@@ -130,3 +124,37 @@ export async function getOrganizationByIdAndUserId(organizationId: number, userI
+   const result = await db.select().from(organizations).where(and(eq(organizations.id, organizationId), eq(organizations.userId, userId))).limit(1);
+   return result.length > 0 ? result[0] : undefined;
+ }
++
++
++
++export async function getPasswordHash(openId: string): Promise<string | undefined> {
++  const db = await getDb();
++  if (!db) return undefined;
++  const result = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.openId, openId)).limit(1);
++  return result.length > 0 ? result[0].passwordHash : undefined;
++}
++
++
++export async function updateUserRole(userId: number, role: "user" | "admin") {
++  const db = await getDb();
++  if (!db) return;
++  await db.update(users).set({ role }).where(eq(users.id, userId));
++}
++
++
++export async function listAllUsers() {
++  const db = await getDb();
++  if (!db) return [];
++  return await db.select().from(users).orderBy(desc(users.createdAt));
++}
++
++
++export async function listAllUserProfiles() {
++  const db = await getDb();
++  if (!db) return [];
++  return await db.select().from(userProfiles);
++}
++
++
++
++

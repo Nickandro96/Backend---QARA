@@ -1,0 +1,92 @@
+diff --git a/drizzle/schema.ts b/drizzle/schema.ts
+index 1785230f..9609d17c 100644
+--- a/drizzle/schema.ts
++++ b/drizzle/schema.ts
+@@ -451,3 +451,16 @@ export const isoAuditResponses = mysqlTable("iso_audit_responses", {
+   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+   auditId: int("auditId").notNull().references(() => audits.id, { onDelete: "cascade" }),
+ });
++
++export const organizations = mysqlTable("organizations", {
++  id: int("id").autoincrement().primaryKey(),
++  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
++  name: varchar("name", { length: 255 }).notNull(),
++  address: varchar("address", { length: 255 }),
++  siret: varchar("siret", { length: 14 }),
++  createdAt: timestamp("createdAt").defaultNow().notNull(),
++  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
++});
++
++export type Organization = typeof organizations.$inferSelect;
++export type InsertOrganization = typeof organizations.$inferInsert;
+diff --git a/server/db.ts b/server/db.ts
+index e3ad350f..31b8e9f9 100644
+--- a/server/db.ts
++++ b/server/db.ts
+@@ -130,3 +130,66 @@ export async function getOrganizationByIdAndUserId(organizationId: number, userI
+   const result = await db.select().from(organizations).where(and(eq(organizations.id, organizationId), eq(organizations.userId, userId))).limit(1);
+   return result.length > 0 ? result[0] : undefined;
+ }
++
++
++export async function getUserByOpenId(openId: string) {
++  const db = await getDb();
++  if (!db) return undefined;
++  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
++  return result.length > 0 ? result[0] : undefined;
++}
++
++export async function upsertUser(data: {
++  openId: string;
++  name?: string;
++  email?: string;
++  loginMethod?: string;
++}) {
++  const db = await getDb();
++  if (!db) throw new Error("Database not available");
++
++  try {
++    const [result] = await db.insert(users)
++      .values({
++        openId: data.openId,
++        name: data.name,
++        email: data.email,
++        loginMethod: data.loginMethod,
++        createdAt: new Date(),
++        updatedAt: new Date(),
++        lastSignedIn: new Date(),
++      })
++      .onDuplicateKeyUpdate({
++        set: {
++          name: data.name,
++          email: data.email,
++          loginMethod: data.loginMethod,
++          updatedAt: new Date(),
++          lastSignedIn: new Date(),
++        },
++      });
++    return result.insertId;
++  } catch (error: any) {
++    console.error("[Database] Failed to upsert user. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
++    throw error;
++  }
++}
++
++export async function getUserByEmail(email: string) {
++  const db = await getDb();
++  if (!db) return undefined;
++  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
++  return result.length > 0 ? result[0] : undefined;
++}
++
++export async function storePasswordHash(openId: string, hash: string) {
++  const db = await getDb();
++  if (!db) throw new Error("Database not available");
++
++  try {
++    await db.update(users).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(users.openId, openId));
++  } catch (error: any) {
++    console.error("[Database] Failed to store password hash. FULL ERROR:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
++    throw error;
++  }
++}
