@@ -1,20 +1,46 @@
+import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
-import * as trpcExpress from "@trpc/server/adapters/express";
 import superjson from "superjson";
+import type { TrpcContext } from "./context";
 
-export const createContext = ({ req, res }: trpcExpress.CreateExpressContextOptions) => {
-  return { req, res, user: (req as any).user };
-};
-
-const t = initTRPC.context<typeof createContext>().create({
+const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export { createContext } from "./context";
+
+const requireUser = t.middleware(async opts => {
+  const { ctx, next } = opts;
+
   if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
-  return next({ ctx: { ...ctx, user: ctx.user } });
+
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    },
+  });
 });
+
+export const protectedProcedure = t.procedure.use(requireUser);
+
+export const adminProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.user || ctx.user.role !== 'admin') {
+      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    });
+  }),
+);

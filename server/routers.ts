@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { COOKIE_NAME } from "@shared/const";
+// Fix: Replace @shared/const alias with relative path
+import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { TRPCError } from "@trpc/server";
 import { systemRouter } from "./_core/systemRouter";
