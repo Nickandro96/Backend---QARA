@@ -5,7 +5,13 @@ import { appRouter } from "../routers";
 import { createContext } from "./trpc";
 
 const app = express();
-app.use(cors());
+
+// CORS configuration for Vercel -> Railway with credentials
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(",") ?? true,
+  credentials: true,
+}));
+
 app.use(express.json());
 
 app.use(
