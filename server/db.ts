@@ -67,9 +67,23 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    const result = await db.insert(users).values(values).onDuplicateKeyUpdate({
       set: updateSet,
     });
+
+    const userId = result.insertId;
+    const existingSite = await getFirstSiteByUserId(userId);
+    if (!existingSite) {
+      await createSite({
+        userId: userId,
+        name: "Default Site",
+        addressLine1: "N/A",
+        city: "N/A",
+        postalCode: "N/A",
+        country: "N/A",
+        isMainSite: true,
+      });
+    }
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -275,6 +289,7 @@ export async function createAudit(auditData: {
   organizationId?: number;
   name: string;
   auditType: string;
+  standard: string;
   auditStandard: string;
   status: "draft" | "in_progress" | "closed";
   auditProgramRef?: string;
@@ -410,7 +425,7 @@ export async function addEvidenceFile(fileData: {
   questionId: number;
   fileName: string;
   fileUrl: string;
-  uploadedBy: number;
+  userId: number;
 }) {
   const db = await getDb();
   if (!db) return;
@@ -421,14 +436,15 @@ export async function addEvidenceFile(fileData: {
   });
 }
 
-export async function getEvidenceFiles(auditId: number, questionId: number) {
+export async function getEvidenceFiles(auditId: number, questionId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
 
   return await db.select().from(evidenceFiles)
     .where(and(
       eq(evidenceFiles.auditId, auditId),
-      eq(evidenceFiles.questionId, questionId)
+      eq(evidenceFiles.questionId, questionId),
+      eq(evidenceFiles.userId, userId)
     ));
 }
 
@@ -562,7 +578,7 @@ export async function createSite(siteData: {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    return result.insertId;
+    return { id: result.insertId };
   } catch (error) {
     console.error("[Database] Failed to create site:", error);
     throw error;

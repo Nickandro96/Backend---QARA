@@ -15,7 +15,8 @@ export const auditRouter = router({
    */
   create: protectedProcedure
     .input(z.object({
-      auditType: z.enum(["mdr", "iso", "fda"]),
+      auditType: z.enum(["internal", "supplier", "mock"]),
+      standard: z.enum(["MDR", "ISO13485", "ISO9001", "FDA"]).default("MDR"),
       name: z.string().min(2),
       siteId: z.number().int().positive(),
       organizationId: z.number().int().positive().optional(),
@@ -57,6 +58,7 @@ export const auditRouter = router({
         const auditId = await db.createAudit({
           userId,
           auditType: input.auditType,
+          standard: input.standard,
           name: input.name,
           siteId: input.siteId,
           organizationId: input.organizationId,

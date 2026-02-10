@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1770714503905,
+      "tag": "0000_remarkable_hitman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1770717383568,
+      "tag": "0001_chemical_mongoose",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1770719083987,
+      "tag": "0002_polite_toxin",
+      "breakpoints": true
+    }
+  ]
+}
