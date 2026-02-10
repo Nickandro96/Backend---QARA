@@ -10,6 +10,8 @@ import { eq as eq8, and as and7 } from "drizzle-orm";
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
 var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+var UNAUTHED_ERR_MSG = "Please login (10001)";
+var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
 
 // server/_core/cookies.ts
 function isSecureRequest(req) {
@@ -129,13 +131,20 @@ async function notifyOwner(payload) {
 }
 
 // server/_core/trpc.ts
-import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
 import superjson from "superjson";
 
+// shared/_core/errors.ts
+var HttpError = class extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+    this.name = "HttpError";
+  }
+};
+var ForbiddenError = (msg) => new HttpError(403, msg);
+
 // server/_core/sdk.ts
-import { COOKIE_NAME as COOKIE_NAME2, ONE_YEAR_MS as ONE_YEAR_MS2 } from "@shared/const";
-import { ForbiddenError } from "@shared/_core/errors";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
 
@@ -683,7 +692,7 @@ var SDKServer = class {
    */
   async createSessionToken(openId, options = {}) {
     const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS2;
+    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1e3);
     const secretKey = this.getSessionSecret();
     return new SignJWT({
@@ -711,7 +720,7 @@ var SDKServer = class {
    */
   async authenticateRequest(req) {
     const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME2);
+    const sessionCookie = cookies.get(COOKIE_NAME);
     const session = await this.verifySession(sessionCookie);
     if (!session) {
       throw ForbiddenError("Session invalide ou expir\xE9e");
@@ -778,9 +787,6 @@ var adminProcedure = t.procedure.use(
   })
 );
 
-// server/_core/systemRouter.ts
-import { COOKIE_NAME as COOKIE_NAME3, ONE_YEAR_MS as ONE_YEAR_MS3 } from "@shared/const";
-
 // server/_core/passwordUtils.ts
 import crypto from "crypto";
 function hashPassword(password) {
@@ -829,9 +835,9 @@ var systemRouter = router({
       name: input.name
     });
     const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.cookie(COOKIE_NAME3, sessionToken, {
+    ctx.res.cookie(COOKIE_NAME, sessionToken, {
       ...cookieOptions,
-      maxAge: ONE_YEAR_MS3,
+      maxAge: ONE_YEAR_MS,
       httpOnly: true,
       secure: true,
       sameSite: "none"
@@ -870,9 +876,9 @@ var systemRouter = router({
       name: input.name
     });
     const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.cookie(COOKIE_NAME3, sessionToken, {
+    ctx.res.cookie(COOKIE_NAME, sessionToken, {
       ...cookieOptions,
-      maxAge: ONE_YEAR_MS3,
+      maxAge: ONE_YEAR_MS,
       httpOnly: true,
       secure: true,
       sameSite: "none"
@@ -923,9 +929,9 @@ var systemRouter = router({
       name: user.name
     });
     const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.cookie(COOKIE_NAME3, sessionToken, {
+    ctx.res.cookie(COOKIE_NAME, sessionToken, {
       ...cookieOptions,
-      maxAge: ONE_YEAR_MS3,
+      maxAge: ONE_YEAR_MS,
       httpOnly: true,
       secure: true,
       sameSite: "none"
