@@ -20,6 +20,7 @@ import { fdaRouter } from "./fda-router";
 import { mdrRouter } from "./mdr-router";
 import { isoRouter } from "./iso-router";
 import { auditRouter } from "./audit-router";
+import { siteRouter } from "./site-router";
 import { generateAuditReport } from "./report-generator";
 import { auditReports } from "../drizzle/schema";
 import { storagePut as uploadToS3 } from "./storage";
@@ -1086,6 +1087,7 @@ export const appRouter = router({
 
   // Audit Management (create, list, update audits)
   audit: auditRouter,
+  site: siteRouter,
 
   // Audit Reports Generation
   reports: router({
