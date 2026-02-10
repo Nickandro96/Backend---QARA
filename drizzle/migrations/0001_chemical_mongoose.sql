@@ -1,0 +1,19 @@
+ALTER TABLE `audits` ADD `auditedEntityName` varchar(255);--> statement-breakpoint
+ALTER TABLE `audits` ADD `auditedEntityAddress` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `exclusions` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `productFamilies` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `classDevices` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `markets` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `plannedStartDate` timestamp;--> statement-breakpoint
+ALTER TABLE `audits` ADD `plannedEndDate` timestamp;--> statement-breakpoint
+ALTER TABLE `audits` ADD `actualStartDate` timestamp;--> statement-breakpoint
+ALTER TABLE `audits` ADD `actualEndDate` timestamp;--> statement-breakpoint
+ALTER TABLE `audits` ADD `auditLeader` varchar(255);--> statement-breakpoint
+ALTER TABLE `audits` ADD `auditTeamMembers` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `auditeeMainContact` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `summary` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `conclusion` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `recommendation` text;--> statement-breakpoint
+ALTER TABLE `audits` ADD `nbNC_major` int;--> statement-breakpoint
+ALTER TABLE `audits` ADD `nbNC_minor` int;--> statement-breakpoint
+ALTER TABLE `audits` ADD `nbObs` int;
