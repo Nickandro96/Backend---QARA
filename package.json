@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "pnpm run db:migrate && NODE_ENV=production node dist/index.js",
+    "build": "esbuild server/_core/index.ts --platform=node --bundle --format=esm --outdir=dist --external:./node_modules/*",
+    "start": "NODE_ENV=production node dist/index.js",
     "db:migrate": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

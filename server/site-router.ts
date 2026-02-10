@@ -1,46 +1,58 @@
-import { z } from 'zod';
-import { protectedProcedure, publicProcedure, router } from './trpc';
-import { sites } from '../../drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { z } from "zod";
+import { protectedProcedure, router } from "./_core/trpc";
+import * as db from "./db";
+import { TRPCError } from "@trpc/server";
 
 export const siteRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user.id;
-    return ctx.db.select().from(sites).where(eq(sites.userId, userId));
+    return await db.getSites(ctx.user.id);
   }),
 
   create: protectedProcedure
     .input(z.object({
-      name: z.string(),
+      name: z.string().min(2),
+      code: z.string().optional(),
       address: z.string().optional(),
-      city: z.string().optional(),
-      state: z.string().optional(),
-      zipCode: z.string().optional(),
       country: z.string().optional(),
-      phone: z.string().optional(),
-      email: z.string().optional(),
-      notes: z.string().optional(),
+      isActive: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.user.id;
-      const newSite = await ctx.db.insert(sites).values({
-        ...input,
-        userId: userId,
-      });
-      return newSite;
+      try {
+        return await db.createSite({
+          ...input,
+          userId: ctx.user.id,
+        });
+      } catch (error: any) {
+        console.error("[SITE CREATE ROUTER] Error:", error.message);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create site: " + error.message,
+        });
+      }
+    }),
+
+  getById: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const site = await db.getSiteByIdAndUserId(input.id, ctx.user.id);
+      if (!site) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Site not found",
+        });
+      }
+      return site;
     }),
 
   getDefaultOrCreate: protectedProcedure.mutation(async ({ ctx }) => {
-    const userId = ctx.user.id;
-    let defaultSite = await ctx.db.select().from(sites).where(and(eq(sites.userId, userId), eq(sites.name, 'Default Site'))).limit(1);
-
-    if (defaultSite.length === 0) {
-      const newSite = await ctx.db.insert(sites).values({
-        name: 'Default Site',
-        userId: userId,
-      });
-      defaultSite = await ctx.db.select().from(sites).where(and(eq(sites.userId, userId), eq(sites.name, 'Default Site'))).limit(1);
+    let site = await db.getFirstSiteByUserId(ctx.user.id);
+    if (!site) {
+      site = await db.createSite({
+        userId: ctx.user.id,
+        name: "Default Site",
+        isActive: true,
+      }) as any;
     }
-    return defaultSite[0];
+    return site;
   }),
 });
