@@ -147,7 +147,7 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({
         status: z.enum(["planned", "in_progress", "completed", "cancelled"]).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         return await db.getAudits({
@@ -175,7 +175,7 @@ export const appRouter = router({
         economicRole: z.string().optional(),
         processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
         referentialIds: z.array(z.number()).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         organizationId: z.number().optional(),
         auditObjective: z.string().optional(),
         auditScope: z.string().optional(),
@@ -297,9 +297,9 @@ export const appRouter = router({
         auditStandard: z.string().default("MDR 2017/745"),
         auditType: z.string().default("mdr"),
         economicRole: z.string(),
-        processesSelected: z.array(z.union([z.string(), z.number()])),
-        referentialIds: z.array(z.number()).default([1]), // Assuming MDR_ID is 1
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
+        processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
+        referentialIds: z.array(z.number()).default([1]),
         organizationId: z.number().optional(),
         auditObjective: z.string().optional(),
         auditScope: z.string().optional(),
@@ -318,33 +318,13 @@ export const appRouter = router({
         observers: z.array(z.object({ name: z.string(), role: z.string().optional() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        let siteIdToUse = input.siteId;
-
-        let resolvedSiteId = input.siteId;
-        if (!resolvedSiteId) {
-          const defaultSite = await db.getFirstSiteByUserId(ctx.user.id);
-          if (defaultSite) {
-            resolvedSiteId = defaultSite.id;
-          } else {
-            const newDefaultSite = await db.createSite({
-              userId: ctx.user.id,
-              name: "Default Site",
-              addressLine1: "N/A",
-              city: "N/A",
-              postalCode: "N/A",
-              country: "N/A",
-              isMainSite: true,
-            });
-            resolvedSiteId = newDefaultSite.id;
-          }
-        } else {
-          const siteExists = await db.getSiteByIdAndUserId(resolvedSiteId, ctx.user.id);
-          if (!siteExists) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Invalid siteId",
-            });
-          }
+        const resolvedSiteId = input.siteId;
+        const siteExists = await db.getSiteByIdAndUserId(resolvedSiteId, ctx.user.id);
+        if (!siteExists) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Site not found or does not belong to the user.",
+          });
         }
 
         let resolvedOrganizationId = input.organizationId;
@@ -366,15 +346,22 @@ export const appRouter = router({
             name: input.name || `Audit MDR (${input.economicRole}) - ${new Date().toLocaleDateString()}`,
             auditType: input.auditType,
             auditStandard: input.auditStandard,
-            status: "draft",
-            auditProgramRef: input.auditProgramRef,
+            status: "draft", // Always start as draft
+            economicRole: input.economicRole,
+            siteId: resolvedSiteId,
+            organizationId: resolvedOrganizationId,
+            processesSelected: input.processesSelected ? JSON.stringify(input.processesSelected) : "[]",
+            referentialIds: JSON.stringify(input.referentialIds || []),
             auditObjective: input.auditObjective,
             auditScope: input.auditScope,
             auditCriteria: input.auditCriteria,
+            auditProgramRef: input.auditProgramRef,
             auditMethod: input.auditMethod,
-            auditLanguage: input.auditLanguage,
             startDate: input.startDate ? new Date(input.startDate) : undefined,
             endDate: input.endDate ? new Date(input.endDate) : undefined,
+            openingMeetingAt: input.openingMeetingAt ? new Date(input.openingMeetingAt) : undefined,
+            closingMeetingAt: input.closingMeetingAt ? new Date(input.closingMeetingAt) : undefined,
+            auditLanguage: input.auditLanguage,
             auditeeContactName: input.auditeeContactName,
             auditeeContactEmail: input.auditeeContactEmail,
             auditeeContactPhone: input.auditeeContactPhone,
@@ -382,16 +369,29 @@ export const appRouter = router({
             leadAuditorEmail: input.leadAuditorEmail,
             auditors: input.auditors ? JSON.stringify(input.auditors) : undefined,
             observers: input.observers ? JSON.stringify(input.observers) : undefined,
-            economicRole: input.economicRole,
-            processesSelected: JSON.stringify(input.processesSelected),
-            referentialIds: JSON.stringify(input.referentialIds),
-            score: undefined,
-            conformityRate: undefined,
+            auditedEntityName: input.auditedEntityName,
+            auditedEntityAddress: input.auditedEntityAddress,
+            exclusions: input.exclusions,
+            productFamilies: input.productFamilies,
+            classDevices: input.classDevices,
+            markets: input.markets,
+            plannedStartDate: input.plannedStartDate ? new Date(input.plannedStartDate) : undefined,
+            plannedEndDate: input.plannedEndDate ? new Date(input.plannedEndDate) : undefined,
+            actualStartDate: input.actualStartDate ? new Date(input.actualStartDate) : undefined,
+            actualEndDate: input.actualEndDate ? new Date(input.actualEndDate) : undefined,
+            auditLeader: input.auditLeader,
+            auditTeamMembers: input.auditTeamMembers ? JSON.stringify(input.auditTeamMembers) : undefined,
+            auditeeMainContact: input.auditeeMainContact,
+            summary: input.summary,
+            conclusion: input.conclusion,
+            recommendation: input.recommendation,
+            nbNC_major: input.nbNC_major,
+            nbNC_minor: input.nbNC_minor,
+            nbObs: input.nbObs,
+            score: 0, // Default value
+            conformityRate: 0, // Default value
           });
-          console.log("CREATE AUDIT PAYLOAD:", input);
-          console.log("USER:", ctx.user.id);
-          console.log("resolvedSiteId:", resolvedSiteId);
-          console.log("resolvedOrganizationId:", resolvedOrganizationId);
+          console.log("CREATE AUDIT PAYLOAD:", { ...input, userId: ctx.user.id, resolvedSiteId, resolvedOrganizationId });
           console.log("auditId:", auditId);
           return { auditId };
         } catch (error: any) {
@@ -412,7 +412,10 @@ export const appRouter = router({
         processId: z.number().optional(),
         economicRole: z.string().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // Questions are global, but we might want to filter by user's economic role if applicable
+        // For now, getQuestions does not take userId, so we just pass the input filters.
+        // If questions become user-specific, this will need to be updated.
         return await db.getQuestions(input);
       }),
   }),
@@ -927,7 +930,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
         criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
@@ -944,7 +947,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
         criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
@@ -962,7 +965,7 @@ export const appRouter = router({
             start: z.date(),
             end: z.date(),
           }).optional(),
-          siteId: z.number().optional(),
+         siteId: z.number().int().positive().optional(),.int().positive(),
           auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
           criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
         }).optional(),
@@ -981,7 +984,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
         criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
@@ -998,7 +1001,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
@@ -1013,7 +1016,7 @@ export const appRouter = router({
           findingType: z.string().optional(),
           criticality: z.string().optional(),
           status: z.string().optional(),
-          siteId: z.number().optional(),
+          siteId: z.number().int().positive().optional(),
         }).optional(),
         pagination: z.object({
           page: z.number(),
@@ -1043,7 +1046,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
         criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
@@ -1060,7 +1063,7 @@ export const appRouter = router({
           start: z.date(),
           end: z.date(),
         }).optional(),
-        siteId: z.number().optional(),
+        siteId: z.number().int().positive().optional(),
         auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
         criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
       }).optional())
