@@ -199,346 +199,244 @@ export async function getSiteByIdAndUserId(siteId: number, userId: number) {
  * - L'ancien createSite n'acceptait que address (string).
  * - On supporte les 2 (compat), mais on n'insère jamais "address" si la colonne n'existe pas.
  */
-export async function createSite(siteData: {
+export async function createSite(input: {
   userId: number;
   name: string;
-
-  // ✅ lié au wizard MDR
-  organisationId?: number | null;
-
-  // ✅ champs adressage complets
-  code?: string;
+  address?: string;
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
   postalCode?: string;
   country?: string;
-
-  // ✅ statut
   isMainSite?: boolean;
-  isActive?: boolean;
-
-  // ⚠️ compat: si ton front envoie encore "address"
-  address?: string;
+  organisationId?: number | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // ✅ Compatibilité : si "address" arrive, on le map vers addressLine1
-  const payload: Record<string, any> = {
-    ...siteData,
-    addressLine1: siteData.addressLine1 ?? siteData.address ?? null,
+  const payload: any = {
+    userId: input.userId,
+    name: input.name,
+    addressLine1: input.addressLine1 ?? null,
+    addressLine2: input.addressLine2 ?? null,
+    city: input.city ?? null,
+    postalCode: input.postalCode ?? null,
+    country: input.country ?? null,
+    isMainSite: input.isMainSite ?? false,
+    organisationId: input.organisationId ?? null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  // on évite d'insérer une colonne "address" si elle n'existe pas en DB
-  delete payload.address;
-
   try {
-    const [result] = await db.insert(sites).values(payload as any);
-    return { id: result.insertId };
+    const result = await db.insert(sites).values(payload as any);
+    return { id: (result as any).insertId, ...payload };
   } catch (error: any) {
-    console.error(
-      "[Database] Failed to create site. FULL ERROR:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
+    console.error("[Database] Failed to create site:", error?.message ?? error);
     throw error;
   }
 }
 
-/**
- * ---------------------------------------------------------
- * Organizations queries
- * ---------------------------------------------------------
- */
+export async function upsertOrganisation(input: {
+  id?: number;
+  userId: number;
+  name: string;
+  siret?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const payload: any = {
+    userId: input.userId,
+    name: input.name,
+    siret: input.siret ?? null,
+    addressLine1: input.addressLine1 ?? null,
+    addressLine2: input.addressLine2 ?? null,
+    city: input.city ?? null,
+    postalCode: input.postalCode ?? null,
+    country: input.country ?? null,
+    updatedAt: new Date(),
+  };
+
+  try {
+    if (input.id) {
+      await db
+        .update(organisations)
+        .set(payload)
+        .where(and(eq(organisations.id, input.id), eq(organisations.userId, input.userId)));
+      return { id: input.id, ...payload };
+    } else {
+      const result = await db.insert(organisations).values({
+        ...payload,
+        createdAt: new Date(),
+      } as any);
+      return { id: (result as any).insertId, ...payload };
+    }
+  } catch (error: any) {
+    console.error("[Database] Failed to upsert organisation:", error?.message ?? error);
+    throw error;
+  }
+}
 
 export async function getOrganisations(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  try {
-    return await db
-      .select()
-      .from(organisations)
-      .where(eq(organisations.userId, userId))
-      .orderBy(desc(organisations.createdAt));
-  } catch (error: any) {
-    // ✅ FIX: ne bloque plus l'UI si table/colonnes pas prêtes (migrations)
-    console.error("[DB][getOrganizations] FULL ERROR:", error);
-    return [];
-  }
+  return await db
+    .select()
+    .from(organisations)
+    .where(eq(organisations.userId, userId))
+    .orderBy(desc(organisations.createdAt));
 }
 
-export async function getOrganisationByIdAndUserId(
-  organisationId: number,
-  userId: number
-) {
+export async function getOrganisationByIdAndUserId(orgId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(organisations)
-    .where(
-      and(eq(organisations.id, organisationId), eq(organisations.userId, userId))
-    )
+    .where(and(eq(organisations.id, orgId), eq(organisations.userId, userId)))
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function createOrganisation(orgData: {
-  userId: number;
-  name: string;
-  legalEntityType?: string;
-  siret?: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  postalCode?: string;
-  country?: string;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  try {
-    const [result] = await db.insert(organisations).values({
-      ...orgData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any);
-    return { id: result.insertId };
-  } catch (error: any) {
-    console.error(
-      "[Database] Failed to create organization. FULL ERROR:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
-    throw error;
-  }
-}
-
 /**
  * ---------------------------------------------------------
- * Audit queries (CRUD complet)
+ * Audits (extraits / essentiels)
  * ---------------------------------------------------------
  */
 
-export async function getAuditById(auditId: number, userId: number) {
+export async function createAudit(input: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const payload: any = {
+    ...input,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const result = await db.insert(audits).values(payload as any);
+  return { id: (result as any).insertId, ...payload };
+}
+
+export async function listAuditsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(audits)
+    .where(eq(audits.userId, userId))
+    .orderBy(desc(audits.createdAt));
+}
+
+export async function getAuditByIdAndUserId(auditId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-
   const result = await db
     .select()
     .from(audits)
     .where(and(eq(audits.id, auditId), eq(audits.userId, userId)))
     .limit(1);
-
   return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getAudits(filters: {
-  userId: number;
-  siteId?: number;
-  status?: string;
-}) {
-  const db = await getDb();
-  if (!db) return [];
-
-  const conditions = [eq(audits.userId, filters.userId)];
-  if (filters.siteId) conditions.push(eq(audits.siteId, filters.siteId));
-  if (filters.status)
-    conditions.push(eq(audits.status as any, filters.status as any));
-
-  return await db
-    .select()
-    .from(audits)
-    .where(and(...conditions))
-    .orderBy(desc(audits.createdAt));
-}
-
-export async function createAudit(auditData: {
-  userId: number;
-  siteId: number;
-  name: string;
-  auditType: string;
-  status:
-    | "draft"
-    | "in_progress"
-    | "closed"
-    | "planned"
-    | "completed"
-    | "cancelled";
-  startDate?: Date;
-  endDate?: Date;
-
-  referentialIds: string;
-  processIds?: string;
-
-  clientOrganization?: string | null;
-  siteLocation?: string | null;
-  auditorName?: string | null;
-  auditorEmail?: string | null;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  try {
-    const payload: Record<string, any> = {
-      ...auditData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    if (payload.processIds === undefined) payload.processIds = JSON.stringify([]);
-
-    const [result] = await (db as any).insert(audits).values(payload);
-    return result.insertId as number;
-  } catch (error: any) {
-    console.error(
-      "[Database] Failed to create audit. FULL ERROR:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
-    throw error;
-  }
-}
-
-export async function updateAudit(
-  auditId: number,
-  patch: Partial<{
-    name: string;
-    auditStandard: string;
-    auditType: string;
-    economicRole: string;
-
-    siteId: number;
-    organizationId: number;
-
-    startDate: Date;
-    endDate: Date;
-
-    referentialIds: string;
-    processIds: string;
-
-    auditors: string;
-    observers: string;
-
-    auditorName: string;
-    auditorEmail: string;
-
-    status: string;
-
-    updatedAt: Date;
-  }>
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  try {
-    const data: Record<string, any> = {
-      ...patch,
-      updatedAt: new Date(),
-    };
-
-    await (db as any).update(audits).set(data).where(eq(audits.id, auditId));
-    return { success: true };
-  } catch (error: any) {
-    console.error(
-      "[Database] Failed to update audit. FULL ERROR:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
-    throw error;
-  }
-}
-
-export async function deleteAudit(auditId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  try {
-    await db.delete(audits).where(eq(audits.id, auditId));
-    return { success: true };
-  } catch (error: any) {
-    console.error(
-      "[Database] Failed to delete audit. FULL ERROR:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error))
-    );
-    throw error;
-  }
-}
-
-export async function compareAudits(
-  audit1Id: number,
-  audit2Id: number,
-  userId: number
-) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const [a1] = await db
-    .select()
-    .from(audits)
-    .where(and(eq(audits.id, audit1Id), eq(audits.userId, userId)))
-    .limit(1);
-
-  const [a2] = await db
-    .select()
-    .from(audits)
-    .where(and(eq(audits.id, audit2Id), eq(audits.userId, userId)))
-    .limit(1);
-
-  if (!a1 || !a2) return null;
-
-  const a1Refs = safeJsonParse<number[]>((a1 as any).referentialIds, []);
-  const a2Refs = safeJsonParse<number[]>((a2 as any).referentialIds, []);
-  const a1Procs = safeJsonParse<(string | number)[]>((a1 as any).processIds, []);
-  const a2Procs = safeJsonParse<(string | number)[]>((a2 as any).processIds, []);
-
-  return {
-    audit1: a1,
-    audit2: a2,
-    parsed: {
-      audit1: { referentialIds: a1Refs, processIds: a1Procs },
-      audit2: { referentialIds: a2Refs, processIds: a2Procs },
-    },
-  };
 }
 
 /**
  * ---------------------------------------------------------
- * Users auth helpers
+ * Evidence Files
+ * ---------------------------------------------------------
+ */
+export async function createEvidenceFile(input: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const payload: any = {
+    ...input,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const result = await db.insert(evidenceFiles).values(payload as any);
+  return { id: (result as any).insertId, ...payload };
+}
+
+export async function listEvidenceFilesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(evidenceFiles)
+    .where(eq(evidenceFiles.userId, userId))
+    .orderBy(desc(evidenceFiles.createdAt));
+}
+
+/**
+ * ---------------------------------------------------------
+ * Referential / Process master data
  * ---------------------------------------------------------
  */
 
-export async function getUserByOpenId(openId: string) {
+export async function getAllReferentials() {
   const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  if (!db) return [];
+  try {
+    return await db.select().from(referentials).orderBy(referentials.id);
+  } catch (error) {
+    console.error("[Database] Failed to get referentials:", error);
+    return [];
+  }
 }
+
+/**
+ * ✅ FIX: processes -> processus (sinon crash)
+ */
+export async function getAllProcesses() {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    return await db.select().from(processus).orderBy(processus.id);
+  } catch (error) {
+    console.error("[Database] Failed to get processes:", error);
+    return [];
+  }
+}
+
+/**
+ * ---------------------------------------------------------
+ * Users
+ * ---------------------------------------------------------
+ */
 
 export async function upsertUser(data: {
   openId: string;
   name?: string;
   email?: string;
   loginMethod?: string;
+  lastSignedIn?: Date;
+  role?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  const now = new Date();
+
+  const payload: any = {
+    openId: data.openId,
+    name: data.name ?? null,
+    email: data.email ?? null,
+    loginMethod: data.loginMethod ?? null,
+    role: data.role ?? "user",
+    lastSignedIn: data.lastSignedIn ?? now,
+    createdAt: now,
+    updatedAt: now,
+  };
+
   try {
-    const [result] = await db
+    const result = await db
       .insert(users)
-      .values({
-        openId: data.openId,
-        name: data.name,
-        email: data.email,
-        loginMethod: data.loginMethod,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastSignedIn: new Date(),
-      })
+      .values(payload as any)
       .onDuplicateKeyUpdate({
         set: {
           name: data.name,
@@ -549,7 +447,7 @@ export async function upsertUser(data: {
         },
       });
 
-    return result.insertId;
+    return (result as any).insertId;
   } catch (error: any) {
     console.error(
       "[Database] Failed to upsert user. FULL ERROR:",
@@ -566,6 +464,18 @@ export async function getUserByEmail(email: string) {
     .select()
     .from(users)
     .where(eq(users.email, email))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** ✅ AJOUTÉ POUR L'AUTH VIA COOKIE */
+export async function getUserByOpenId(openId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
@@ -658,30 +568,5 @@ export async function upsertUserProfile(
       error?.message ?? error
     );
     throw error;
-  }
-}
-
-export async function getAllReferentials() {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    return await db.select().from(referentials).orderBy(referentials.id);
-  } catch (error) {
-    console.error("[Database] Failed to get referentials:", error);
-    return [];
-  }
-}
-
-/**
- * ✅ FIX: processes -> processus (sinon crash)
- */
-export async function getAllProcesses() {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    return await db.select().from(processus).orderBy(processus.id);
-  } catch (error) {
-    console.error("[Database] Failed to get processes:", error);
-    return [];
   }
 }
