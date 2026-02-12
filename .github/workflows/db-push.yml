@@ -42,8 +42,7 @@ jobs:
           const mysql = require("mysql2/promise");
 
           (async () => {
-            const url = process.env.DATABASE_URL;
-            const conn = await mysql.createConnection(url);
+            const conn = await mysql.createConnection(process.env.DATABASE_URL);
 
             const [a] = await conn.query(`SHOW TABLES LIKE 'processes'`);
             const [b] = await conn.query(`SHOW TABLES LIKE 'processus'`);
@@ -70,57 +69,44 @@ jobs:
           });
           NODE
 
-      # ✅ Ensure Drizzle meta/journal exists so `drizzle-kit migrate` can run
-      - name: Ensure drizzle/meta/_journal.json exists (required by migrate)
+      # ✅ Drizzle requires meta/_journal.json (your error shows it's looking for THIS path)
+      # We create BOTH meta/_journal.json and drizzle/meta/_journal.json to be safe with any config.
+      - name: Ensure Drizzle journal exists (meta/_journal.json + drizzle/meta/_journal.json)
         run: |
           node - <<'NODE'
           const fs = require("fs");
           const path = require("path");
 
-          const metaDir = path.join(process.cwd(), "drizzle", "meta");
-          const migDir  = path.join(process.cwd(), "drizzle", "migrations");
-          const journalPath = path.join(metaDir, "_journal.json");
-
-          if (!fs.existsSync(metaDir)) fs.mkdirSync(metaDir, { recursive: true });
-          if (!fs.existsSync(migDir)) fs.mkdirSync(migDir, { recursive: true });
-
-          if (!fs.existsSync(journalPath)) {
-            const journal = { version: "5", dialect: "mysql", entries: [] };
-            fs.writeFileSync(journalPath, JSON.stringify(journal), "utf8");
-            console.log("Created drizzle/meta/_journal.json ✅");
-          } else {
-            console.log("drizzle/meta/_journal.json already exists ✅");
+          function ensureJournal(dir) {
+            fs.mkdirSync(dir, { recursive: true });
+            const journalPath = path.join(dir, "_journal.json");
+            if (!fs.existsSync(journalPath)) {
+              const journal = { version: "5", dialect: "mysql", entries: [] };
+              fs.writeFileSync(journalPath, JSON.stringify(journal), "utf8");
+              console.log("Created", journalPath, "✅");
+            } else {
+              console.log("Exists", journalPath, "✅");
+            }
           }
+
+          ensureJournal(path.join(process.cwd(), "meta"));
+          ensureJournal(path.join(process.cwd(), "drizzle", "meta"));
+
+          // Ensure migrations folder exists (even if empty)
+          fs.mkdirSync(path.join(process.cwd(), "drizzle", "migrations"), { recursive: true });
           NODE
 
-      # ✅ Optional baseline table creation (keeps data, doesn't drop anything)
-      - name: Ensure __drizzle_migrations table exists (safe)
+      - name: Debug journal files present
         run: |
-          node - <<'NODE'
-          const mysql = require("mysql2/promise");
+          echo "== repo root =="
+          ls -la
+          echo "== meta =="
+          ls -la meta || true
+          echo "== drizzle/meta =="
+          ls -la drizzle/meta || true
+          echo "== drizzle/migrations =="
+          ls -la drizzle/migrations || true
 
-          (async () => {
-            const url = process.env.DATABASE_URL;
-            const conn = await mysql.createConnection(url);
-
-            await conn.query(`
-              CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
-                \`id\` int NOT NULL AUTO_INCREMENT,
-                \`hash\` varchar(255) NOT NULL,
-                \`created_at\` bigint NOT NULL,
-                PRIMARY KEY (\`id\`),
-                UNIQUE KEY \`__drizzle_migrations_hash_unique\` (\`hash\`)
-              )
-            `);
-
-            console.log("__drizzle_migrations ensured ✅");
-            await conn.end();
-          })().catch((e) => {
-            console.error(e);
-            process.exit(1);
-          });
-          NODE
-
-      # ❌ DO NOT run `drizzle-kit generate` in CI (it recreates 0000_... and conflicts with existing tables)
+      # ✅ Keep data: do not generate in CI, only migrate
       - name: Run migrations (no-op if none committed)
         run: pnpm exec drizzle-kit migrate --config=drizzle.config.ts
