@@ -52,33 +52,41 @@ jobs:
           })().catch((e) => { console.error(e); process.exit(1); });
           NODE
 
-      # ✅ Make journal + run migrate in the SAME step (cannot be skipped)
+      # ✅ Create Drizzle journal in ALL common locations (covers any `out:` path)
       - name: Ensure Drizzle journal exists then migrate (single-step, safe)
         run: |
           set -euxo pipefail
 
-          # Create both possible journal locations
-          mkdir -p meta
-          mkdir -p drizzle/meta
+          echo "CWD=$(pwd)"
+          ls -la
+
+          JOURNAL='{"version":"5","dialect":"mysql","entries":[]}'
+
+          # Candidate roots where drizzle may look depending on drizzle.config.ts `out:`
+          for d in \
+            "meta" \
+            "drizzle/meta" \
+            "drizzle/migrations/meta" \
+            "migrations/meta"
+          do
+            mkdir -p "$d"
+            if [ ! -f "$d/_journal.json" ]; then
+              echo "$JOURNAL" > "$d/_journal.json"
+            fi
+          done
+
+          # Ensure migrations folders exist too (even if empty)
           mkdir -p drizzle/migrations
-
-          if [ ! -f meta/_journal.json ]; then
-            echo '{"version":"5","dialect":"mysql","entries":[]}' > meta/_journal.json
-          fi
-
-          if [ ! -f drizzle/meta/_journal.json ]; then
-            echo '{"version":"5","dialect":"mysql","entries":[]}' > drizzle/meta/_journal.json
-          fi
+          mkdir -p migrations
 
           echo "== meta =="
-          ls -la meta
-          cat meta/_journal.json
-
+          ls -la meta || true
           echo "== drizzle/meta =="
-          ls -la drizzle/meta
-          cat drizzle/meta/_journal.json
+          ls -la drizzle/meta || true
+          echo "== drizzle/migrations/meta =="
+          ls -la drizzle/migrations/meta || true
+          echo "== migrations/meta =="
+          ls -la migrations/meta || true
 
-          echo "== drizzle/migrations =="
-          ls -la drizzle/migrations || true
-
+          # IMPORTANT: do NOT run generate in CI
           pnpm exec drizzle-kit migrate --config=drizzle.config.ts
