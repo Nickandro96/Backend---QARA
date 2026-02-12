@@ -10,50 +10,142 @@ import {
   evidenceFiles,
   referentials,
   processus,
-  // auditReports,
 } from "../drizzle/schema";
 
 /**
  * ---------------------------------------------------------
- * ✅ DRIZZLE MYSQL2 CONNECTION (FIX)
+ * ✅ DRIZZLE MYSQL2 CONNECTION (Railway-friendly)
  * ---------------------------------------------------------
- * drizzle-orm/mysql2 attend un client mysql2 (pool/connection)
+ * Supports multiple env styles:
  *
- * Supporte:
- * - DATABASE_URL=mysql://user:pass@host:port/db
- * - ou variables séparées (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT)
+ * 1) DATABASE_URL=mysql://user:pass@host:port/db
+ *
+ * 2) Railway / other providers URL variants:
+ *    - MYSQL_URL
+ *    - MYSQL_PRIVATE_URL
+ *    - MYSQL_PUBLIC_URL
+ *
+ * 3) Railway-style split vars (uppercase no underscores):
+ *    - MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT
+ *
+ * 4) Split vars with underscores:
+ *    - MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT
+ *
+ * 5) Generic DB_* split vars:
+ *    - DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
  */
 
 let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
-function getMysqlConfigFromEnv() {
-  // 1) DATABASE_URL (recommandé)
-  if (process.env.DATABASE_URL) {
-    const url = new URL(process.env.DATABASE_URL);
+type MysqlCfg = {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  ssl?: any;
+};
 
+function pickFirstEnv(...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = process.env[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v);
+  }
+  return undefined;
+}
+
+function parseMysqlUrl(urlString: string): MysqlCfg | null {
+  try {
+    const url = new URL(urlString);
+
+    // accept mysql:// or mysqls://
+    if (!url.protocol.startsWith("mysql")) return null;
+
+    const host = url.hostname;
+    const port = url.port ? Number(url.port) : 3306;
+    const user = decodeURIComponent(url.username ?? "");
+    const password = decodeURIComponent(url.password ?? "");
+    const database = url.pathname?.replace("/", "") ?? "";
+
+    if (!host || !user || !database) return null;
+
+    // Optional: allow "ssl=true" in query string
+    const sslFlag = url.searchParams.get("ssl");
+    const ssl =
+      sslFlag && ["1", "true", "yes"].includes(sslFlag.toLowerCase())
+        ? { rejectUnauthorized: true }
+        : undefined;
+
+    return { host, port, user, password, database, ssl };
+  } catch {
+    return null;
+  }
+}
+
+function getMysqlConfigFromEnv(): MysqlCfg | null {
+  // ---------- (1) Prefer a single URL ----------
+  const url =
+    pickFirstEnv(
+      "DATABASE_URL",
+      "MYSQL_URL",
+      "MYSQL_PRIVATE_URL",
+      "MYSQL_PUBLIC_URL"
+    ) ?? undefined;
+
+  if (url) {
+    const parsed = parseMysqlUrl(url);
+    if (parsed) return parsed;
+  }
+
+  // ---------- (2) Railway "no underscore" style ----------
+  const rh = pickFirstEnv("MYSQLHOST");
+  const ru = pickFirstEnv("MYSQLUSER");
+  const rp = pickFirstEnv("MYSQLPASSWORD");
+  const rd = pickFirstEnv("MYSQLDATABASE");
+  const rport = pickFirstEnv("MYSQLPORT");
+
+  if (rh && ru && rd) {
     return {
-      host: url.hostname,
-      port: url.port ? Number(url.port) : 3306,
-      user: decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      database: url.pathname.replace("/", ""),
-      // ssl: { rejectUnauthorized: true }, // si besoin
+      host: rh,
+      port: rport ? Number(rport) : 3306,
+      user: ru,
+      password: rp ?? "",
+      database: rd,
     };
   }
 
-  // 2) Variables séparées
-  if (
-    process.env.MYSQL_HOST &&
-    process.env.MYSQL_USER &&
-    process.env.MYSQL_DATABASE
-  ) {
+  // ---------- (3) Underscore style ----------
+  const uh = pickFirstEnv("MYSQL_HOST");
+  const uu = pickFirstEnv("MYSQL_USER");
+  const up = pickFirstEnv("MYSQL_PASSWORD");
+  const ud = pickFirstEnv("MYSQL_DATABASE");
+  const uport = pickFirstEnv("MYSQL_PORT");
+
+  if (uh && uu && ud) {
     return {
-      host: process.env.MYSQL_HOST,
-      port: process.env.MYSQL_PORT ? Number(process.env.MYSQL_PORT) : 3306,
-      user: process.env.MYSQL_USER,
-      password: process.env.MYSQL_PASSWORD ?? "",
-      database: process.env.MYSQL_DATABASE,
+      host: uh,
+      port: uport ? Number(uport) : 3306,
+      user: uu,
+      password: up ?? "",
+      database: ud,
+    };
+  }
+
+  // ---------- (4) Generic DB_* style ----------
+  const dh = pickFirstEnv("DB_HOST");
+  const du = pickFirstEnv("DB_USER");
+  const dp = pickFirstEnv("DB_PASSWORD");
+  const dn = pickFirstEnv("DB_NAME");
+  const dport = pickFirstEnv("DB_PORT");
+
+  if (dh && du && dn) {
+    return {
+      host: dh,
+      port: dport ? Number(dport) : 3306,
+      user: du,
+      password: dp ?? "",
+      database: dn,
     };
   }
 
@@ -65,14 +157,21 @@ export async function getDb() {
 
   const cfg = getMysqlConfigFromEnv();
   if (!cfg) {
-    console.error("[Database] Missing DATABASE_URL or MYSQL_* env vars");
+    console.error(
+      "[Database] Missing DB env vars. Provide DATABASE_URL (recommended) or MYSQL_*."
+    );
     return null;
   }
 
   try {
     if (!_pool) {
       _pool = mysql.createPool({
-        ...cfg,
+        host: cfg.host,
+        port: cfg.port,
+        user: cfg.user,
+        password: cfg.password,
+        database: cfg.database,
+        ...(cfg.ssl ? { ssl: cfg.ssl } : {}),
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
@@ -93,7 +192,6 @@ export async function getDb() {
  * ✅ Helpers
  * ---------------------------------------------------------
  */
-
 export function safeJsonParse<T>(value: unknown, fallback: T): T {
   try {
     if (value === null || value === undefined) return fallback;
@@ -110,305 +208,9 @@ export function safeJsonParse<T>(value: unknown, fallback: T): T {
 
 /**
  * ---------------------------------------------------------
- * User Profile queries
- * ---------------------------------------------------------
- */
-
-export async function getUserProfile(userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  return result.length > 0 ? { ...result[0], userId: result[0].id } : undefined;
-}
-
-/**
- * ⚠️ Ton appRouter appelle db.updateUserProfile()
- */
-export async function updateUserProfile(
-  userId: number,
-  input: { economicRole?: string; companyName?: string }
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const patch: Record<string, any> = { updatedAt: new Date() };
-
-  if (input.economicRole !== undefined) patch.economicRole = input.economicRole;
-  if (input.companyName !== undefined) patch.companyName = input.companyName;
-
-  try {
-    await (db as any).update(users).set(patch).where(eq(users.id, userId));
-    return { success: true };
-  } catch (error: any) {
-    console.error(
-      "[Database] Failed to update user profile:",
-      error?.message ?? error
-    );
-    throw error;
-  }
-}
-
-/**
- * ---------------------------------------------------------
- * Sites queries
- * ---------------------------------------------------------
- */
-
-export async function getSites(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db
-    .select()
-    .from(sites)
-    .where(eq(sites.userId, userId))
-    .orderBy(desc(sites.createdAt));
-}
-
-export async function getFirstSiteByUserId(userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(sites)
-    .where(eq(sites.userId, userId))
-    .orderBy(sites.createdAt)
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getSiteByIdAndUserId(siteId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(sites)
-    .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-/**
- * ✅ FIX CRITIQUE:
- * - Le wizard MDR envoie organisationId + addressLine1/city/postalCode/etc.
- * - L'ancien createSite n'acceptait que address (string).
- * - On supporte les 2 (compat), mais on n'insère jamais "address" si la colonne n'existe pas.
- */
-export async function createSite(input: {
-  userId: number;
-  name: string;
-  address?: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  postalCode?: string;
-  country?: string;
-  isMainSite?: boolean;
-  organisationId?: number | null;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const payload: any = {
-    userId: input.userId,
-    name: input.name,
-    addressLine1: input.addressLine1 ?? null,
-    addressLine2: input.addressLine2 ?? null,
-    city: input.city ?? null,
-    postalCode: input.postalCode ?? null,
-    country: input.country ?? null,
-    isMainSite: input.isMainSite ?? false,
-    organisationId: input.organisationId ?? null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  try {
-    const result = await db.insert(sites).values(payload as any);
-    return { id: (result as any).insertId, ...payload };
-  } catch (error: any) {
-    console.error("[Database] Failed to create site:", error?.message ?? error);
-    throw error;
-  }
-}
-
-export async function upsertOrganisation(input: {
-  id?: number;
-  userId: number;
-  name: string;
-  siret?: string | null;
-  addressLine1?: string | null;
-  addressLine2?: string | null;
-  city?: string | null;
-  postalCode?: string | null;
-  country?: string | null;
-}) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const payload: any = {
-    userId: input.userId,
-    name: input.name,
-    siret: input.siret ?? null,
-    addressLine1: input.addressLine1 ?? null,
-    addressLine2: input.addressLine2 ?? null,
-    city: input.city ?? null,
-    postalCode: input.postalCode ?? null,
-    country: input.country ?? null,
-    updatedAt: new Date(),
-  };
-
-  try {
-    if (input.id) {
-      await db
-        .update(organisations)
-        .set(payload)
-        .where(and(eq(organisations.id, input.id), eq(organisations.userId, input.userId)));
-      return { id: input.id, ...payload };
-    } else {
-      const result = await db.insert(organisations).values({
-        ...payload,
-        createdAt: new Date(),
-      } as any);
-      return { id: (result as any).insertId, ...payload };
-    }
-  } catch (error: any) {
-    console.error("[Database] Failed to upsert organisation:", error?.message ?? error);
-    throw error;
-  }
-}
-
-export async function getOrganisations(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db
-    .select()
-    .from(organisations)
-    .where(eq(organisations.userId, userId))
-    .orderBy(desc(organisations.createdAt));
-}
-
-export async function getOrganisationByIdAndUserId(orgId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(organisations)
-    .where(and(eq(organisations.id, orgId), eq(organisations.userId, userId)))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-/**
- * ---------------------------------------------------------
- * Audits (extraits / essentiels)
- * ---------------------------------------------------------
- */
-
-export async function createAudit(input: any) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const now = new Date();
-  const payload: any = {
-    ...input,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const result = await db.insert(audits).values(payload as any);
-  return { id: (result as any).insertId, ...payload };
-}
-
-export async function listAuditsByUserId(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db
-    .select()
-    .from(audits)
-    .where(eq(audits.userId, userId))
-    .orderBy(desc(audits.createdAt));
-}
-
-export async function getAuditByIdAndUserId(auditId: number, userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(audits)
-    .where(and(eq(audits.id, auditId), eq(audits.userId, userId)))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-/**
- * ---------------------------------------------------------
- * Evidence Files
- * ---------------------------------------------------------
- */
-export async function createEvidenceFile(input: any) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const now = new Date();
-  const payload: any = {
-    ...input,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const result = await db.insert(evidenceFiles).values(payload as any);
-  return { id: (result as any).insertId, ...payload };
-}
-
-export async function listEvidenceFilesByUserId(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db
-    .select()
-    .from(evidenceFiles)
-    .where(eq(evidenceFiles.userId, userId))
-    .orderBy(desc(evidenceFiles.createdAt));
-}
-
-/**
- * ---------------------------------------------------------
- * Referential / Process master data
- * ---------------------------------------------------------
- */
-
-export async function getAllReferentials() {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    return await db.select().from(referentials).orderBy(referentials.id);
-  } catch (error) {
-    console.error("[Database] Failed to get referentials:", error);
-    return [];
-  }
-}
-
-/**
- * ✅ FIX: processes -> processus (sinon crash)
- */
-export async function getAllProcesses() {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    return await db.select().from(processus).orderBy(processus.id);
-  } catch (error) {
-    console.error("[Database] Failed to get processes:", error);
-    return [];
-  }
-}
-
-/**
- * ---------------------------------------------------------
  * Users
  * ---------------------------------------------------------
  */
-
 export async function upsertUser(data: {
   openId: string;
   name?: string;
@@ -468,7 +270,6 @@ export async function getUserByEmail(email: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-/** ✅ AJOUTÉ POUR L'AUTH VIA COOKIE */
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -537,8 +338,7 @@ export async function listAllUsers() {
 export async function listAllUserProfiles() {
   const db = await getDb();
   if (!db) return [];
-  // Assuming user profiles are part of the users table for now, or a separate profiles table
-  // If there's a separate profiles table, this would need to be adjusted.
+  // If you later move profiles to another table, update this function.
   return await db.select().from(users).orderBy(desc(users.createdAt));
 }
 
@@ -553,7 +353,6 @@ export async function upsertUserProfile(
   if (!db) throw new Error("Database not available");
 
   const patch: Record<string, any> = { updatedAt: new Date() };
-
   if (data.subscriptionTier !== undefined)
     patch.subscriptionTier = data.subscriptionTier;
   if (data.subscriptionStatus !== undefined)
@@ -563,10 +362,260 @@ export async function upsertUserProfile(
     await (db as any).update(users).set(patch).where(eq(users.id, userId));
     return { success: true };
   } catch (error: any) {
-    console.error(
-      "[Database] Failed to upsert user profile:",
-      error?.message ?? error
-    );
+    console.error("[Database] Failed to upsert user profile:", error);
     throw error;
   }
+}
+
+/**
+ * ---------------------------------------------------------
+ * User Profile queries
+ * ---------------------------------------------------------
+ */
+export async function getUserProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return result.length > 0 ? { ...result[0], userId: result[0].id } : undefined;
+}
+
+export async function updateUserProfile(
+  userId: number,
+  input: { economicRole?: string; companyName?: string }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const patch: Record<string, any> = { updatedAt: new Date() };
+  if (input.economicRole !== undefined) patch.economicRole = input.economicRole;
+  if (input.companyName !== undefined) patch.companyName = input.companyName;
+
+  try {
+    await (db as any).update(users).set(patch).where(eq(users.id, userId));
+    return { success: true };
+  } catch (error: any) {
+    console.error("[Database] Failed to update user profile:", error);
+    throw error;
+  }
+}
+
+/**
+ * ---------------------------------------------------------
+ * Sites queries
+ * ---------------------------------------------------------
+ */
+export async function getSites(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(sites)
+    .where(eq(sites.userId, userId))
+    .orderBy(desc(sites.createdAt));
+}
+
+export async function getFirstSiteByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(sites)
+    .where(eq(sites.userId, userId))
+    .orderBy(sites.createdAt)
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getSiteByIdAndUserId(siteId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(sites)
+    .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createSite(input: {
+  userId: number;
+  name: string;
+  address?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  isMainSite?: boolean;
+  organisationId?: number | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const payload: any = {
+    userId: input.userId,
+    name: input.name,
+    addressLine1: input.addressLine1 ?? null,
+    addressLine2: input.addressLine2 ?? null,
+    city: input.city ?? null,
+    postalCode: input.postalCode ?? null,
+    country: input.country ?? null,
+    isMainSite: input.isMainSite ?? false,
+    organisationId: input.organisationId ?? null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const result = await db.insert(sites).values(payload as any);
+  return { id: (result as any).insertId, ...payload };
+}
+
+/**
+ * ---------------------------------------------------------
+ * Organisations queries
+ * ---------------------------------------------------------
+ */
+export async function upsertOrganisation(input: {
+  id?: number;
+  userId: number;
+  name: string;
+  siret?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const payload: any = {
+    userId: input.userId,
+    name: input.name,
+    siret: input.siret ?? null,
+    addressLine1: input.addressLine1 ?? null,
+    addressLine2: input.addressLine2 ?? null,
+    city: input.city ?? null,
+    postalCode: input.postalCode ?? null,
+    country: input.country ?? null,
+    updatedAt: new Date(),
+  };
+
+  if (input.id) {
+    await db
+      .update(organisations)
+      .set(payload)
+      .where(and(eq(organisations.id, input.id), eq(organisations.userId, input.userId)));
+    return { id: input.id, ...payload };
+  } else {
+    const result = await db.insert(organisations).values({
+      ...payload,
+      createdAt: new Date(),
+    } as any);
+    return { id: (result as any).insertId, ...payload };
+  }
+}
+
+export async function getOrganisations(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(organisations)
+    .where(eq(organisations.userId, userId))
+    .orderBy(desc(organisations.createdAt));
+}
+
+export async function getOrganisationByIdAndUserId(orgId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(organisations)
+    .where(and(eq(organisations.id, orgId), eq(organisations.userId, userId)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * ---------------------------------------------------------
+ * Audits
+ * ---------------------------------------------------------
+ */
+export async function createAudit(input: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const payload: any = { ...input, createdAt: now, updatedAt: now };
+  const result = await db.insert(audits).values(payload as any);
+  return { id: (result as any).insertId, ...payload };
+}
+
+export async function listAuditsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(audits)
+    .where(eq(audits.userId, userId))
+    .orderBy(desc(audits.createdAt));
+}
+
+export async function getAuditByIdAndUserId(auditId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(audits)
+    .where(and(eq(audits.id, auditId), eq(audits.userId, userId)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/**
+ * ---------------------------------------------------------
+ * Evidence Files
+ * ---------------------------------------------------------
+ */
+export async function createEvidenceFile(input: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const now = new Date();
+  const payload: any = { ...input, createdAt: now, updatedAt: now };
+  const result = await db.insert(evidenceFiles).values(payload as any);
+  return { id: (result as any).insertId, ...payload };
+}
+
+export async function listEvidenceFilesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db
+    .select()
+    .from(evidenceFiles)
+    .where(eq(evidenceFiles.userId, userId))
+    .orderBy(desc(evidenceFiles.createdAt));
+}
+
+/**
+ * ---------------------------------------------------------
+ * Referential / Process master data
+ * ---------------------------------------------------------
+ */
+export async function getAllReferentials() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(referentials).orderBy(referentials.id);
+}
+
+/** ✅ FIX: table is named "processus" */
+export async function getAllProcesses() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(processus).orderBy(processus.id);
 }
