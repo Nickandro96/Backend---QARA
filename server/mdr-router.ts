@@ -361,8 +361,9 @@ export const mdrRouter = router({
       // Filter by economicRole
       if (economicRole && economicRole !== "all") {
         filteredQuestions = filteredQuestions.filter(q => {
-          const qEconomicRole = String(q.economicRole).toLowerCase().trim();
-          return qEconomicRole === economicRole;
+          if (!q.economicRole) return true; // Question générique
+          const qRoles = safeParseArray(q.economicRole).map(r => String(r).toLowerCase().trim());
+          return qRoles.length === 0 || qRoles.includes(economicRole.toLowerCase().trim());
         });
         console.log(`[MDR] Questions after economicRole filter (${economicRole}): ${filteredQuestions.length}`);
       }
