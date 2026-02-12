@@ -9,7 +9,7 @@ import {
   uniqueIndex,
   mysqlEnum,
 } from "drizzle-orm/mysql-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 
 /**
  * IMPORTANT:
@@ -25,16 +25,31 @@ export const users = mysqlTable(
   "users",
   {
     id: int("id").autoincrement().primaryKey(),
+
     email: varchar("email", { length: 255 }).notNull(),
     passwordHash: varchar("passwordHash", { length: 255 }),
+
     firstName: varchar("firstName", { length: 255 }),
     lastName: varchar("lastName", { length: 255 }),
+
+    // ✅ Utilisé dans db.ts (upsertUser) / auth helpers
+    name: varchar("name", { length: 255 }),
+    openId: varchar("openId", { length: 255 }),
+    loginMethod: varchar("loginMethod", { length: 50 }),
+    lastSignedIn: timestamp("lastSignedIn"),
+
+    // ✅ Utilisé dans updateUserProfile / UI
+    economicRole: varchar("economicRole", { length: 100 }),
+    companyName: varchar("companyName", { length: 255 }),
+
+    // ✅ Utilisé dans upsertUserProfile
+    subscriptionTier: varchar("subscriptionTier", { length: 50 }),
+    subscriptionStatus: varchar("subscriptionStatus", { length: 50 }),
+
     role: varchar("role", { length: 50 }).default("user").notNull(),
+
     createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt")
-      .notNull()
-      .defaultNow()
-      .onUpdateNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
   (t) => ({
     emailUq: uniqueIndex("users_email_uq").on(t.email),
@@ -52,10 +67,7 @@ export const userProfiles = mysqlTable("user_profiles", {
   bio: text("bio"),
   avatarUrl: varchar("avatarUrl", { length: 2048 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -78,10 +90,7 @@ export const organisations = mysqlTable("organisations", {
     .notNull()
     .references(() => users.id),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -105,11 +114,9 @@ export const sites = mysqlTable("sites", {
   userId: int("userId")
     .notNull()
     .references(() => users.id),
+
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -121,10 +128,7 @@ export const referentiels = mysqlTable("referentiels", {
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -134,10 +138,7 @@ export const processus = mysqlTable("processus", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -147,19 +148,20 @@ export const audits = mysqlTable("audits", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
+
   userId: int("userId")
     .notNull()
     .references(() => users.id),
   siteId: int("siteId").references(() => sites.id),
+
   status: varchar("status", { length: 50 }).default("in_progress").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
+
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
+
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -174,6 +176,7 @@ export const questions = mysqlTable("questions", {
   article: varchar("article", { length: 255 }),
   annexe: varchar("annexe", { length: 255 }),
   title: varchar("title", { length: 255 }),
+
   economicRole: json("economicRole"),
   applicableProcesses: json("applicableProcesses"),
 
@@ -198,9 +201,11 @@ export const audit_responses = mysqlTable(
   "audit_responses",
   {
     id: int("id").autoincrement().primaryKey(),
+
     userId: int("userId")
       .notNull()
       .references(() => users.id),
+
     auditId: int("auditId")
       .notNull()
       .references(() => audits.id),
@@ -220,13 +225,14 @@ export const audit_responses = mysqlTable(
     answeredAt: timestamp("answeredAt"),
 
     createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt")
-      .notNull()
-      .defaultNow()
-      .onUpdateNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
   (t) => ({
-    unq: uniqueIndex("audit_response_unq").on(t.userId, t.auditId, t.questionKey),
+    unq: uniqueIndex("audit_response_unq").on(
+      t.userId,
+      t.auditId,
+      t.questionKey
+    ),
   })
 );
 
@@ -244,10 +250,7 @@ export const findings = mysqlTable("findings", {
   status: varchar("status", { length: 50 }).default("open"),
 
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -266,10 +269,7 @@ export const actions = mysqlTable("actions", {
     .default("open")
     .notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -282,10 +282,7 @@ export const resultats = mysqlTable("resultats", {
   score: int("score"),
   conformityRate: int("conformityRate"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -298,14 +295,13 @@ export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
     .references(() => users.id),
   siteId: int("siteId").references(() => sites.id),
   economicRole: varchar("economicRole", { length: 50 }).notNull(),
-  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(false),
+  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(
+    false
+  ),
   targetMarkets: json("targetMarkets"),
   deviceClasses: json("deviceClasses"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .onUpdateNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 /* =========================
@@ -329,6 +325,17 @@ export const mdrEvidenceFiles = mysqlTable("mdr_evidence_files", {
 });
 
 /* =========================
+   AUDIT REPORTS (KEEP)
+========================= */
+export const auditReports = mysqlTable("audit_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  auditId: int("auditId").notNull(),
+  reportUrl: varchar("reportUrl", { length: 2048 }),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+/* =========================
    RELATIONS
 ========================= */
 export const usersRelations = relations(users, ({ many }) => ({
@@ -347,18 +354,33 @@ export const auditsRelations = relations(audits, ({ one, many }) => ({
 }));
 
 export const auditResponsesRelations = relations(audit_responses, ({ one }) => ({
-  user: one(users, { fields: [audit_responses.userId], references: [users.id] }),
-  audit: one(audits, { fields: [audit_responses.auditId], references: [audits.id] }),
+  user: one(users, {
+    fields: [audit_responses.userId],
+    references: [users.id],
+  }),
+  audit: one(audits, {
+    fields: [audit_responses.auditId],
+    references: [audits.id],
+  }),
 }));
 
-export const organisationsRelations = relations(organisations, ({ one, many }) => ({
-  user: one(users, { fields: [organisations.userId], references: [users.id] }),
-  sites: many(sites),
-}));
+export const organisationsRelations = relations(
+  organisations,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [organisations.userId],
+      references: [users.id],
+    }),
+    sites: many(sites),
+  })
+);
 
 export const sitesRelations = relations(sites, ({ one, many }) => ({
   user: one(users, { fields: [sites.userId], references: [users.id] }),
-  organisation: one(organisations, { fields: [sites.organisationId], references: [organisations.id] }),
+  organisation: one(organisations, {
+    fields: [sites.organisationId],
+    references: [organisations.id],
+  }),
   audits: many(audits),
 }));
 
@@ -369,7 +391,10 @@ export const findingsRelations = relations(findings, ({ one, many }) => ({
 }));
 
 export const actionsRelations = relations(actions, ({ one }) => ({
-  finding: one(findings, { fields: [actions.findingId], references: [findings.id] }),
+  finding: one(findings, {
+    fields: [actions.findingId],
+    references: [findings.id],
+  }),
 }));
 
 export const resultatsRelations = relations(resultats, ({ one }) => ({
@@ -377,26 +402,39 @@ export const resultatsRelations = relations(resultats, ({ one }) => ({
   audit: one(audits, { fields: [resultats.auditId], references: [audits.id] }),
 }));
 
-export const mdrRoleQualificationsRelations = relations(mdrRoleQualifications, ({ one }) => ({
-  user: one(users, { fields: [mdrRoleQualifications.userId], references: [users.id] }),
-  site: one(sites, { fields: [mdrRoleQualifications.siteId], references: [sites.id] }),
-}));
+export const mdrRoleQualificationsRelations = relations(
+  mdrRoleQualifications,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [mdrRoleQualifications.userId],
+      references: [users.id],
+    }),
+    site: one(sites, {
+      fields: [mdrRoleQualifications.siteId],
+      references: [sites.id],
+    }),
+  })
+);
 
-export const mdrEvidenceFilesRelations = relations(mdrEvidenceFiles, ({ one }) => ({
-  user: one(users, { fields: [mdrEvidenceFiles.userId], references: [users.id] }),
-  audit: one(audits, { fields: [mdrEvidenceFiles.auditId], references: [audits.id] }),
-}));
+export const mdrEvidenceFilesRelations = relations(
+  mdrEvidenceFiles,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [mdrEvidenceFiles.userId],
+      references: [users.id],
+    }),
+    audit: one(audits, {
+      fields: [mdrEvidenceFiles.auditId],
+      references: [audits.id],
+    }),
+  })
+);
 
-// Alias for backward compatibility
+/* =========================
+   Aliases / Backward compatibility
+========================= */
 export const referentials = referentiels;
 export const auditResponses = audit_responses;
 export const evidenceFiles = mdrEvidenceFiles;
-export const auditReports = mysqlTable("audit_reports", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  auditId: int("auditId").notNull(),
-  reportUrl: varchar("reportUrl", { length: 2048 }),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
 export const auditChecklistAnswers = audit_responses;
 export const referentielsTable = referentiels;
