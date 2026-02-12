@@ -35,78 +35,50 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1****@#'
 
-      # ✅ Idempotent rename: processes -> processus (only if needed)
       - name: Rename legacy table processes -> processus (idempotent)
         run: |
           node - <<'NODE'
           const mysql = require("mysql2/promise");
-
           (async () => {
             const conn = await mysql.createConnection(process.env.DATABASE_URL);
-
             const [a] = await conn.query(`SHOW TABLES LIKE 'processes'`);
             const [b] = await conn.query(`SHOW TABLES LIKE 'processus'`);
-
-            if (a.length === 0) {
-              console.log("No rename needed for processes ✅");
-              await conn.end();
-              return;
-            }
-            if (b.length > 0) {
-              console.log("Table 'processus' already exists, skipping rename ✅");
-              await conn.end();
-              return;
-            }
-
+            if (a.length === 0) { console.log("No rename needed for processes ✅"); await conn.end(); return; }
+            if (b.length > 0) { console.log("Table 'processus' already exists, skipping rename ✅"); await conn.end(); return; }
             console.log("Renaming table processes -> processus ...");
             await conn.query(`RENAME TABLE \`processes\` TO \`processus\``);
             console.log("Rename done ✅");
-
             await conn.end();
-          })().catch((e) => {
-            console.error(e);
-            process.exit(1);
-          });
+          })().catch((e) => { console.error(e); process.exit(1); });
           NODE
 
-      # ✅ Drizzle requires meta/_journal.json (your error shows it's looking for THIS path)
-      # We create BOTH meta/_journal.json and drizzle/meta/_journal.json to be safe with any config.
-      - name: Ensure Drizzle journal exists (meta/_journal.json + drizzle/meta/_journal.json)
+      # ✅ Make journal + run migrate in the SAME step (cannot be skipped)
+      - name: Ensure Drizzle journal exists then migrate (single-step, safe)
         run: |
-          node - <<'NODE'
-          const fs = require("fs");
-          const path = require("path");
+          set -euxo pipefail
 
-          function ensureJournal(dir) {
-            fs.mkdirSync(dir, { recursive: true });
-            const journalPath = path.join(dir, "_journal.json");
-            if (!fs.existsSync(journalPath)) {
-              const journal = { version: "5", dialect: "mysql", entries: [] };
-              fs.writeFileSync(journalPath, JSON.stringify(journal), "utf8");
-              console.log("Created", journalPath, "✅");
-            } else {
-              console.log("Exists", journalPath, "✅");
-            }
-          }
+          # Create both possible journal locations
+          mkdir -p meta
+          mkdir -p drizzle/meta
+          mkdir -p drizzle/migrations
 
-          ensureJournal(path.join(process.cwd(), "meta"));
-          ensureJournal(path.join(process.cwd(), "drizzle", "meta"));
+          if [ ! -f meta/_journal.json ]; then
+            echo '{"version":"5","dialect":"mysql","entries":[]}' > meta/_journal.json
+          fi
 
-          // Ensure migrations folder exists (even if empty)
-          fs.mkdirSync(path.join(process.cwd(), "drizzle", "migrations"), { recursive: true });
-          NODE
+          if [ ! -f drizzle/meta/_journal.json ]; then
+            echo '{"version":"5","dialect":"mysql","entries":[]}' > drizzle/meta/_journal.json
+          fi
 
-      - name: Debug journal files present
-        run: |
-          echo "== repo root =="
-          ls -la
           echo "== meta =="
-          ls -la meta || true
+          ls -la meta
+          cat meta/_journal.json
+
           echo "== drizzle/meta =="
-          ls -la drizzle/meta || true
+          ls -la drizzle/meta
+          cat drizzle/meta/_journal.json
+
           echo "== drizzle/migrations =="
           ls -la drizzle/migrations || true
 
-      # ✅ Keep data: do not generate in CI, only migrate
-      - name: Run migrations (no-op if none committed)
-        run: pnpm exec drizzle-kit migrate --config=drizzle.config.ts
+          pnpm exec drizzle-kit migrate --config=drizzle.config.ts
