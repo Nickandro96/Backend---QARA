@@ -193,23 +193,50 @@ export async function getSiteByIdAndUserId(siteId: number, userId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+/**
+ * ✅ FIX CRITIQUE:
+ * - Le wizard MDR envoie organisationId + addressLine1/city/postalCode/etc.
+ * - L'ancien createSite n'acceptait que address (string).
+ * - On supporte les 2 (compat), mais on n'insère jamais "address" si la colonne n'existe pas.
+ */
 export async function createSite(siteData: {
   userId: number;
   name: string;
+
+  // ✅ lié au wizard MDR
+  organisationId?: number | null;
+
+  // ✅ champs adressage complets
   code?: string;
-  address?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
   country?: string;
+
+  // ✅ statut
+  isMainSite?: boolean;
   isActive?: boolean;
+
+  // ⚠️ compat: si ton front envoie encore "address"
+  address?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // ✅ Compatibilité : si "address" arrive, on le map vers addressLine1
+  const payload: Record<string, any> = {
+    ...siteData,
+    addressLine1: siteData.addressLine1 ?? siteData.address ?? null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  // on évite d'insérer une colonne "address" si elle n'existe pas en DB
+  delete payload.address;
+
   try {
-    const [result] = await db.insert(sites).values({
-      ...siteData,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const [result] = await db.insert(sites).values(payload as any);
     return { id: result.insertId };
   } catch (error: any) {
     console.error(
@@ -605,17 +632,22 @@ export async function listAllUserProfiles() {
   return await db.select().from(users).orderBy(desc(users.createdAt));
 }
 
-export async function upsertUserProfile(userId: number, data: Partial<{
-  subscriptionTier: "free" | "pro" | "expert" | "entreprise";
-  subscriptionStatus: "active" | "canceled" | "past_due" | "trialing";
-}>) {
+export async function upsertUserProfile(
+  userId: number,
+  data: Partial<{
+    subscriptionTier: "free" | "pro" | "expert" | "entreprise";
+    subscriptionStatus: "active" | "canceled" | "past_due" | "trialing";
+  }>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const patch: Record<string, any> = { updatedAt: new Date() };
 
-  if (data.subscriptionTier !== undefined) patch.subscriptionTier = data.subscriptionTier;
-  if (data.subscriptionStatus !== undefined) patch.subscriptionStatus = data.subscriptionStatus;
+  if (data.subscriptionTier !== undefined)
+    patch.subscriptionTier = data.subscriptionTier;
+  if (data.subscriptionStatus !== undefined)
+    patch.subscriptionStatus = data.subscriptionStatus;
 
   try {
     await (db as any).update(users).set(patch).where(eq(users.id, userId));
@@ -640,11 +672,14 @@ export async function getAllReferentials() {
   }
 }
 
+/**
+ * ✅ FIX: processes -> processus (sinon crash)
+ */
 export async function getAllProcesses() {
   const db = await getDb();
   if (!db) return [];
   try {
-    return await db.select().from(processes).orderBy(processes.id);
+    return await db.select().from(processus).orderBy(processus.id);
   } catch (error) {
     console.error("[Database] Failed to get processes:", error);
     return [];
