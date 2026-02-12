@@ -1,0 +1,40 @@
+name: DB Push (Drizzle)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Verify DATABASE_URL
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is EMPTY"
+            exit 1
+          fi
+          echo "DATABASE_URL is set (length=${#DATABASE_URL})"
+          echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
+
+      - name: Drizzle push (force)
+        run: pnpm exec drizzle-kit push --force
