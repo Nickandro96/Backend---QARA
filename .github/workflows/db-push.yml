@@ -30,11 +30,17 @@ jobs:
       - name: Verify DATABASE_URL
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL is EMPTY"
+            echo "::error::DATABASE_URL secret is missing or empty"
             exit 1
           fi
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
 
-      - name: Drizzle push (force)
-        run: pnpm exec drizzle-kit push --force
+      - name: Show Drizzle config files (debug)
+        run: |
+          ls -la
+          echo "----"
+          find . -maxdepth 2 -name "drizzle.config.*" -print
+
+      - name: Drizzle push (force) using TS config
+        run: pnpm exec drizzle-kit push --config=drizzle.config.ts --force
