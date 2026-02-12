@@ -1,10 +1,10 @@
-name: DB Push (Drizzle)
+name: DB Migrate (Drizzle)
 
 on:
   workflow_dispatch:
 
 jobs:
-  push:
+  migrate:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -35,7 +35,7 @@ jobs:
           fi
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
 
-      - name: Rename organizations -> organisations (if needed)
+      - name: Rename legacy tables (if needed)
         run: |
           node - <<'NODE'
           const mysql = require("mysql2/promise");
@@ -46,15 +46,26 @@ jobs:
 
             const conn = await mysql.createConnection(url);
 
+            // rename organizations -> organisations (déjà fait chez toi, mais safe)
             const [hasOrganizations] = await conn.query("SHOW TABLES LIKE 'organizations'");
             const [hasOrganisations] = await conn.query("SHOW TABLES LIKE 'organisations'");
-
             if (hasOrganizations.length > 0 && hasOrganisations.length === 0) {
               console.log("Renaming table organizations -> organisations ...");
               await conn.query("RENAME TABLE organizations TO organisations");
               console.log("Rename done ✅");
             } else {
-              console.log("No rename needed ✅");
+              console.log("No rename needed for organisations ✅");
+            }
+
+            // rename processes -> processus (pour éviter la question interactive)
+            const [hasProcesses] = await conn.query("SHOW TABLES LIKE 'processes'");
+            const [hasProcessus] = await conn.query("SHOW TABLES LIKE 'processus'");
+            if (hasProcesses.length > 0 && hasProcessus.length === 0) {
+              console.log("Renaming table processes -> processus ...");
+              await conn.query("RENAME TABLE processes TO processus");
+              console.log("Rename done ✅");
+            } else {
+              console.log("No rename needed for processus ✅");
             }
 
             await conn.end();
@@ -64,6 +75,8 @@ jobs:
           });
           NODE
 
-      - name: Drizzle push (force)
-        run: |
-          pnpm exec drizzle-kit push --config=drizzle.config.ts --force
+      - name: Generate migrations from schema
+        run: pnpm exec drizzle-kit generate --config=drizzle.config.ts
+
+      - name: Apply migrations to Railway DB
+        run: pnpm exec drizzle-kit migrate --config=drizzle.config.ts
