@@ -35,7 +35,7 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1****@#'
 
-      # ✅ Keep your existing rename step (processes -> processus) if needed
+      # ✅ Idempotent rename: processes -> processus (only if needed)
       - name: Rename legacy table processes -> processus (idempotent)
         run: |
           node - <<'NODE'
@@ -45,7 +45,6 @@ jobs:
             const url = process.env.DATABASE_URL;
             const conn = await mysql.createConnection(url);
 
-            // Check if "processes" exists and "processus" does not
             const [a] = await conn.query(`SHOW TABLES LIKE 'processes'`);
             const [b] = await conn.query(`SHOW TABLES LIKE 'processus'`);
 
@@ -71,31 +70,39 @@ jobs:
           });
           NODE
 
-      # ✅ BASELINE: if DB already has your tables but drizzle migrations table is empty,
-      # mark existing migrations as "applied" so drizzle-kit migrate won't try to CREATE TABLE again.
-      - name: Baseline Drizzle migrations if DB already has tables (safe, keeps data)
+      # ✅ Ensure Drizzle meta/journal exists so `drizzle-kit migrate` can run
+      - name: Ensure drizzle/meta/_journal.json exists (required by migrate)
         run: |
           node - <<'NODE'
           const fs = require("fs");
           const path = require("path");
-          const crypto = require("crypto");
-          const mysql = require("mysql2/promise");
 
-          function sha256(content) {
-            return crypto.createHash("sha256").update(content).digest("hex");
+          const metaDir = path.join(process.cwd(), "drizzle", "meta");
+          const migDir  = path.join(process.cwd(), "drizzle", "migrations");
+          const journalPath = path.join(metaDir, "_journal.json");
+
+          if (!fs.existsSync(metaDir)) fs.mkdirSync(metaDir, { recursive: true });
+          if (!fs.existsSync(migDir)) fs.mkdirSync(migDir, { recursive: true });
+
+          if (!fs.existsSync(journalPath)) {
+            const journal = { version: "5", dialect: "mysql", entries: [] };
+            fs.writeFileSync(journalPath, JSON.stringify(journal), "utf8");
+            console.log("Created drizzle/meta/_journal.json ✅");
+          } else {
+            console.log("drizzle/meta/_journal.json already exists ✅");
           }
+          NODE
+
+      # ✅ Optional baseline table creation (keeps data, doesn't drop anything)
+      - name: Ensure __drizzle_migrations table exists (safe)
+        run: |
+          node - <<'NODE'
+          const mysql = require("mysql2/promise");
 
           (async () => {
             const url = process.env.DATABASE_URL;
             const conn = await mysql.createConnection(url);
 
-            // 1) Detect whether DB already has "real" tables
-            // Pick a couple of your known tables as signal:
-            const [tUsers] = await conn.query(`SHOW TABLES LIKE 'users'`);
-            const [tActions] = await conn.query(`SHOW TABLES LIKE 'actions'`);
-            const dbHasTables = (tUsers.length > 0) || (tActions.length > 0);
-
-            // 2) Ensure drizzle migrations table exists
             await conn.query(`
               CREATE TABLE IF NOT EXISTS \`__drizzle_migrations\` (
                 \`id\` int NOT NULL AUTO_INCREMENT,
@@ -106,77 +113,7 @@ jobs:
               )
             `);
 
-            // 3) Check if drizzle already has history
-            const [rows] = await conn.query(`SELECT COUNT(*) AS c FROM \`__drizzle_migrations\``);
-            const count = Number(rows?.[0]?.c ?? 0);
-
-            if (!dbHasTables) {
-              console.log("DB seems empty (no users/actions table). No baseline needed ✅");
-              await conn.end();
-              return;
-            }
-
-            if (count > 0) {
-              console.log(`__drizzle_migrations already has ${count} row(s). No baseline needed ✅`);
-              await conn.end();
-              return;
-            }
-
-            // 4) Read drizzle journal if present (best source of hashes)
-            // drizzle-kit writes: drizzle/meta/_journal.json
-            const journalPath = path.join(process.cwd(), "drizzle", "meta", "_journal.json");
-            let hashes = [];
-
-            if (fs.existsSync(journalPath)) {
-              const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
-              // journal.entries: [{ idx, when, tag, breakpoints, ... }]
-              // Depending on drizzle-kit versions, hash may exist or not.
-              // We'll prefer hash if present; otherwise we fallback to hashing the SQL file content.
-              if (Array.isArray(journal.entries) && journal.entries.length > 0) {
-                hashes = journal.entries
-                  .map((e) => ({
-                    hash: e.hash || null,
-                    when: typeof e.when === "number" ? e.when : Date.now(),
-                    tag: e.tag || null,
-                  }));
-              }
-            }
-
-            // 5) Fallback: compute hashes from SQL files if journal doesn't provide hashes
-            const migDir = path.join(process.cwd(), "drizzle", "migrations");
-            const sqlFiles = fs.existsSync(migDir)
-              ? fs.readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort()
-              : [];
-
-            if (sqlFiles.length === 0) {
-              console.log("No migration SQL files found in drizzle/migrations. Baseline skipped ⚠️");
-              await conn.end();
-              return;
-            }
-
-            // If journal hashes are missing, compute from SQL file content
-            const computed = sqlFiles.map((f) => {
-              const full = path.join(migDir, f);
-              const content = fs.readFileSync(full, "utf8");
-              return { file: f, hash: sha256(content), when: Date.now() };
-            });
-
-            // Use journal hashes if they exist AND look valid; else use computed hashes.
-            const hasValidJournalHashes = hashes.length > 0 && hashes.every((h) => typeof h.hash === "string" && h.hash.length > 10);
-            const final = hasValidJournalHashes
-              ? hashes.map((h, i) => ({ hash: h.hash, when: h.when || Date.now(), file: hashes[i]?.tag || `journal_${i}` }))
-              : computed;
-
-            console.log(`Baselining ${final.length} migration(s) into __drizzle_migrations...`);
-
-            for (const m of final) {
-              await conn.query(
-                `INSERT IGNORE INTO \`__drizzle_migrations\` (\`hash\`, \`created_at\`) VALUES (?, ?)`,
-                [m.hash, m.when]
-              );
-            }
-
-            console.log("Baseline complete ✅ (no tables dropped, data preserved)");
+            console.log("__drizzle_migrations ensured ✅");
             await conn.end();
           })().catch((e) => {
             console.error(e);
@@ -184,6 +121,6 @@ jobs:
           });
           NODE
 
-      # ❌ IMPORTANT: DO NOT RUN drizzle-kit generate in CI
-      - name: Run migrations (idempotent)
+      # ❌ DO NOT run `drizzle-kit generate` in CI (it recreates 0000_... and conflicts with existing tables)
+      - name: Run migrations (no-op if none committed)
         run: pnpm exec drizzle-kit migrate --config=drizzle.config.ts
