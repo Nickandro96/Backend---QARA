@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CI: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +35,6 @@ jobs:
           fi
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
 
-      # ✅ IMPORTANT: fix Drizzle interactive prompt by doing the rename ourselves
       - name: Rename organizations -> organisations (if needed)
         run: |
           node - <<'NODE'
@@ -64,6 +64,6 @@ jobs:
           });
           NODE
 
-      - name: Drizzle push (non-interactive)
+      - name: Drizzle push (force)
         run: |
-          pnpm exec drizzle-kit push --config=drizzle.config.ts --force --yes
+          pnpm exec drizzle-kit push --config=drizzle.config.ts --force
