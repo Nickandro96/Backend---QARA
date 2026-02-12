@@ -10,8 +10,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,11 +29,41 @@ jobs:
       - name: Verify DATABASE_URL
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::error::DATABASE_URL secret is missing or empty"
+            echo "DATABASE_URL is EMPTY (missing GitHub secret)"
             exit 1
           fi
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
-          echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
 
-      - name: Drizzle push (force)
-        run: pnpm exec drizzle-kit push --config=drizzle.config.ts --force
+      # ✅ IMPORTANT: fix Drizzle interactive prompt by doing the rename ourselves
+      - name: Rename organizations -> organisations (if needed)
+        run: |
+          node - <<'NODE'
+          const mysql = require("mysql2/promise");
+
+          (async () => {
+            const url = process.env.DATABASE_URL;
+            if (!url) throw new Error("DATABASE_URL missing");
+
+            const conn = await mysql.createConnection(url);
+
+            const [hasOrganizations] = await conn.query("SHOW TABLES LIKE 'organizations'");
+            const [hasOrganisations] = await conn.query("SHOW TABLES LIKE 'organisations'");
+
+            if (hasOrganizations.length > 0 && hasOrganisations.length === 0) {
+              console.log("Renaming table organizations -> organisations ...");
+              await conn.query("RENAME TABLE organizations TO organisations");
+              console.log("Rename done ✅");
+            } else {
+              console.log("No rename needed ✅");
+            }
+
+            await conn.end();
+          })().catch((e) => {
+            console.error("Rename step failed:", e);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Drizzle push (non-interactive)
+        run: |
+          pnpm exec drizzle-kit push --config=drizzle.config.ts --force --yes
