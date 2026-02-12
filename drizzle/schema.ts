@@ -49,13 +49,8 @@ export const userProfiles = mysqlTable("user_profiles", {
   userId: int("userId")
     .notNull()
     .references(() => users.id),
-
-  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
-  plan: varchar("plan", { length: 100 }),
-  status: varchar("status", { length: 50 }),
-  currentPeriodEnd: timestamp("currentPeriodEnd"),
-
+  bio: text("bio"),
+  avatarUrl: varchar("avatarUrl", { length: 2048 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt")
     .notNull()
@@ -69,6 +64,16 @@ export const userProfiles = mysqlTable("user_profiles", {
 export const organisations = mysqlTable("organisations", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+
+  // Optional legal/address metadata (used by the frontend wizard)
+  legalEntityType: varchar("legalEntityType", { length: 100 }),
+  siret: varchar("siret", { length: 50 }),
+  addressLine1: varchar("addressLine1", { length: 255 }),
+  addressLine2: varchar("addressLine2", { length: 255 }),
+  city: varchar("city", { length: 120 }),
+  postalCode: varchar("postalCode", { length: 30 }),
+  country: varchar("country", { length: 120 }),
+
   userId: int("userId")
     .notNull()
     .references(() => users.id),
@@ -85,6 +90,17 @@ export const organisations = mysqlTable("organisations", {
 export const sites = mysqlTable("sites", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+
+  // Optional site metadata (used by the frontend wizard)
+  code: varchar("code", { length: 50 }),
+  addressLine1: varchar("addressLine1", { length: 255 }),
+  addressLine2: varchar("addressLine2", { length: 255 }),
+  city: varchar("city", { length: 120 }),
+  postalCode: varchar("postalCode", { length: 30 }),
+  country: varchar("country", { length: 120 }),
+  isMainSite: boolean("isMainSite").default(false),
+  isActive: boolean("isActive").default(true),
+
   organisationId: int("organisationId").references(() => organisations.id),
   userId: int("userId")
     .notNull()
