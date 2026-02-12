@@ -36,11 +36,24 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
 
-      - name: Show Drizzle config files (debug)
+      - name: Locate Drizzle config (debug)
         run: |
+          echo "Repo root:"
           ls -la
-          echo "----"
-          find . -maxdepth 2 -name "drizzle.config.*" -print
+          echo "---- drizzle configs ----"
+          find . -maxdepth 5 -type f \( -name "drizzle.config.*" -o -name "*drizzle*.config.*" \) -print
+          echo "---- package scripts ----"
+          cat package.json | sed -n '1,200p'
 
-      - name: Drizzle push (force) using TS config
-        run: pnpm exec drizzle-kit push --config=drizzle.config.ts --force
+      - name: FAIL if no drizzle config found
+        run: |
+          COUNT=$(find . -maxdepth 5 -type f \( -name "drizzle.config.*" -o -name "*drizzle*.config.*" \) | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No Drizzle config file found in repo (drizzle.config.* or *drizzle*.config.*)"
+            exit 1
+          fi
+
+      - name: Drizzle push (force) using found config (edit path below after first run)
+        run: |
+          echo "::error::Edit this step with the config path printed above, e.g. server/drizzle.config.ts"
+          exit 1
