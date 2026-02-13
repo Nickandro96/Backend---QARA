@@ -52,6 +52,10 @@ jobs:
           })().catch((e) => { console.error(e); process.exit(1); });
           NODE
 
+      # ✅ NEW: Apply raw SQL migrations in drizzle/migrations/*.sql (idempotent tracking)
+      - name: Apply SQL migrations from drizzle/migrations
+        run: pnpm exec tsx scripts/apply-sql-migrations.ts
+
       # ✅ Create Drizzle journal in ALL common locations (covers any `out:` path)
       - name: Ensure Drizzle journal exists then migrate (single-step, safe)
         run: |
