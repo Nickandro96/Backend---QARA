@@ -1,47 +1,145 @@
-name: DB Migrate & Seed (Railway MySQL)
+import mysql from "mysql2/promise";
 
-on:
-  workflow_dispatch:
+function pickFirstEnv(...keys: string[]) {
+  for (const k of keys) {
+    const v = process.env[k];
+    if (v && String(v).trim() !== "") return String(v);
+  }
+  return undefined;
+}
 
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      CI: "true"
+async function columnExists(conn: mysql.Connection, table: string, column: string) {
+  const [rows] = await conn.query(
+    `SELECT COUNT(*) as cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?`,
+    [table, column]
+  );
+  const cnt = (rows as any[])[0]?.cnt ?? 0;
+  return Number(cnt) > 0;
+}
 
-    steps:
-      - uses: actions/checkout@v4
+async function addColumnIfMissing(conn: mysql.Connection, table: string, column: string, ddl: string) {
+  const exists = await columnExists(conn, table, column);
+  if (exists) {
+    console.log(`[DB FIX] OK: ${table}.${column} already exists`);
+    return;
+  }
+  console.log(`[DB FIX] ADD: ${table}.${column}`);
+  await conn.query(ddl);
+  console.log(`[DB FIX] DONE: ${table}.${column} added`);
+}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+async function main() {
+  const url =
+    pickFirstEnv("DATABASE_URL", "MYSQL_PRIVATE_URL", "MYSQL_PUBLIC_URL", "MYSQL_URL") ??
+    "";
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: "pnpm"
+  if (!url) {
+    console.error("[DB FIX] Missing DATABASE_URL (or MYSQL_*_URL) env var");
+    process.exit(1);
+  }
 
-      - name: Install deps
-        run: pnpm install
+  const conn = await mysql.createConnection(url);
 
-      - name: Debug DATABASE_URL presence (masked)
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL is EMPTY"
-            exit 1
-          fi
-          echo "DATABASE_URL is set (length=${#DATABASE_URL})"
-          echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
+  try {
+    // ✅ minimum pour débloquer ton login
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "passwordHash",
+      "ALTER TABLE `users` ADD COLUMN `passwordHash` varchar(255) NULL"
+    );
 
-      # ✅ Non-interactive, reliable way: use migrations
-      - name: Generate migrations (drizzle-kit generate)
-        run: pnpm exec drizzle-kit generate
+    // Bonus (souvent utiles si ton schema les attend)
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "firstName",
+      "ALTER TABLE `users` ADD COLUMN `firstName` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "lastName",
+      "ALTER TABLE `users` ADD COLUMN `lastName` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "name",
+      "ALTER TABLE `users` ADD COLUMN `name` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "openId",
+      "ALTER TABLE `users` ADD COLUMN `openId` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "loginMethod",
+      "ALTER TABLE `users` ADD COLUMN `loginMethod` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "lastSignedIn",
+      "ALTER TABLE `users` ADD COLUMN `lastSignedIn` datetime NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "economicRole",
+      "ALTER TABLE `users` ADD COLUMN `economicRole` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "companyName",
+      "ALTER TABLE `users` ADD COLUMN `companyName` varchar(255) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "subscriptionTier",
+      "ALTER TABLE `users` ADD COLUMN `subscriptionTier` varchar(50) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "subscriptionStatus",
+      "ALTER TABLE `users` ADD COLUMN `subscriptionStatus` varchar(50) NULL"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "role",
+      "ALTER TABLE `users` ADD COLUMN `role` varchar(50) NOT NULL DEFAULT 'user'"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "createdAt",
+      "ALTER TABLE `users` ADD COLUMN `createdAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    );
+    await addColumnIfMissing(
+      conn,
+      "users",
+      "updatedAt",
+      "ALTER TABLE `users` ADD COLUMN `updatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    );
 
-      - name: Run migrations (drizzle-kit migrate)
-        run: pnpm exec drizzle-kit migrate
+    console.log("[DB FIX] ✅ Completed");
+  } finally {
+    await conn.end();
+  }
+}
 
-      - name: Seed DB
-        run: pnpm db:seed
+main().catch((e) => {
+  console.error("[DB FIX] ❌ Failed:", e);
+  process.exit(1);
+});
