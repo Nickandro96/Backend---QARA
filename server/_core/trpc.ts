@@ -6,6 +6,15 @@ import { COOKIE_NAME } from "../../shared/const";
 import { sdk } from "./sdk";
 import * as db from "../db";
 
+/**
+ * Context
+ * - reads session cookie
+ * - loads user into ctx.user
+ *
+ * IMPORTANT:
+ * - The frontend sends plain JSON input.
+ * - We DO NOT use superjson transformer here to avoid "expected object, received undefined".
+ */
 export const createContext = async ({
   req,
   res,
@@ -25,7 +34,7 @@ export const createContext = async ({
         }
       }
     }
-  } catch (e) {
+  } catch {
     user = null;
   }
 
@@ -34,7 +43,6 @@ export const createContext = async ({
 
 type Context = Awaited<ReturnType<typeof createContext>>;
 
-// ✅ IMPORTANT: pas de superjson ici (front en JSON normal)
 const t = initTRPC.context<Context>().create();
 
 export const router = t.router;
