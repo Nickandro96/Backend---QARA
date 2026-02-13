@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CI: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -21,9 +22,37 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "pnpm"
 
       - name: Install deps
         run: pnpm install
 
-      - name: Run DB fix
-        run: npx tsx scripts/db-fix-users.ts
+      # ✅ Debug: show where we are + list files
+      - name: Debug repo tree (scripts + root)
+        run: |
+          pwd
+          ls -la
+          echo "---- scripts/ ----"
+          ls -la scripts || true
+          echo "---- find db-fix-users.ts ----"
+          find . -maxdepth 5 -type f -name "db-fix-users.ts" -print
+
+      # ✅ Run: try common locations automatically
+      - name: Run DB fix script (auto-detect)
+        run: |
+          set -e
+          if [ -f "scripts/db-fix-users.ts" ]; then
+            echo "Found scripts/db-fix-users.ts"
+            npx tsx scripts/db-fix-users.ts
+            exit 0
+          fi
+
+          FOUND=$(find . -maxdepth 5 -type f -name "db-fix-users.ts" | head -n 1)
+          if [ -n "$FOUND" ]; then
+            echo "Found at: $FOUND"
+            npx tsx "$FOUND"
+            exit 0
+          fi
+
+          echo "ERROR: db-fix-users.ts not found in repo."
+          exit 1
