@@ -2,8 +2,17 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
-import { audits, questions, processus, mdrRoleQualifications, sites, users, referentials } from "../drizzle/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import {
+  audits,
+  questions,
+  processus,
+  mdrRoleQualifications,
+  sites,
+  users,
+  referentials,
+  auditResponses, // ✅ NEW: required for saveResponse/getResponses
+} from "../drizzle/schema";
+import { eq, and, sql } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -59,16 +68,6 @@ const loadQuestionsFromJson = (): any[] => {
   console.warn("[MDR] all-questions-data.json NOT FOUND in any path.");
   return [];
 };
-
-// Normalize processId: accept either canonical id ("gov_strat") or label ("Gouvernance ...")
-function normalizeProcessId(processId?: string | null) {
-  if (!processId) return null;
-
-  if (MDR_PROCESSES.some((p) => p.id === processId)) return processId;
-
-  const found = MDR_PROCESSES.find((p) => p.name.toLowerCase() === String(processId).toLowerCase());
-  return found ? found.id : processId;
-}
 
 function isNumericString(v: any) {
   return typeof v === "string" && /^[0-9]+$/.test(v);
@@ -126,29 +125,25 @@ function normalizeAuditForFrontend(audit: any) {
 async function mapSelectedProcessesToDbProcessIds(db: any, selected: string[]) {
   if (!selected || selected.length === 0) return [];
 
-  // If the selection is numeric already, keep it
   const numericIds = selected
     .filter((x) => typeof x === "number" || isNumericString(x))
     .map((x) => Number(x))
     .filter((n) => !Number.isNaN(n));
 
-  // For string ids like "traceability_udi", map via MDR_PROCESSES name -> processus.name
   const stringTokens = selected
     .filter((x) => typeof x === "string" && !isNumericString(x))
     .map((x) => String(x));
 
   if (stringTokens.length === 0) return numericIds;
 
-  // Build expected names from MDR_PROCESSES
   const expectedNames: string[] = [];
   for (const token of stringTokens) {
     const byId = MDR_PROCESSES.find((p) => p.id === token);
     if (byId) expectedNames.push(byId.name);
-    else expectedNames.push(token); // try direct match by name too
+    else expectedNames.push(token);
   }
 
   try {
-    // Load all processes once, then match by name (case-insensitive)
     const allProcs = await db.select().from(processus);
     const nameToId = new Map<string, number>();
     for (const p of allProcs) {
@@ -162,8 +157,7 @@ async function mapSelectedProcessesToDbProcessIds(db: any, selected: string[]) {
       if (id && !Number.isNaN(id)) mappedIds.push(id);
     }
 
-    const merged = [...new Set([...numericIds, ...mappedIds])];
-    return merged;
+    return [...new Set([...numericIds, ...mappedIds])];
   } catch (e) {
     console.warn("[MDR] Unable to map processes via DB table `processus`:", e);
     return numericIds;
@@ -214,7 +208,6 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
 }
 
 async function loadQuestionsFromDb(db: any) {
-  // We assume table exists: schema.questions (as per your Railway screenshot)
   try {
     const rows = await db.select().from(questions);
     console.log("[MDR] total questions loaded from DB:", rows.length);
@@ -225,6 +218,9 @@ async function loadQuestionsFromDb(db: any) {
   }
 }
 
+// ✅ shared zod enum used by frontend buttons
+const ResponseValueEnum = z.enum(["compliant", "non_compliant", "not_applicable", "partial", "in_progress"]);
+
 export const mdrRouter = router({
   /**
    * Get user's sites
@@ -233,16 +229,12 @@ export const mdrRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-    // Some older codebases had db.getSites(); if it doesn't exist, fallback to direct table read.
     const anyDb: any = db as any;
     if (typeof anyDb.getSites === "function") {
       return anyDb.getSites(ctx.user.id);
     }
 
     try {
-      // Fallback: return all sites (or filter if your schema has sites.userId)
-      // If your schema has a userId column on sites, change this to:
-      // .where(eq((sites as any).userId, ctx.user.id))
       const rows = await db.select().from(sites);
       return rows;
     } catch (e) {
@@ -261,20 +253,15 @@ export const mdrRouter = router({
 
   /**
    * ✅ Step 1 Wizard: Create or Update draft audit
-   * This endpoint guarantees:
-   * - auditId is a NUMBER
-   * - referentialIds/processIds are ARRAYS in the response (not JSON strings)
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
       z.object({
-        auditId: z.number().optional(), // if provided, we update
+        auditId: z.number().optional(),
         siteId: z.number(),
         name: z.string().min(1),
         auditType: z.string().default("internal"),
         status: z.string().default("draft"),
-
-        // The wizard often sends arrays; we store as JSON string to be compatible with existing DB schema
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
 
@@ -299,7 +286,6 @@ export const mdrRouter = router({
         auditType: input.auditType,
         status: input.status,
 
-        // Store as JSON string to match your current DB payload behavior
         referentialIds: JSON.stringify(input.referentialIds ?? []),
         processIds: JSON.stringify(input.processIds ?? []),
 
@@ -313,13 +299,9 @@ export const mdrRouter = router({
         updatedAt: now,
       };
 
-      // If audits.createdAt is NOT NULL without default, we set it on insert
-      // If your DB has a default CURRENT_TIMESTAMP, this is harmless.
       const insertValues: any = { ...valuesToSave, createdAt: now };
 
-      // Update flow
       if (input.auditId) {
-        // Verify ownership + existence
         const [existing] = await db
           .select()
           .from(audits)
@@ -339,16 +321,11 @@ export const mdrRouter = router({
           .limit(1);
 
         const normalized = normalizeAuditForFrontend(updated);
-        return {
-          auditId: Number(normalized.id),
-          audit: normalized,
-        };
+        return { auditId: Number(normalized.id), audit: normalized };
       }
 
-      // Insert flow
       await db.insert(audits).values(insertValues);
 
-      // MySQL insertId handling depends on driver; safest is to re-select last inserted for this user/site/name
       const [created] = await db
         .select()
         .from(audits)
@@ -361,38 +338,34 @@ export const mdrRouter = router({
       }
 
       const normalized = normalizeAuditForFrontend(created);
-      return {
-        auditId: Number(normalized.id),
-        audit: normalized,
-      };
+      return { auditId: Number(normalized.id), audit: normalized };
     }),
 
   /**
-   * ✅ REQUIRED by frontend (you saw 404: mdr.getAuditContext)
+   * ✅ REQUIRED by frontend
    */
   getAuditContext: protectedProcedure
-    .input(
-      z.object({
-        auditId: z.number(),
-      })
-    )
+    .input(z.object({ auditId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
-      // Ensure arrays are arrays (not JSON strings)
       return {
         auditId: Number(auditContext.auditId),
         siteId: auditContext.siteId,
         economicRole: auditContext.economicRole,
-        processIds: Array.isArray(auditContext.processIds) ? auditContext.processIds : safeParseArray(auditContext.processIds).map(String),
+        processIds: Array.isArray(auditContext.processIds)
+          ? auditContext.processIds
+          : safeParseArray(auditContext.processIds).map(String),
         referentialIds: Array.isArray(auditContext.referentialIds)
           ? auditContext.referentialIds
           : safeParseArray(auditContext.referentialIds)
               .map((n: any) => Number(n))
               .filter((n: any) => !Number.isNaN(n)),
+        // helpful for UI title if you want it
+        auditName: (auditContext.audit as any)?.name ?? null,
       };
     }),
 
@@ -482,33 +455,134 @@ export const mdrRouter = router({
     }),
 
   /**
-   * Get questions for a given MDR audit, filtered by context
+   * ✅ NEW: Get existing responses for this audit (for current user)
    */
-  getQuestionsForAudit: protectedProcedure
-    .input(
-      z.object({
-        auditId: z.number(),
-      })
-    )
+  getResponses: protectedProcedure
+    .input(z.object({ auditId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
-        db,
-        ctx.user.id,
-        input.auditId
-      );
+      // ownership check
+      await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
-      // Load all questions from DB (or JSON as fallback)
-      let allQuestions = await loadQuestionsFromDb(db);
-      if (allQuestions.length === 0) {
-        allQuestions = loadQuestionsFromJson();
+      try {
+        // Prefer filtering by auditId; user scoping enforced by ownership already.
+        // But if your audit_responses has userId, we also filter by userId (more strict).
+        const rows = await db
+          .select()
+          .from(auditResponses)
+          // @ts-ignore (some schemas may not have userId; keep auditId filter minimum)
+          .where(
+            (auditResponses as any).userId
+              ? and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id))
+              : eq((auditResponses as any).auditId, input.auditId)
+          );
+
+        return (rows || []).map((r: any) => ({
+          questionKey: r.questionKey,
+          responseValue: r.responseValue,
+          responseComment: r.responseComment ?? "",
+          note: r.note ?? "",
+          evidenceFiles: safeParseArray(r.evidenceFiles),
+          role: r.role ?? null,
+          processId: r.processId ?? null,
+          updatedAt: r.updatedAt ?? null,
+        }));
+      } catch (e: any) {
+        console.error("[MDR] getResponses failed:", e);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to load responses" });
       }
+    }),
+
+  /**
+   * ✅ NEW: Save response (upsert) for current user + audit
+   */
+  saveResponse: protectedProcedure
+    .input(
+      z.object({
+        auditId: z.number(),
+        questionKey: z.string().min(1),
+        responseValue: ResponseValueEnum,
+        responseComment: z.string().optional().nullable(),
+        note: z.string().optional().nullable(),
+        role: z.string().optional().nullable(),
+        processId: z.string().optional().nullable(),
+        evidenceFiles: z.array(z.string()).optional().default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      // ownership check
+      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+      const now = new Date();
+
+      // build values
+      const values: any = {
+        auditId: input.auditId,
+        questionKey: input.questionKey,
+        responseValue: input.responseValue,
+        responseComment: input.responseComment ?? "",
+        note: input.note ?? "",
+        evidenceFiles: JSON.stringify(input.evidenceFiles ?? []),
+        role: input.role ?? null,
+        processId: input.processId ?? null,
+        updatedAt: now,
+      };
+
+      // if table has userId column, persist it
+      // @ts-ignore
+      if ((auditResponses as any).userId) values.userId = ctx.user.id;
+
+      try {
+        // Try to find existing row (safe even without unique index)
+        const whereExpr =
+          // @ts-ignore
+          (auditResponses as any).userId
+            ? and(
+                eq((auditResponses as any).auditId, input.auditId),
+                eq((auditResponses as any).questionKey, input.questionKey),
+                eq((auditResponses as any).userId, ctx.user.id)
+              )
+            : and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).questionKey, input.questionKey));
+
+        const [existing] = await db.select().from(auditResponses).where(whereExpr).limit(1);
+
+        if (existing) {
+          await db.update(auditResponses).set(values).where(eq((auditResponses as any).id, (existing as any).id));
+          return { success: true, mode: "updated" as const };
+        }
+
+        // create
+        const insertValues: any = { ...values, createdAt: now };
+        await db.insert(auditResponses).values(insertValues);
+        return { success: true, mode: "created" as const };
+      } catch (e: any) {
+        console.error("[MDR] saveResponse failed:", e);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to save response" });
+      }
+    }),
+
+  /**
+   * Get questions for a given MDR audit, filtered by context
+   */
+  getQuestionsForAudit: protectedProcedure
+    .input(z.object({ auditId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+      let allQuestions = await loadQuestionsFromDb(db);
+      if (allQuestions.length === 0) allQuestions = loadQuestionsFromJson();
 
       if (allQuestions.length === 0) {
         console.warn("[MDR] No questions found in DB or JSON file.");
-        return [];
+        return { questions: [] as any[] };
       }
 
       let filteredQuestions = allQuestions;
@@ -519,8 +593,8 @@ export const mdrRouter = router({
 
       // Filter by economicRole
       if (economicRole && economicRole !== "all") {
-        filteredQuestions = filteredQuestions.filter((q) => {
-          if (!q.economicRole) return true; // Question générique
+        filteredQuestions = filteredQuestions.filter((q: any) => {
+          if (!q.economicRole) return true;
           const qRoles = safeParseArray(q.economicRole).map((r) => String(r).toLowerCase().trim());
           return qRoles.length === 0 || qRoles.includes(economicRole.toLowerCase().trim());
         });
@@ -529,8 +603,7 @@ export const mdrRouter = router({
 
       // Filter by referentialIds
       if (referentialIds && referentialIds.length > 0) {
-        filteredQuestions = filteredQuestions.filter((q) => {
-          // If question has no referentialId, it's considered generic
+        filteredQuestions = filteredQuestions.filter((q: any) => {
           if (!q.referentialId) return true;
           return referentialIds.includes(Number(q.referentialId));
         });
@@ -541,20 +614,17 @@ export const mdrRouter = router({
       let questionsAfterProcessFilter = filteredQuestions;
       if (processIds && processIds.length > 0 && !processIds.includes("all")) {
         const dbProcessIds = await mapSelectedProcessesToDbProcessIds(db, processIds);
-        console.log(
-          `[MDR] Mapped frontend processIds [${processIds.join(",")}] to DB processIds [${dbProcessIds.join(",")}]`
-        );
+        console.log(`[MDR] Mapped frontend processIds [${processIds.join(",")}] to DB processIds [${dbProcessIds.join(",")}]`);
 
         if (dbProcessIds.length > 0) {
-          questionsAfterProcessFilter = filteredQuestions.filter((q) => {
-            if (!q.processId) return false; // Question must have a processId to be filtered
+          questionsAfterProcessFilter = filteredQuestions.filter((q: any) => {
+            if (!q.processId) return false;
+
             const qApplicableProcesses = safeParseArray(q.applicableProcesses).map((p: string) => String(p).toLowerCase());
 
             return dbProcessIds.some((dbProcId) => {
-              // Check if dbProcId matches the question's processId directly
               if (Number(q.processId) === Number(dbProcId)) return true;
 
-              // Or check if any applicable process name matches
               const mdrProcess = MDR_PROCESSES.find(
                 (p) => p.id === String(dbProcId) || p.name.toLowerCase() === String(dbProcId).toLowerCase()
               );
@@ -563,20 +633,15 @@ export const mdrRouter = router({
           });
         }
 
-        console.log(
-          `[MDR] Questions after processIds filter (${processIds.join(",")}): ${questionsAfterProcessFilter.length}`
-        );
+        console.log(`[MDR] Questions after processIds filter (${processIds.join(",")}): ${questionsAfterProcessFilter.length}`);
 
-        // Fallback: if no questions found for specific processes, return all questions filtered by role/referential
         if (questionsAfterProcessFilter.length === 0 && dbProcessIds.length > 0) {
-          console.warn(
-            "[MDR] No questions found for specific processes. Falling back to all questions filtered by role/referential."
-          );
+          console.warn("[MDR] No questions found for specific processes. Falling back to all questions filtered by role/referential.");
           questionsAfterProcessFilter = filteredQuestions;
         }
       }
 
-      return questionsAfterProcessFilter.map((q: any) => ({
+      const out = questionsAfterProcessFilter.map((q: any) => ({
         id: q.id,
         questionKey: q.questionKey || generateQuestionKey(q),
         questionText: q.questionText,
@@ -585,12 +650,17 @@ export const mdrRouter = router({
         title: q.title,
         expectedEvidence: q.expectedEvidence,
         criticality: q.criticality,
-        risk: q.risk,
+        // some DBs have "risk" vs "risks"; keep both safely
+        risk: (q as any).risk ?? null,
+        risks: (q as any).risks ?? null,
         interviewFunctions: safeParseArray(q.interviewFunctions),
         economicRole: q.economicRole,
         applicableProcesses: safeParseArray(q.applicableProcesses),
         referentialId: q.referentialId,
-        processId: q.processId, // Keep processId for drilldown if needed
+        processId: q.processId,
       }));
+
+      // ✅ return object to match common frontend pattern: data.questions
+      return { questions: out };
     }),
 });
