@@ -107,6 +107,12 @@ export const sites = mysqlTable("sites", {
   city: varchar("city", { length: 120 }),
   postalCode: varchar("postalCode", { length: 30 }),
   country: varchar("country", { length: 120 }),
+
+  // ✅ NEW (Option 2: add columns instead of removing fields)
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }),
+  notes: text("notes"),
+
   isMainSite: boolean("isMainSite").default(false),
   isActive: boolean("isActive").default(true),
 
@@ -228,11 +234,7 @@ export const audit_responses = mysqlTable(
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
   (t) => ({
-    unq: uniqueIndex("audit_response_unq").on(
-      t.userId,
-      t.auditId,
-      t.questionKey
-    ),
+    unq: uniqueIndex("audit_response_unq").on(t.userId, t.auditId, t.questionKey),
   })
 );
 
@@ -295,9 +297,7 @@ export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
     .references(() => users.id),
   siteId: int("siteId").references(() => sites.id),
   economicRole: varchar("economicRole", { length: 50 }).notNull(),
-  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(
-    false
-  ),
+  hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(false),
   targetMarkets: json("targetMarkets"),
   deviceClasses: json("deviceClasses"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -364,16 +364,13 @@ export const auditResponsesRelations = relations(audit_responses, ({ one }) => (
   }),
 }));
 
-export const organisationsRelations = relations(
-  organisations,
-  ({ one, many }) => ({
-    user: one(users, {
-      fields: [organisations.userId],
-      references: [users.id],
-    }),
-    sites: many(sites),
-  })
-);
+export const organisationsRelations = relations(organisations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [organisations.userId],
+    references: [users.id],
+  }),
+  sites: many(sites),
+}));
 
 export const sitesRelations = relations(sites, ({ one, many }) => ({
   user: one(users, { fields: [sites.userId], references: [users.id] }),
@@ -402,33 +399,27 @@ export const resultatsRelations = relations(resultats, ({ one }) => ({
   audit: one(audits, { fields: [resultats.auditId], references: [audits.id] }),
 }));
 
-export const mdrRoleQualificationsRelations = relations(
-  mdrRoleQualifications,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [mdrRoleQualifications.userId],
-      references: [users.id],
-    }),
-    site: one(sites, {
-      fields: [mdrRoleQualifications.siteId],
-      references: [sites.id],
-    }),
-  })
-);
+export const mdrRoleQualificationsRelations = relations(mdrRoleQualifications, ({ one }) => ({
+  user: one(users, {
+    fields: [mdrRoleQualifications.userId],
+    references: [users.id],
+  }),
+  site: one(sites, {
+    fields: [mdrRoleQualifications.siteId],
+    references: [sites.id],
+  }),
+}));
 
-export const mdrEvidenceFilesRelations = relations(
-  mdrEvidenceFiles,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [mdrEvidenceFiles.userId],
-      references: [users.id],
-    }),
-    audit: one(audits, {
-      fields: [mdrEvidenceFiles.auditId],
-      references: [audits.id],
-    }),
-  })
-);
+export const mdrEvidenceFilesRelations = relations(mdrEvidenceFiles, ({ one }) => ({
+  user: one(users, {
+    fields: [mdrEvidenceFiles.userId],
+    references: [users.id],
+  }),
+  audit: one(audits, {
+    fields: [mdrEvidenceFiles.auditId],
+    references: [audits.id],
+  }),
+}));
 
 /* =========================
    Aliases / Backward compatibility
