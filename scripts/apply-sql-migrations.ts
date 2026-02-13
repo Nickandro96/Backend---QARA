@@ -7,6 +7,25 @@ function sha256(content: string) {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
+function isIgnorableMigrationError(e: any) {
+  const code = e?.code;
+  const msg = String(e?.sqlMessage || e?.message || "");
+
+  // ✅ Cas typiques : colonnes déjà ajoutées / index déjà existant / table déjà existante
+  if (code === "ER_DUP_FIELDNAME") return true; // Duplicate column name
+  if (code === "ER_DUP_KEYNAME") return true; // Duplicate key name
+  if (code === "ER_TABLE_EXISTS_ERROR") return true; // Table already exists
+  if (code === "ER_MULTIPLE_PRI_KEY") return true; // multiple primary key defined
+  if (code === "ER_CANT_DROP_FIELD_OR_KEY" && msg.includes("check that column/key exists")) return true;
+
+  // Certaines variantes MySQL renvoient juste un message
+  if (msg.toLowerCase().includes("duplicate column name")) return true;
+  if (msg.toLowerCase().includes("duplicate key name")) return true;
+  if (msg.toLowerCase().includes("already exists")) return true;
+
+  return false;
+}
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is missing");
@@ -24,6 +43,7 @@ async function main() {
     multipleStatements: true,
   });
 
+  // 1) Ensure tracking table exists
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS \`_drizzle_migrations\` (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -32,11 +52,20 @@ async function main() {
     );
   `);
 
+  // Optionnel mais utile: éviter les doublons de hash
+  try {
+    await conn.execute(`CREATE UNIQUE INDEX \`_drizzle_migrations_hash_uq\` ON \`_drizzle_migrations\` (hash);`);
+  } catch {
+    // ignore if already exists
+  }
+
+  // 2) Load already applied hashes
   const [appliedRows] = await conn.query<any[]>(
     `SELECT hash FROM \`_drizzle_migrations\``
   );
   const applied = new Set(appliedRows.map((r) => String(r.hash)));
 
+  // 3) Find migration files
   const migrationsDir = path.join(process.cwd(), "drizzle", "migrations");
   if (!fs.existsSync(migrationsDir)) {
     console.log("No migrations directory found:", migrationsDir);
@@ -69,22 +98,39 @@ async function main() {
     const hash = sha256(sql);
 
     if (applied.has(hash)) {
-      console.log(`Already applied: ${file} (${hash.slice(0, 8)}...)`);
+      console.log(`Already applied (by hash): ${file} (${hash.slice(0, 8)}...)`);
       continue;
     }
 
     console.log(`Applying: ${file} (${hash.slice(0, 8)}...)`);
+
     try {
       await conn.beginTransaction();
       await conn.query(sql);
+
+      // record hash
       await conn.execute(
-        `INSERT INTO \`_drizzle_migrations\` (hash, created_at) VALUES (?, ?)`,
+        `INSERT IGNORE INTO \`_drizzle_migrations\` (hash, created_at) VALUES (?, ?)`,
         [hash, Date.now()]
       );
+
       await conn.commit();
       console.log(`✅ Applied: ${file}`);
+      applied.add(hash);
     } catch (e: any) {
       await conn.rollback();
+
+      // ✅ Si c’est un "déjà fait" (colonne existante, etc.), on baseline le hash
+      if (isIgnorableMigrationError(e)) {
+        console.warn(`⚠️ Migration already applied in DB, baselining hash: ${file}`);
+        await conn.execute(
+          `INSERT IGNORE INTO \`_drizzle_migrations\` (hash, created_at) VALUES (?, ?)`,
+          [hash, Date.now()]
+        );
+        applied.add(hash);
+        continue;
+      }
+
       console.error(`❌ Failed: ${file}`);
       throw e;
     }
