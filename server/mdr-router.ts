@@ -10,7 +10,7 @@ import {
   sites,
   users,
   referentials,
-  auditResponses, // ✅ NEW: required for saveResponse/getResponses
+  auditResponses,
 } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import fs from "fs";
@@ -164,6 +164,29 @@ async function mapSelectedProcessesToDbProcessIds(db: any, selected: string[]) {
   }
 }
 
+// ✅ NEW: Map selected process tokens -> process NAMES (needed for JSON_CONTAINS(applicableProcesses))
+function mapSelectedProcessesToNames(selected: string[]) {
+  if (!selected || selected.length === 0) return [];
+  const out: string[] = [];
+  for (const token of selected) {
+    if (!token) continue;
+    if (token === "all") continue;
+
+    // If it's numeric, it's probably DB process id => we cannot trust it if processId is broken.
+    // We'll still try to map via MDR_PROCESSES by name match later if needed.
+    if (isNumericString(token)) {
+      // don't push numeric tokens as names
+      continue;
+    }
+
+    const p = MDR_PROCESSES.find((x) => x.id === token);
+    if (p) out.push(p.name);
+    else out.push(token); // already a name
+  }
+  // unique
+  return [...new Set(out.map((s) => String(s).trim()).filter(Boolean))];
+}
+
 // Internal helper: get audit context WITHOUT calling tRPC endpoints
 async function getAuditContextInternal(db: any, userId: number, auditId: number) {
   const [audit] = await db
@@ -235,7 +258,8 @@ export const mdrRouter = router({
     }
 
     try {
-      const rows = await db.select().from(sites);
+      // ✅ FIX: must be user-scoped
+      const rows = await db.select().from(sites).where(eq(sites.userId, ctx.user.id));
       return rows;
     } catch (e) {
       console.error("[MDR] getSites fallback failed:", e);
@@ -364,7 +388,6 @@ export const mdrRouter = router({
           : safeParseArray(auditContext.referentialIds)
               .map((n: any) => Number(n))
               .filter((n: any) => !Number.isNaN(n)),
-        // helpful for UI title if you want it
         auditName: (auditContext.audit as any)?.name ?? null,
       };
     }),
@@ -467,17 +490,10 @@ export const mdrRouter = router({
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       try {
-        // Prefer filtering by auditId; user scoping enforced by ownership already.
-        // But if your audit_responses has userId, we also filter by userId (more strict).
         const rows = await db
           .select()
           .from(auditResponses)
-          // @ts-ignore (some schemas may not have userId; keep auditId filter minimum)
-          .where(
-            (auditResponses as any).userId
-              ? and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id))
-              : eq((auditResponses as any).auditId, input.auditId)
-          );
+          .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
 
         return (rows || []).map((r: any) => ({
           questionKey: r.questionKey,
@@ -507,7 +523,7 @@ export const mdrRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(),
+        processId: z.string().optional().nullable(), // token or numeric string
         evidenceFiles: z.array(z.string()).optional().default([]),
       })
     )
@@ -520,7 +536,10 @@ export const mdrRouter = router({
 
       const now = new Date();
 
-      // build values
+      // ✅ normalize processId to INT or null
+      const normalizedProcessId =
+        input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
+
       const values: any = {
         auditId: input.auditId,
         questionKey: input.questionKey,
@@ -529,25 +548,17 @@ export const mdrRouter = router({
         note: input.note ?? "",
         evidenceFiles: JSON.stringify(input.evidenceFiles ?? []),
         role: input.role ?? null,
-        processId: input.processId ?? null,
+        processId: normalizedProcessId,
         updatedAt: now,
+        userId: ctx.user.id,
       };
 
-      // if table has userId column, persist it
-      // @ts-ignore
-      if ((auditResponses as any).userId) values.userId = ctx.user.id;
-
       try {
-        // Try to find existing row (safe even without unique index)
-        const whereExpr =
-          // @ts-ignore
-          (auditResponses as any).userId
-            ? and(
-                eq((auditResponses as any).auditId, input.auditId),
-                eq((auditResponses as any).questionKey, input.questionKey),
-                eq((auditResponses as any).userId, ctx.user.id)
-              )
-            : and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).questionKey, input.questionKey));
+        const whereExpr = and(
+          eq((auditResponses as any).auditId, input.auditId),
+          eq((auditResponses as any).questionKey, input.questionKey),
+          eq((auditResponses as any).userId, ctx.user.id)
+        );
 
         const [existing] = await db.select().from(auditResponses).where(whereExpr).limit(1);
 
@@ -556,7 +567,6 @@ export const mdrRouter = router({
           return { success: true, mode: "updated" as const };
         }
 
-        // create
         const insertValues: any = { ...values, createdAt: now };
         await db.insert(auditResponses).values(insertValues);
         return { success: true, mode: "created" as const };
@@ -567,7 +577,7 @@ export const mdrRouter = router({
     }),
 
   /**
-   * Get questions for a given MDR audit, filtered by context
+   * ✅ FIXED: Get questions for a given MDR audit, filtered BY DB (role + processes + referentials)
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -575,8 +585,87 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
+        db,
+        ctx.user.id,
+        input.auditId
+      );
 
+      console.log(
+        `[MDR] getQuestionsForAudit audit=${auditId} role=${economicRole} processIds=${JSON.stringify(
+          processIds
+        )} referentials=${JSON.stringify(referentialIds)}`
+      );
+
+      // Build process names for JSON_CONTAINS(applicableProcesses)
+      const processNames = mapSelectedProcessesToNames(processIds || []);
+      const hasProcessFilter = processNames.length > 0;
+
+      // ---- Try DB-first (FAST & CORRECT) ----
+      try {
+        const whereParts: any[] = [];
+
+        // ✅ economicRole filter (varchar in DB)
+        if (economicRole && economicRole !== "all") {
+          whereParts.push(eq((questions as any).economicRole, economicRole));
+        }
+
+        // ✅ referentials filter
+        if (referentialIds && referentialIds.length > 0) {
+          // Use IN (...) via SQL to avoid drizzle typing friction
+          whereParts.push(sql`${(questions as any).referentialId} in (${sql.join(
+            referentialIds.map((n: number) => sql`${n}`),
+            sql`, `
+          )})`);
+        }
+
+        // ✅ processes filter via JSON_CONTAINS(applicableProcesses, '"Process Name"')
+        if (hasProcessFilter) {
+          const conds = processNames.map((pname) =>
+            sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, ${JSON.stringify(pname)})`
+          );
+          whereParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+        }
+
+        const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
+
+        const rows = finalWhere
+          ? await db.select().from(questions).where(finalWhere)
+          : await db.select().from(questions);
+
+        console.log(`[MDR] DB filtered questions count: ${rows.length}`);
+
+        if (rows && rows.length > 0) {
+          const out = rows.map((q: any) => ({
+            id: q.id,
+            questionKey: q.questionKey || generateQuestionKey(q),
+            questionText: q.questionText,
+            questionType: q.questionType ?? null,
+            article: q.article,
+            annexe: q.annexe,
+            title: q.title,
+
+            expectedEvidence: q.expectedEvidence ?? null,
+            criticality: q.criticality ?? null,
+
+            // ✅ unify risks
+            risks: q.risks ?? q.risk ?? null,
+
+            interviewFunctions: safeParseArray(q.interviewFunctions),
+            economicRole: q.economicRole ?? null,
+            applicableProcesses: safeParseArray(q.applicableProcesses),
+
+            referentialId: q.referentialId ?? null,
+            processId: q.processId ?? null,
+          }));
+
+          return { questions: out };
+        }
+      } catch (e: any) {
+        console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
+      }
+
+      // ---- Fallback (JSON file or DB full scan) ----
       let allQuestions = await loadQuestionsFromDb(db);
       if (allQuestions.length === 0) allQuestions = loadQuestionsFromJson();
 
@@ -585,82 +674,55 @@ export const mdrRouter = router({
         return { questions: [] as any[] };
       }
 
-      let filteredQuestions = allQuestions;
+      let filtered = allQuestions;
 
-      console.log(
-        `[MDR] Filtering questions for audit ${auditId}: economicRole=${economicRole}, processIds=${processIds}, referentialIds=${referentialIds}`
-      );
-
-      // Filter by economicRole
+      // role filter (support both varchar and legacy json array)
       if (economicRole && economicRole !== "all") {
-        filteredQuestions = filteredQuestions.filter((q: any) => {
+        filtered = filtered.filter((q: any) => {
           if (!q.economicRole) return true;
+          if (typeof q.economicRole === "string") {
+            return q.economicRole.toLowerCase().trim() === economicRole.toLowerCase().trim();
+          }
           const qRoles = safeParseArray(q.economicRole).map((r) => String(r).toLowerCase().trim());
           return qRoles.length === 0 || qRoles.includes(economicRole.toLowerCase().trim());
         });
-        console.log(`[MDR] Questions after economicRole filter (${economicRole}): ${filteredQuestions.length}`);
       }
 
-      // Filter by referentialIds
+      // referentials
       if (referentialIds && referentialIds.length > 0) {
-        filteredQuestions = filteredQuestions.filter((q: any) => {
+        filtered = filtered.filter((q: any) => {
           if (!q.referentialId) return true;
           return referentialIds.includes(Number(q.referentialId));
         });
-        console.log(`[MDR] Questions after referentialIds filter (${referentialIds.join(",")}): ${filteredQuestions.length}`);
       }
 
-      // Filter by processIds (if specific processes are selected)
-      let questionsAfterProcessFilter = filteredQuestions;
-      if (processIds && processIds.length > 0 && !processIds.includes("all")) {
-        const dbProcessIds = await mapSelectedProcessesToDbProcessIds(db, processIds);
-        console.log(`[MDR] Mapped frontend processIds [${processIds.join(",")}] to DB processIds [${dbProcessIds.join(",")}]`);
-
-        if (dbProcessIds.length > 0) {
-          questionsAfterProcessFilter = filteredQuestions.filter((q: any) => {
-            if (!q.processId) return false;
-
-            const qApplicableProcesses = safeParseArray(q.applicableProcesses).map((p: string) => String(p).toLowerCase());
-
-            return dbProcessIds.some((dbProcId) => {
-              if (Number(q.processId) === Number(dbProcId)) return true;
-
-              const mdrProcess = MDR_PROCESSES.find(
-                (p) => p.id === String(dbProcId) || p.name.toLowerCase() === String(dbProcId).toLowerCase()
-              );
-              return !!(mdrProcess && qApplicableProcesses.includes(mdrProcess.name.toLowerCase()));
-            });
-          });
-        }
-
-        console.log(`[MDR] Questions after processIds filter (${processIds.join(",")}): ${questionsAfterProcessFilter.length}`);
-
-        if (questionsAfterProcessFilter.length === 0 && dbProcessIds.length > 0) {
-          console.warn("[MDR] No questions found for specific processes. Falling back to all questions filtered by role/referential.");
-          questionsAfterProcessFilter = filteredQuestions;
-        }
+      // process filter using applicableProcesses names
+      if (hasProcessFilter) {
+        const wanted = processNames.map((x) => x.toLowerCase());
+        filtered = filtered.filter((q: any) => {
+          const qApplicable = safeParseArray(q.applicableProcesses).map((p: any) => String(p).toLowerCase());
+          return wanted.some((w) => qApplicable.includes(w));
+        });
       }
 
-      const out = questionsAfterProcessFilter.map((q: any) => ({
+      const out = filtered.map((q: any) => ({
         id: q.id,
         questionKey: q.questionKey || generateQuestionKey(q),
         questionText: q.questionText,
+        questionType: q.questionType ?? null,
         article: q.article,
         annexe: q.annexe,
         title: q.title,
-        expectedEvidence: q.expectedEvidence,
-        criticality: q.criticality,
-        // some DBs have "risk" vs "risks"; keep both safely
-        risk: (q as any).risk ?? null,
-        risks: (q as any).risks ?? null,
+        expectedEvidence: q.expectedEvidence ?? null,
+        criticality: q.criticality ?? null,
+        risks: (q as any).risks ?? (q as any).risk ?? null,
         interviewFunctions: safeParseArray(q.interviewFunctions),
-        economicRole: q.economicRole,
+        economicRole: q.economicRole ?? null,
         applicableProcesses: safeParseArray(q.applicableProcesses),
-        referentialId: q.referentialId,
-        processId: q.processId,
+        referentialId: q.referentialId ?? null,
+        processId: q.processId ?? null,
       }));
 
-      // ✅ return object to match common frontend pattern: data.questions
       return { questions: out };
     }),
 });
