@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Fix: Replace @shared/const alias with relative path
@@ -23,7 +23,7 @@ import { auditRouter } from "./audit-router";
 import { siteRouter } from "./site-router";
 
 import { generateAuditReport } from "./report-generator";
-import { auditReports } from "../drizzle/schema";
+import { auditReports, sites as sitesTable } from "../drizzle/schema";
 
 import { storagePut as uploadToS3 } from "./storage";
 
@@ -38,6 +38,20 @@ const zIsoDate = z.preprocess((v) => {
   }
   return v;
 }, z.date());
+
+// "" / undefined -> null (critical for organisationId or optional strings)
+const emptyStringToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
+
+const optionalTrimmedStringOrNull = z.preprocess((v: unknown) => {
+  if (v === "" || v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s.length === 0 ? null : s;
+}, z.string().nullable());
+
+const optionalIntOrNull = z.preprocess(
+  emptyStringToNull,
+  z.coerce.number().int().positive().nullable()
+);
 
 // -----------------------------
 // Router
@@ -90,45 +104,122 @@ export const appRouter = router({
       }),
   }),
 
+  /**
+   * ✅ IMPORTANT
+   * Frontend calls: trpc.sites.create / trpc.sites.list
+   * We implement them here using Drizzle directly to avoid db.createSite() inserting organisationId = "".
+   */
   sites: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      const sitesList = await db.getSites(ctx.user.id);
-      return { sites: sitesList };
+      const database = await db.getDb();
+
+      const rows = await database
+        .select()
+        .from(sitesTable)
+        .where(eq(sitesTable.userId, ctx.user.id))
+        .orderBy(desc(sitesTable.createdAt));
+
+      return { sites: rows };
     }),
 
     create: protectedProcedure
       .input(
         z.object({
           name: z.string().min(2),
-          addressLine1: z.string().optional(),
-          addressLine2: z.string().optional(),
-          city: z.string().optional(),
-          postalCode: z.string().optional(),
-          country: z.string().optional(),
-          isMainSite: z.boolean().default(false),
+
+          // Optional strings (normalized to null)
+          code: optionalTrimmedStringOrNull.optional(),
+          addressLine1: optionalTrimmedStringOrNull.optional(),
+          addressLine2: optionalTrimmedStringOrNull.optional(),
+          city: optionalTrimmedStringOrNull.optional(),
+          postalCode: optionalTrimmedStringOrNull.optional(),
+          country: optionalTrimmedStringOrNull.optional(),
+          phone: optionalTrimmedStringOrNull.optional(),
+          email: optionalTrimmedStringOrNull.optional(),
+          notes: optionalTrimmedStringOrNull.optional(),
+
+          isMainSite: z.coerce.boolean().optional().default(false),
+          isActive: z.coerce.boolean().optional().default(true),
+
+          // ✅ Critical bug fix: accept "" / undefined -> null
+          organisationId: optionalIntOrNull.optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        return await db.createSite({
-          ...input,
+        const database = await db.getDb();
+
+        const values = {
           userId: ctx.user.id,
-        });
+          name: input.name.trim(),
+
+          code: input.code ?? null,
+          addressLine1: input.addressLine1 ?? null,
+          addressLine2: input.addressLine2 ?? null,
+          city: input.city ?? null,
+          postalCode: input.postalCode ?? null,
+          country: input.country ?? null,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          notes: input.notes ?? null,
+
+          isMainSite: input.isMainSite ?? false,
+          isActive: input.isActive ?? true,
+
+          // ✅ never send "" to MySQL
+          organisationId: input.organisationId ?? null,
+
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        const result: any = await database.insert(sitesTable).values(values);
+
+        const insertedId =
+          result?.[0]?.insertId ??
+          result?.insertId ??
+          null;
+
+        return { id: insertedId, ...values };
       }),
 
     getDefaultOrCreate: protectedProcedure.query(async ({ ctx }) => {
-      let site = await db.getFirstSiteByUserId(ctx.user.id);
-      if (!site) {
-        site = await db.createSite({
-          userId: ctx.user.id,
-          name: "Default Site",
-          addressLine1: "N/A",
-          city: "N/A",
-          postalCode: "N/A",
-          country: "N/A",
-          isMainSite: true,
-        });
-      }
-      return site;
+      const database = await db.getDb();
+
+      const [existing] = await database
+        .select()
+        .from(sitesTable)
+        .where(eq(sitesTable.userId, ctx.user.id))
+        .orderBy(desc(sitesTable.createdAt))
+        .limit(1);
+
+      if (existing) return existing;
+
+      const values = {
+        userId: ctx.user.id,
+        name: "Default Site",
+        addressLine1: "N/A",
+        addressLine2: null,
+        city: "N/A",
+        postalCode: "N/A",
+        country: "N/A",
+        phone: null,
+        email: null,
+        notes: null,
+        code: null,
+        isMainSite: true,
+        isActive: true,
+        organisationId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const result: any = await database.insert(sitesTable).values(values);
+      const insertedId =
+        result?.[0]?.insertId ??
+        result?.insertId ??
+        null;
+
+      return { id: insertedId, ...values };
     }),
   }),
 
@@ -190,14 +281,7 @@ export const appRouter = router({
         z
           .object({
             status: z
-              .enum([
-                "draft",
-                "planned",
-                "in_progress",
-                "completed",
-                "closed",
-                "cancelled",
-              ])
+              .enum(["draft", "planned", "in_progress", "completed", "closed", "cancelled"])
               .optional(),
             siteId: z.number().int().positive().optional(),
           })
@@ -233,41 +317,17 @@ export const appRouter = router({
           referentialIds: z.array(z.number()).default([1]),
           processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
 
-          startDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
-          endDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
+          startDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
+          endDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
 
-          plannedStartDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
-          plannedEndDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
+          plannedStartDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
+          plannedEndDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
 
-          actualStartDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
-          actualEndDate: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
+          actualStartDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
+          actualEndDate: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
 
-          openingMeetingAt: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
-          closingMeetingAt: z.preprocess(
-            (arg) => (arg instanceof Date ? arg.toISOString() : arg),
-            z.string().optional()
-          ),
+          openingMeetingAt: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
+          closingMeetingAt: z.preprocess((arg) => (arg instanceof Date ? arg.toISOString() : arg), z.string().optional()),
 
           auditedEntityName: z.string().optional(),
           auditedEntityAddress: z.string().optional(),
@@ -382,10 +442,7 @@ export const appRouter = router({
 
         // Resolve siteId and organizationId if provided
         if (updateData.siteId) {
-          const siteExists = await db.getSiteByIdAndUserId(
-            updateData.siteId,
-            ctx.user.id
-          );
+          const siteExists = await db.getSiteByIdAndUserId(updateData.siteId, ctx.user.id);
           if (!siteExists) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -394,10 +451,7 @@ export const appRouter = router({
           }
         }
         if (updateData.organizationId) {
-          const organizationExists = await db.getOrganisationByIdAndUserId(
-            updateData.organizationId,
-            ctx.user.id
-          );
+          const organizationExists = await db.getOrganisationByIdAndUserId(updateData.organizationId, ctx.user.id);
           if (!organizationExists) {
             throw new TRPCError({
               code: "BAD_REQUEST",
@@ -410,28 +464,16 @@ export const appRouter = router({
           await db.updateAudit(id, {
             ...updateData,
 
-            startDate: updateData.startDate
-              ? new Date(updateData.startDate)
-              : undefined,
-            endDate: updateData.endDate
-              ? new Date(updateData.endDate)
-              : undefined,
+            startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
+            endDate: updateData.endDate ? new Date(updateData.endDate) : undefined,
 
-            auditors: updateData.auditors
-              ? JSON.stringify(updateData.auditors)
-              : undefined,
-            observers: updateData.observers
-              ? JSON.stringify(updateData.observers)
-              : undefined,
+            auditors: updateData.auditors ? JSON.stringify(updateData.auditors) : undefined,
+            observers: updateData.observers ? JSON.stringify(updateData.observers) : undefined,
 
             // ✅ on n’écrit PAS dans “processesSelected” DB, on aligne sur processIds
-            processIds: updateData.processesSelected
-              ? JSON.stringify(updateData.processesSelected)
-              : undefined,
+            processIds: updateData.processesSelected ? JSON.stringify(updateData.processesSelected) : undefined,
 
-            referentialIds: updateData.referentialIds
-              ? JSON.stringify(updateData.referentialIds)
-              : undefined,
+            referentialIds: updateData.referentialIds ? JSON.stringify(updateData.referentialIds) : undefined,
 
             // Optionnel: si ton DB a ces colonnes et que tu veux les maintenir
             auditorName: updateData.leadAuditorName ?? undefined,
@@ -455,47 +497,43 @@ export const appRouter = router({
 
     // ✅✅✅ AJOUT ICI : audits.updateMetadata (pour corriger ton erreur NOT_FOUND)
     updateMetadata: protectedProcedure
-  .input(
-    z.object({
-      // ✅ accepte id OU auditId (le front envoie parfois auditId)
-      id: z.number().optional(),
-      auditId: z.number().optional(),
+      .input(
+        z.object({
+          // ✅ accepte id OU auditId (le front envoie parfois auditId)
+          id: z.number().optional(),
+          auditId: z.number().optional(),
 
-      referentialIds: z.array(z.number()).optional(),
-      processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
-      notes: z.string().optional(),
-    })
-  )
-  .mutation(async ({ ctx, input }) => {
-    const resolvedId = input.id ?? input.auditId;
+          referentialIds: z.array(z.number()).optional(),
+          processesSelected: z.array(z.union([z.string(), z.number()])).optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const resolvedId = input.id ?? input.auditId;
 
-    if (!resolvedId) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Missing audit id (expected 'id' or 'auditId')",
-      });
-    }
+        if (!resolvedId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Missing audit id (expected 'id' or 'auditId')",
+          });
+        }
 
-    const audit = await db.getAuditById(resolvedId, ctx.user.id);
-    if (!audit) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Audit not found or does not belong to the user",
-      });
-    }
+        const audit = await db.getAuditById(resolvedId, ctx.user.id);
+        if (!audit) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Audit not found or does not belong to the user",
+          });
+        }
 
-    await db.updateAudit(resolvedId, {
-      referentialIds: input.referentialIds
-        ? JSON.stringify(input.referentialIds)
-        : undefined,
-      processIds: input.processesSelected
-        ? JSON.stringify(input.processesSelected)
-        : undefined,
-      notes: input.notes ?? undefined,
-    });
+        await db.updateAudit(resolvedId, {
+          referentialIds: input.referentialIds ? JSON.stringify(input.referentialIds) : undefined,
+          processIds: input.processesSelected ? JSON.stringify(input.processesSelected) : undefined,
+          notes: input.notes ?? undefined,
+        });
 
-    return { success: true };
-  }),
+        return { success: true };
+      }),
 
     start: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -708,6 +746,8 @@ export const appRouter = router({
 
   // Audit Management (ton router existant)
   audit: auditRouter,
+
+  // ✅ Keep existing mount for compatibility (does not affect trpc.sites.*)
   site: siteRouter,
 
   // --------------------------------------------
