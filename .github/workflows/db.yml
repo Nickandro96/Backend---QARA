@@ -1,4 +1,4 @@
-name: DB Push & Seed (Railway MySQL)
+name: DB Migrate & Seed (Railway MySQL)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CI: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -35,10 +36,12 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
 
-      # ✅ NON-INTERACTIVE: auto-answer prompts (create table instead of rename)
-      - name: Push schema to DB (drizzle-kit push --force) [non-interactive]
-        run: |
-          echo "y" | pnpm db:push
+      # ✅ Non-interactive, reliable way: use migrations
+      - name: Generate migrations (drizzle-kit generate)
+        run: pnpm exec drizzle-kit generate
+
+      - name: Run migrations (drizzle-kit migrate)
+        run: pnpm exec drizzle-kit migrate
 
       - name: Seed DB
         run: pnpm db:seed
