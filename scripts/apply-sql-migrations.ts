@@ -12,8 +12,7 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is missing");
 
   const u = new URL(url);
-  const dbName = (u.pathname || "").replace("/", "");
-  if (!dbName) throw new Error("DATABASE_URL has no database name in path");
+  const dbName = u.pathname.replace("/", "");
 
   const conn = await mysql.createConnection({
     host: u.hostname,
@@ -21,27 +20,22 @@ async function main() {
     user: decodeURIComponent(u.username),
     password: decodeURIComponent(u.password),
     database: dbName,
-    ssl: { rejectUnauthorized: false }, // ok pour Railway proxy
+    ssl: { rejectUnauthorized: false },
     multipleStatements: true,
   });
 
-  // ✅ Table de suivi dédiée (NE PAS utiliser _drizzle_migrations)
   await conn.execute(`
-    CREATE TABLE IF NOT EXISTS \`_custom_sql_migrations\` (
+    CREATE TABLE IF NOT EXISTS \`_drizzle_migrations\` (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      file_name VARCHAR(255) NOT NULL,
       hash VARCHAR(64) NOT NULL,
-      created_at BIGINT NOT NULL,
-      UNIQUE KEY uq_custom_sql_hash (hash),
-      UNIQUE KEY uq_custom_sql_file (file_name)
+      created_at BIGINT NOT NULL
     );
   `);
 
   const [appliedRows] = await conn.query<any[]>(
-    `SELECT file_name, hash FROM \`_custom_sql_migrations\``
+    `SELECT hash FROM \`_drizzle_migrations\``
   );
-  const appliedHash = new Set(appliedRows.map((r) => String(r.hash)));
-  const appliedFile = new Set(appliedRows.map((r) => String(r.file_name)));
+  const applied = new Set(appliedRows.map((r) => String(r.hash)));
 
   const migrationsDir = path.join(process.cwd(), "drizzle", "migrations");
   if (!fs.existsSync(migrationsDir)) {
@@ -74,8 +68,7 @@ async function main() {
 
     const hash = sha256(sql);
 
-    // ✅ Double protection: hash + file name
-    if (appliedHash.has(hash) || appliedFile.has(file)) {
+    if (applied.has(hash)) {
       console.log(`Already applied: ${file} (${hash.slice(0, 8)}...)`);
       continue;
     }
@@ -85,8 +78,8 @@ async function main() {
       await conn.beginTransaction();
       await conn.query(sql);
       await conn.execute(
-        `INSERT INTO \`_custom_sql_migrations\` (file_name, hash, created_at) VALUES (?, ?, ?)`,
-        [file, hash, Date.now()]
+        `INSERT INTO \`_drizzle_migrations\` (hash, created_at) VALUES (?, ?)`,
+        [hash, Date.now()]
       );
       await conn.commit();
       console.log(`✅ Applied: ${file}`);
@@ -97,15 +90,20 @@ async function main() {
     }
   }
 
-  // Vérif colonnes sites
-  const [cols] = await conn.query<any[]>(
-    `SELECT COLUMN_NAME, DATA_TYPE
-     FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sites'
-     ORDER BY ORDINAL_POSITION`
-  );
-  console.log("Sites columns:");
-  console.table(cols);
+  async function printCols(table: string) {
+    const [cols] = await conn.query<any[]>(
+      `SELECT COLUMN_NAME, DATA_TYPE
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+       ORDER BY ORDINAL_POSITION`,
+      [table]
+    );
+    console.log(`\n${table} columns:`);
+    console.table(cols);
+  }
+
+  await printCols("sites");
+  await printCols("organisations");
 
   await conn.end();
 }
