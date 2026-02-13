@@ -168,8 +168,18 @@ export const audits = mysqlTable("audits", {
   status: varchar("status", { length: 50 }).default("in_progress").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
+  // ✅ stockés en JSON (stringifié côté router)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
+
+  // ✅ champs wizard (si ta DB les a, c’est mieux de les déclarer)
+  clientOrganization: varchar("clientOrganization", { length: 255 }),
+  siteLocation: varchar("siteLocation", { length: 255 }),
+  auditorName: varchar("auditorName", { length: 255 }),
+  auditorEmail: varchar("auditorEmail", { length: 255 }),
+
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
 
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
@@ -180,6 +190,7 @@ export const audits = mysqlTable("audits", {
 ========================= */
 export const questions = mysqlTable("questions", {
   id: int("id").autoincrement().primaryKey(),
+
   referentialId: int("referentialId"),
   processId: int("processId"),
 
@@ -188,7 +199,17 @@ export const questions = mysqlTable("questions", {
   annexe: varchar("annexe", { length: 255 }),
   title: varchar("title", { length: 255 }),
 
-  economicRole: json("economicRole"),
+  /**
+   * ✅ IMPORTANT FIX:
+   * Dans ta DB Railway, economicRole est une STRING ("fabricant"/"importateur"/"distributeur")
+   * Donc on le déclare en varchar.
+   */
+  economicRole: varchar("economicRole", { length: 50 }),
+
+  /**
+   * ✅ applicableProcesses est un JSON array de strings
+   * ex: ["Gouvernance & stratégie réglementaire", "Affaires réglementaires (RA)"]
+   */
   applicableProcesses: json("applicableProcesses"),
 
   questionType: varchar("questionType", { length: 50 }),
@@ -196,7 +217,16 @@ export const questions = mysqlTable("questions", {
   expectedEvidence: text("expectedEvidence"),
 
   criticality: varchar("criticality", { length: 50 }),
+
+  /**
+   * ✅ compat:
+   * - ta DB a une colonne "risks"
+   * - ton ancien schéma avait "risk"
+   * On garde les deux pour ne rien casser.
+   */
   risk: text("risk"),
+  risks: text("risks"),
+
   interviewFunctions: json("interviewFunctions"),
   actionPlan: text("actionPlan"),
   aiPrompt: text("aiPrompt"),
