@@ -153,7 +153,12 @@ export const processus = mysqlTable("processus", {
 export const audits = mysqlTable("audits", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  type: varchar("type", { length: 50 }).notNull(),
+
+  // ✅ IMPORTANT:
+  // Le backend/frontend utilisent "auditType"
+  // Mais la colonne SQL existante s'appelle souvent "type"
+  // => on mappe auditType -> colonne "type" pour compat DB
+  auditType: varchar("type", { length: 50 }).notNull(),
 
   userId: int("userId")
     .notNull()
@@ -217,7 +222,8 @@ export const audit_responses = mysqlTable(
       .references(() => audits.id),
 
     questionId: int("questionId"),
-    questionKey: varchar("questionKey", { length: 255 }),
+    // ✅ notNull: cohérent avec l'index unique + saveResponse/getResponses
+    questionKey: varchar("questionKey", { length: 255 }).notNull(),
 
     responseValue: varchar("responseValue", { length: 50 }),
     responseComment: text("responseComment"),
@@ -428,4 +434,6 @@ export const referentials = referentiels;
 export const auditResponses = audit_responses;
 export const evidenceFiles = mdrEvidenceFiles;
 export const auditChecklistAnswers = audit_responses;
+
+// ✅ FIX: typo (referentielsTable must point to referentiels)
 export const referentielsTable = referentiels;
