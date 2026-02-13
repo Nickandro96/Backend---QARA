@@ -75,10 +75,6 @@ function parseMysqlUrl(urlString: string, source: string): MysqlCfg | null {
 
     if (!host || !user || !database) return null;
 
-    // Railway / managed DB often requires TLS on public endpoints.
-    // Enable SSL if:
-    // - host looks like a managed/public endpoint (railway)
-    // - or query string hints ssl/tls
     const sslHint =
       url.searchParams.get("ssl") ||
       url.searchParams.get("sslmode") ||
@@ -88,10 +84,7 @@ function parseMysqlUrl(urlString: string, source: string): MysqlCfg | null {
     const looksManagedOrPublic =
       /railway\.app/i.test(host) ||
       /public/i.test(source) ||
-      (sslHint &&
-        ["1", "true", "yes", "require", "required"].includes(
-          sslHint.toLowerCase()
-        ));
+      (sslHint && ["1", "true", "yes", "require", "required"].includes(sslHint.toLowerCase()));
 
     const ssl = looksManagedOrPublic ? { rejectUnauthorized: false } : undefined;
 
@@ -109,14 +102,14 @@ function getMysqlConfigFromEnv(): MysqlCfg | null {
     if (parsed) return parsed;
   }
 
-  // ✅ Then DATABASE_URL (you have it in Backend vars)
+  // ✅ Then DATABASE_URL
   const dbUrl = pickFirstEnv("DATABASE_URL");
   if (dbUrl) {
     const parsed = parseMysqlUrl(dbUrl, "DATABASE_URL");
     if (parsed) return parsed;
   }
 
-  // ✅ Then public URL (managed DB endpoints frequently require TLS)
+  // ✅ Then public URL
   const publicUrl = pickFirstEnv("MYSQL_PUBLIC_URL", "MYSQL_URL");
   if (publicUrl) {
     const parsed = parseMysqlUrl(publicUrl, "MYSQL_PUBLIC_URL");
@@ -185,16 +178,14 @@ export async function getDb() {
 
   const cfg = getMysqlConfigFromEnv();
   if (!cfg) {
-    console.error(
-      "[Database] Missing DB env vars. Provide DATABASE_URL (recommended) or MYSQL_*."
-    );
+    console.error("[Database] Missing DB env vars. Provide DATABASE_URL (recommended) or MYSQL_*.");
     return null;
   }
 
   try {
     if (!_pool) {
       console.log(
-        `[Database] Connecting via ${cfg._source ?? "unknown"} host=${cfg.host} port=${cfg.port} db=${cfg.database} ssl=${!!cfg.ssl}`
+        `[Database] Connecting via ${cfg._source ?? "unknown"} host=${cfg.host} port=${cfg.port} db=${cfg.database} ssl=${cfg.ssl ? "on" : "off"}`
       );
 
       _pool = mysql.createPool({
@@ -209,7 +200,7 @@ export async function getDb() {
         queueLimit: 0,
       });
 
-      // ✅ Fail-fast: validate the connection once at startup
+      // ✅ Fail-fast
       const conn = await _pool.getConnection();
       await conn.ping();
       conn.release();
@@ -254,12 +245,7 @@ export async function getUserProfile(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
 
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return result.length > 0 ? { ...result[0], userId: result[0].id } : undefined;
 }
 
@@ -279,10 +265,7 @@ export async function updateUserProfile(
     await (db as any).update(users).set(patch).where(eq(users.id, userId));
     return { success: true };
   } catch (error: any) {
-    console.error(
-      "[Database] Failed to update user profile:",
-      error?.message ?? error
-    );
+    console.error("[Database] Failed to update user profile:", error?.message ?? error);
     throw error;
   }
 }
@@ -296,22 +279,13 @@ export async function updateUserProfile(
 export async function getSites(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db
-    .select()
-    .from(sites)
-    .where(eq(sites.userId, userId))
-    .orderBy(desc(sites.createdAt));
+  return await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(desc(sites.createdAt));
 }
 
 export async function getFirstSiteByUserId(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(sites)
-    .where(eq(sites.userId, userId))
-    .orderBy(sites.createdAt)
-    .limit(1);
+  const result = await db.select().from(sites).where(eq(sites.userId, userId)).orderBy(sites.createdAt).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -414,11 +388,7 @@ export async function upsertOrganisation(input: {
 export async function getOrganisations(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db
-    .select()
-    .from(organisations)
-    .where(eq(organisations.userId, userId))
-    .orderBy(desc(organisations.createdAt));
+  return await db.select().from(organisations).where(eq(organisations.userId, userId)).orderBy(desc(organisations.createdAt));
 }
 
 export async function getOrganisationByIdAndUserId(orgId: number, userId: number) {
@@ -454,11 +424,7 @@ export async function createAudit(input: any) {
 export async function listAuditsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db
-    .select()
-    .from(audits)
-    .where(eq(audits.userId, userId))
-    .orderBy(desc(audits.createdAt));
+  return await db.select().from(audits).where(eq(audits.userId, userId)).orderBy(desc(audits.createdAt));
 }
 
 export async function getAuditByIdAndUserId(auditId: number, userId: number) {
@@ -493,11 +459,7 @@ export async function createEvidenceFile(input: any) {
 export async function listEvidenceFilesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db
-    .select()
-    .from(evidenceFiles)
-    .where(eq(evidenceFiles.userId, userId))
-    .orderBy(desc(evidenceFiles.createdAt));
+  return await db.select().from(evidenceFiles).where(eq(evidenceFiles.userId, userId)).orderBy(desc(evidenceFiles.createdAt));
 }
 
 /**
@@ -588,22 +550,14 @@ export async function upsertUser(data: {
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -612,10 +566,7 @@ export async function storePasswordHash(openId: string, hash: string) {
   if (!db) throw new Error("Database not available");
 
   try {
-    await db
-      .update(users)
-      .set({ passwordHash: hash, updatedAt: new Date() })
-      .where(eq(users.openId, openId));
+    await db.update(users).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(users.openId, openId));
   } catch (error: any) {
     console.error(
       "[Database] Failed to store password hash. FULL ERROR:",
@@ -628,11 +579,7 @@ export async function storePasswordHash(openId: string, hash: string) {
 export async function getPasswordHash(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select({ passwordHash: users.passwordHash })
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
+  const result = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0].passwordHash : undefined;
 }
 
@@ -641,10 +588,7 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
   if (!db) throw new Error("Database not available");
 
   try {
-    await db
-      .update(users)
-      .set({ role: role, updatedAt: new Date() })
-      .where(eq(users.id, userId));
+    await db.update(users).set({ role: role, updatedAt: new Date() }).where(eq(users.id, userId));
     return { success: true };
   } catch (error: any) {
     console.error(
@@ -664,8 +608,6 @@ export async function listAllUsers() {
 export async function listAllUserProfiles() {
   const db = await getDb();
   if (!db) return [];
-  // Assuming user profiles are part of the users table for now, or a separate profiles table
-  // If there's a separate profiles table, this would need to be adjusted.
   return await db.select().from(users).orderBy(desc(users.createdAt));
 }
 
@@ -681,19 +623,14 @@ export async function upsertUserProfile(
 
   const patch: Record<string, any> = { updatedAt: new Date() };
 
-  if (data.subscriptionTier !== undefined)
-    patch.subscriptionTier = data.subscriptionTier;
-  if (data.subscriptionStatus !== undefined)
-    patch.subscriptionStatus = data.subscriptionStatus;
+  if (data.subscriptionTier !== undefined) patch.subscriptionTier = data.subscriptionTier;
+  if (data.subscriptionStatus !== undefined) patch.subscriptionStatus = data.subscriptionStatus;
 
   try {
     await (db as any).update(users).set(patch).where(eq(users.id, userId));
     return { success: true };
   } catch (error: any) {
-    console.error(
-      "[Database] Failed to upsert user profile:",
-      error?.message ?? error
-    );
+    console.error("[Database] Failed to upsert user profile:", error?.message ?? error);
     throw error;
   }
 }
