@@ -35,8 +35,10 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1***@#'
 
-      - name: Push schema to DB (drizzle-kit push --force)
-        run: pnpm db:push
+      # ✅ NON-INTERACTIVE: auto-answer prompts (create table instead of rename)
+      - name: Push schema to DB (drizzle-kit push --force) [non-interactive]
+        run: |
+          echo "y" | pnpm db:push
 
       - name: Seed DB
         run: pnpm db:seed
