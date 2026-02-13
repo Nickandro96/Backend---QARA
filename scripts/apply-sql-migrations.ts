@@ -9,12 +9,11 @@ function sha256(content: string) {
 
 async function main() {
   const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is missing");
-  }
+  if (!url) throw new Error("DATABASE_URL is missing");
 
   const u = new URL(url);
-  const dbName = u.pathname.replace("/", "");
+  const dbName = (u.pathname || "").replace("/", "");
+  if (!dbName) throw new Error("DATABASE_URL has no database name in path");
 
   const conn = await mysql.createConnection({
     host: u.hostname,
@@ -22,27 +21,28 @@ async function main() {
     user: decodeURIComponent(u.username),
     password: decodeURIComponent(u.password),
     database: dbName,
-    // Railway MySQL proxy: SSL souvent requis/utile
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: false }, // ok pour Railway proxy
     multipleStatements: true,
   });
 
-  // 1) Ensure tracking table exists (id/hash/created_at)
+  // ✅ Table de suivi dédiée (NE PAS utiliser _drizzle_migrations)
   await conn.execute(`
-    CREATE TABLE IF NOT EXISTS \`_drizzle_migrations\` (
+    CREATE TABLE IF NOT EXISTS \`_custom_sql_migrations\` (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      file_name VARCHAR(255) NOT NULL,
       hash VARCHAR(64) NOT NULL,
-      created_at BIGINT NOT NULL
+      created_at BIGINT NOT NULL,
+      UNIQUE KEY uq_custom_sql_hash (hash),
+      UNIQUE KEY uq_custom_sql_file (file_name)
     );
   `);
 
-  // 2) Load already applied hashes
   const [appliedRows] = await conn.query<any[]>(
-    `SELECT hash FROM \`_drizzle_migrations\``
+    `SELECT file_name, hash FROM \`_custom_sql_migrations\``
   );
-  const applied = new Set(appliedRows.map((r) => String(r.hash)));
+  const appliedHash = new Set(appliedRows.map((r) => String(r.hash)));
+  const appliedFile = new Set(appliedRows.map((r) => String(r.file_name)));
 
-  // 3) Find migration files
   const migrationsDir = path.join(process.cwd(), "drizzle", "migrations");
   if (!fs.existsSync(migrationsDir)) {
     console.log("No migrations directory found:", migrationsDir);
@@ -72,10 +72,10 @@ async function main() {
       continue;
     }
 
-    // Hash strategy: hash of file content (stable)
     const hash = sha256(sql);
 
-    if (applied.has(hash)) {
+    // ✅ Double protection: hash + file name
+    if (appliedHash.has(hash) || appliedFile.has(file)) {
       console.log(`Already applied: ${file} (${hash.slice(0, 8)}...)`);
       continue;
     }
@@ -85,8 +85,8 @@ async function main() {
       await conn.beginTransaction();
       await conn.query(sql);
       await conn.execute(
-        `INSERT INTO \`_drizzle_migrations\` (hash, created_at) VALUES (?, ?)`,
-        [hash, Date.now()]
+        `INSERT INTO \`_custom_sql_migrations\` (file_name, hash, created_at) VALUES (?, ?, ?)`,
+        [file, hash, Date.now()]
       );
       await conn.commit();
       console.log(`✅ Applied: ${file}`);
@@ -97,7 +97,7 @@ async function main() {
     }
   }
 
-  // Print columns of sites for verification
+  // Vérif colonnes sites
   const [cols] = await conn.query<any[]>(
     `SELECT COLUMN_NAME, DATA_TYPE
      FROM information_schema.COLUMNS
