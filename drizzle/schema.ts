@@ -154,25 +154,28 @@ export const audits = mysqlTable("audits", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
 
-  // ✅ IMPORTANT:
-  // Le backend/frontend utilisent "auditType"
-  // Mais la colonne SQL existante s'appelle souvent "type"
-  // => on mappe auditType -> colonne "type" pour compat DB
-  auditType: varchar("type", { length: 50 }).notNull(),
+  /**
+   * ✅ FIX CRITIQUE:
+   * La colonne SQL s'appelle `type`
+   * -> on l'expose en Drizzle comme `type`
+   * (le router convertit auditType => type)
+   */
+  type: varchar("type", { length: 50 }).notNull(),
 
   userId: int("userId")
     .notNull()
     .references(() => users.id),
   siteId: int("siteId").references(() => sites.id),
 
-  status: varchar("status", { length: 50 }).default("in_progress").notNull(),
+  // ✅ cohérent avec le wizard
+  status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
   // ✅ stockés en JSON (stringifié côté router)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
-  // ✅ champs wizard (si ta DB les a, c’est mieux de les déclarer)
+  // ✅ champs wizard (tu les as ajoutés dans Railway)
   clientOrganization: varchar("clientOrganization", { length: 255 }),
   siteLocation: varchar("siteLocation", { length: 255 }),
   auditorName: varchar("auditorName", { length: 255 }),
@@ -200,15 +203,14 @@ export const questions = mysqlTable("questions", {
   title: varchar("title", { length: 255 }),
 
   /**
-   * ✅ IMPORTANT FIX:
-   * Dans ta DB Railway, economicRole est une STRING ("fabricant"/"importateur"/"distributeur")
-   * Donc on le déclare en varchar.
+   * ✅ NOTE:
+   * Si ta DB stocke economicRole en JSON (array), il faudrait json().
+   * Ici on garde varchar car tu avais indiqué que Railway est en string.
    */
   economicRole: varchar("economicRole", { length: 50 }),
 
   /**
    * ✅ applicableProcesses est un JSON array de strings
-   * ex: ["Gouvernance & stratégie réglementaire", "Affaires réglementaires (RA)"]
    */
   applicableProcesses: json("applicableProcesses"),
 
@@ -218,12 +220,7 @@ export const questions = mysqlTable("questions", {
 
   criticality: varchar("criticality", { length: 50 }),
 
-  /**
-   * ✅ compat:
-   * - ta DB a une colonne "risks"
-   * - ton ancien schéma avait "risk"
-   * On garde les deux pour ne rien casser.
-   */
+  // compat risk/risks
   risk: text("risk"),
   risks: text("risks"),
 
@@ -252,7 +249,6 @@ export const audit_responses = mysqlTable(
       .references(() => audits.id),
 
     questionId: int("questionId"),
-    // ✅ notNull: cohérent avec l'index unique + saveResponse/getResponses
     questionKey: varchar("questionKey", { length: 255 }).notNull(),
 
     responseValue: varchar("responseValue", { length: 50 }),
