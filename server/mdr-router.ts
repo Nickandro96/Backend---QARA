@@ -8,8 +8,6 @@ import {
   processus,
   mdrRoleQualifications,
   sites,
-  users,
-  referentials,
   auditResponses,
 } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -139,49 +137,6 @@ function normalizeAuditForFrontend(audit: any) {
   };
 }
 
-// Map selected process tokens from frontend (string IDs) -> numeric processIds in DB
-async function mapSelectedProcessesToDbProcessIds(db: any, selected: string[]) {
-  if (!selected || selected.length === 0) return [];
-
-  const numericIds = selected
-    .filter((x) => typeof x === "number" || isNumericString(x))
-    .map((x) => Number(x))
-    .filter((n) => !Number.isNaN(n));
-
-  const stringTokens = selected
-    .filter((x) => typeof x === "string" && !isNumericString(x))
-    .map((x) => String(x));
-
-  if (stringTokens.length === 0) return numericIds;
-
-  const expectedNames: string[] = [];
-  for (const token of stringTokens) {
-    const byId = MDR_PROCESSES.find((p) => p.id === token);
-    if (byId) expectedNames.push(byId.name);
-    else expectedNames.push(token);
-  }
-
-  try {
-    const allProcs = await db.select().from(processus);
-    const nameToId = new Map<string, number>();
-    for (const p of allProcs) {
-      if (!p?.name) continue;
-      nameToId.set(String(p.name).toLowerCase(), Number(p.id));
-    }
-
-    const mappedIds: number[] = [];
-    for (const nm of expectedNames) {
-      const id = nameToId.get(String(nm).toLowerCase());
-      if (id && !Number.isNaN(id)) mappedIds.push(id);
-    }
-
-    return [...new Set([...numericIds, ...mappedIds])];
-  } catch (e) {
-    console.warn("[MDR] Unable to map processes via DB table `processus`:", e);
-    return numericIds;
-  }
-}
-
 /**
  * ✅ NEW: Build process "candidates" that can match questions.applicableProcesses.
  */
@@ -221,7 +176,6 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
     }
   }
 
-  // unique + clean
   return [...new Set(candidates.map((s) => String(s).trim()).filter(Boolean))];
 }
 
@@ -296,7 +250,7 @@ export const mdrRouter = router({
     }
 
     try {
-      // ✅ FIX: must be user-scoped
+      // ✅ must be user-scoped
       const rows = await db.select().from(sites).where(eq(sites.userId, ctx.user.id));
       return rows;
     } catch (e) {
@@ -323,6 +277,7 @@ export const mdrRouter = router({
         siteId: z.number(),
         name: z.string().min(1),
 
+        // accept both
         auditType: z.string().optional(),
         type: z.string().optional(),
 
@@ -346,6 +301,7 @@ export const mdrRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const now = new Date();
+
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
@@ -370,7 +326,6 @@ export const mdrRouter = router({
         endDate: resolvedEndDate,
 
         economicRole: input.economicRole ?? null,
-
         updatedAt: now,
       };
 
@@ -545,6 +500,7 @@ export const mdrRouter = router({
 
   /**
    * ✅ Get existing responses for this audit (for current user)
+   * ✅ FIX: select ONLY needed columns (avoid `questionId` mismatch crashes)
    */
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -557,9 +513,23 @@ export const mdrRouter = router({
 
       try {
         const rows = await db
-          .select()
+          .select({
+            questionKey: (auditResponses as any).questionKey,
+            responseValue: (auditResponses as any).responseValue,
+            responseComment: (auditResponses as any).responseComment,
+            note: (auditResponses as any).note,
+            evidenceFiles: (auditResponses as any).evidenceFiles,
+            role: (auditResponses as any).role,
+            processId: (auditResponses as any).processId,
+            updatedAt: (auditResponses as any).updatedAt,
+          })
           .from(auditResponses)
-          .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
+          .where(
+            and(
+              eq((auditResponses as any).auditId, input.auditId),
+              eq((auditResponses as any).userId, ctx.user.id)
+            )
+          );
 
         return (rows || []).map((r: any) => ({
           questionKey: r.questionKey,
@@ -601,8 +571,6 @@ export const mdrRouter = router({
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       const now = new Date();
-
-      // ✅ normalize processId to INT or null
       const normalizedProcessId = input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
 
       const values: any = {
@@ -625,10 +593,10 @@ export const mdrRouter = router({
           eq((auditResponses as any).userId, ctx.user.id)
         );
 
-        const [existing] = await db.select().from(auditResponses).where(whereExpr).limit(1);
+        const [existing] = await db.select({ id: (auditResponses as any).id }).from(auditResponses).where(whereExpr).limit(1);
 
-        if (existing) {
-          await db.update(auditResponses).set(values).where(eq((auditResponses as any).id, (existing as any).id));
+        if (existing?.id) {
+          await db.update(auditResponses).set(values).where(eq((auditResponses as any).id, existing.id));
           return { success: true, mode: "updated" as const };
         }
 
@@ -642,7 +610,8 @@ export const mdrRouter = router({
     }),
 
   /**
-   * ✅ Get questions for a given MDR audit, filtered BY DB:
+   * ✅ Get questions for a given MDR audit, filtered BY DB
+   * ✅ FIX: economicRole is VARCHAR in your DB, so NO JSON_* functions on it
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -662,7 +631,6 @@ export const mdrRouter = router({
         )}`
       );
 
-      // Build process candidates for JSON_CONTAINS(applicableProcesses)
       const processCandidates = await buildApplicableProcessCandidates(db, processIds || []);
       const hasProcessFilter = processCandidates.length > 0;
 
@@ -670,25 +638,13 @@ export const mdrRouter = router({
       try {
         const whereParts: any[] = [];
 
-        /**
-         * ✅ FIX CRITIQUE:
-         * `questions.economicRole` est un VARCHAR chez toi.
-         * On filtre donc en mode "string", ET on supporte le cas JSON array via JSON_VALID().
-         * (sinon MySQL throw sur JSON_CONTAINS/JSON_LENGTH)
-         */
+        // ✅ economicRole is VARCHAR (or nullable)
         if (economicRole && economicRole !== "all") {
           whereParts.push(
             sql`(
               ${(questions as any).economicRole} IS NULL
               OR ${(questions as any).economicRole} = ''
               OR LOWER(${(questions as any).economicRole}) = LOWER(${economicRole})
-              OR (
-                JSON_VALID(${(questions as any).economicRole})
-                AND (
-                  JSON_LENGTH(${(questions as any).economicRole}) = 0
-                  OR JSON_CONTAINS(${(questions as any).economicRole}, ${JSON.stringify(economicRole)})
-                )
-              )
             )`
           );
         }
@@ -703,11 +659,7 @@ export const mdrRouter = router({
           );
         }
 
-        /**
-         * ✅ processes filter:
-         * applicableProcesses est JSON -> OK
-         * mais on garde JSON_VALID en sécurité.
-         */
+        // ✅ processes filter via JSON_CONTAINS(applicableProcesses, '"candidate"')
         if (hasProcessFilter) {
           const conds = processCandidates.map((cand) =>
             sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, ${JSON.stringify(cand)})`
@@ -716,7 +668,7 @@ export const mdrRouter = router({
           whereParts.push(
             sql`(
               ${(questions as any).applicableProcesses} IS NULL
-              OR (JSON_VALID(${(questions as any).applicableProcesses}) AND JSON_LENGTH(${(questions as any).applicableProcesses}) = 0)
+              OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0
               OR (${sql.join(conds, sql` OR `)})
             )`
           );
@@ -730,7 +682,10 @@ export const mdrRouter = router({
               .from(questions)
               .where(finalWhere)
               .orderBy((questions as any).displayOrder, (questions as any).id)
-          : await db.select().from(questions).orderBy((questions as any).displayOrder, (questions as any).id);
+          : await db
+              .select()
+              .from(questions)
+              .orderBy((questions as any).displayOrder, (questions as any).id);
 
         console.log(`[MDR] DB filtered questions count: ${rows.length}`);
 
@@ -776,7 +731,7 @@ export const mdrRouter = router({
         console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
       }
 
-      // ---- Fallback (JSON file or DB full scan) ----
+      // ---- Fallback ----
       let allQuestions = await loadQuestionsFromDb(db);
       if (allQuestions.length === 0) allQuestions = loadQuestionsFromJson();
 
@@ -787,19 +742,14 @@ export const mdrRouter = router({
 
       let filtered = allQuestions;
 
-      // role filter (support json array or json scalar or string)
+      // role filter for VARCHAR
       if (economicRole && economicRole !== "all") {
         filtered = filtered.filter((q: any) => {
           if (!q.economicRole) return true;
-          if (typeof q.economicRole === "string") {
-            return q.economicRole.toLowerCase().trim() === economicRole.toLowerCase().trim();
-          }
-          const qRoles = safeParseArray(q.economicRole).map((r) => String(r).toLowerCase().trim());
-          return qRoles.length === 0 || qRoles.includes(economicRole.toLowerCase().trim());
+          return String(q.economicRole).toLowerCase().trim() === economicRole.toLowerCase().trim();
         });
       }
 
-      // referentials
       if (referentialIds && referentialIds.length > 0) {
         filtered = filtered.filter((q: any) => {
           if (!q.referentialId) return true;
@@ -807,7 +757,6 @@ export const mdrRouter = router({
         });
       }
 
-      // process filter using applicableProcesses candidates (case-insensitive)
       if (hasProcessFilter) {
         const wanted = processCandidates.map((x) => String(x).toLowerCase());
         filtered = filtered.filter((q: any) => {
