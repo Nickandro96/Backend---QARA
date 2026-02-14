@@ -11,13 +11,6 @@ import {
 } from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 
-/**
- * IMPORTANT:
- * - All tables are declared first.
- * - Relations are declared at the end (prevents circular/TDZ issues with bundlers).
- * - Export names must match what your server imports.
- */
-
 /* =========================
    USERS
 ========================= */
@@ -32,17 +25,14 @@ export const users = mysqlTable(
     firstName: varchar("firstName", { length: 255 }),
     lastName: varchar("lastName", { length: 255 }),
 
-    // ✅ Utilisé dans db.ts (upsertUser) / auth helpers
     name: varchar("name", { length: 255 }),
     openId: varchar("openId", { length: 255 }),
     loginMethod: varchar("loginMethod", { length: 50 }),
     lastSignedIn: timestamp("lastSignedIn"),
 
-    // ✅ Utilisé dans updateUserProfile / UI
     economicRole: varchar("economicRole", { length: 100 }),
     companyName: varchar("companyName", { length: 255 }),
 
-    // ✅ Utilisé dans upsertUserProfile
     subscriptionTier: varchar("subscriptionTier", { length: 50 }),
     subscriptionStatus: varchar("subscriptionStatus", { length: 50 }),
 
@@ -77,7 +67,6 @@ export const organisations = mysqlTable("organisations", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
 
-  // Optional legal/address metadata (used by the frontend wizard)
   legalEntityType: varchar("legalEntityType", { length: 100 }),
   siret: varchar("siret", { length: 50 }),
   addressLine1: varchar("addressLine1", { length: 255 }),
@@ -100,7 +89,6 @@ export const sites = mysqlTable("sites", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
 
-  // Optional site metadata (used by the frontend wizard)
   code: varchar("code", { length: 50 }),
   addressLine1: varchar("addressLine1", { length: 255 }),
   addressLine2: varchar("addressLine2", { length: 255 }),
@@ -108,7 +96,6 @@ export const sites = mysqlTable("sites", {
   postalCode: varchar("postalCode", { length: 30 }),
   country: varchar("country", { length: 120 }),
 
-  // ✅ NEW (Option 2: add columns instead of removing fields)
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 255 }),
   notes: text("notes"),
@@ -154,12 +141,6 @@ export const audits = mysqlTable("audits", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
 
-  /**
-   * ✅ FIX CRITIQUE:
-   * La colonne SQL s'appelle `type`
-   * -> on l'expose en Drizzle comme `type`
-   * (le router convertit auditType => type)
-   */
   type: varchar("type", { length: 50 }).notNull(),
 
   userId: int("userId")
@@ -167,15 +148,12 @@ export const audits = mysqlTable("audits", {
     .references(() => users.id),
   siteId: int("siteId").references(() => sites.id),
 
-  // ✅ cohérent avec le wizard
   status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
-  // ✅ stockés en JSON (stringifié côté router)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
-  // ✅ champs wizard (tu les as ajoutés dans Railway)
   clientOrganization: varchar("clientOrganization", { length: 255 }),
   siteLocation: varchar("siteLocation", { length: 255 }),
   auditorName: varchar("auditorName", { length: 255 }),
@@ -202,16 +180,10 @@ export const questions = mysqlTable("questions", {
   annexe: varchar("annexe", { length: 255 }),
   title: varchar("title", { length: 255 }),
 
-  /**
-   * ✅ NOTE:
-   * Si ta DB stocke economicRole en JSON (array), il faudrait json().
-   * Ici on garde varchar car tu avais indiqué que Railway est en string.
-   */
+  // ✅ VARCHAR dans ta DB (captures Railway)
   economicRole: varchar("economicRole", { length: 50 }),
 
-  /**
-   * ✅ applicableProcesses est un JSON array de strings
-   */
+  // ✅ JSON array de strings (captures Railway)
   applicableProcesses: json("applicableProcesses"),
 
   questionType: varchar("questionType", { length: 50 }),
@@ -220,7 +192,6 @@ export const questions = mysqlTable("questions", {
 
   criticality: varchar("criticality", { length: 50 }),
 
-  // compat risk/risks
   risk: text("risk"),
   risks: text("risks"),
 
@@ -248,6 +219,7 @@ export const audit_responses = mysqlTable(
       .notNull()
       .references(() => audits.id),
 
+    // ✅ on le garde (ta DB peut l’avoir ou non)
     questionId: int("questionId"),
     questionKey: varchar("questionKey", { length: 255 }).notNull(),
 
@@ -299,9 +271,7 @@ export const actions = mysqlTable("actions", {
   description: text("description").notNull(),
   responsible: varchar("responsible", { length: 255 }),
   dueDate: timestamp("dueDate"),
-  status: mysqlEnum("status", ["open", "in_progress", "closed"])
-    .default("open")
-    .notNull(),
+  status: mysqlEnum("status", ["open", "in_progress", "closed"]).default("open").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
@@ -386,30 +356,18 @@ export const auditsRelations = relations(audits, ({ one, many }) => ({
 }));
 
 export const auditResponsesRelations = relations(audit_responses, ({ one }) => ({
-  user: one(users, {
-    fields: [audit_responses.userId],
-    references: [users.id],
-  }),
-  audit: one(audits, {
-    fields: [audit_responses.auditId],
-    references: [audits.id],
-  }),
+  user: one(users, { fields: [audit_responses.userId], references: [users.id] }),
+  audit: one(audits, { fields: [audit_responses.auditId], references: [audits.id] }),
 }));
 
 export const organisationsRelations = relations(organisations, ({ one, many }) => ({
-  user: one(users, {
-    fields: [organisations.userId],
-    references: [users.id],
-  }),
+  user: one(users, { fields: [organisations.userId], references: [users.id] }),
   sites: many(sites),
 }));
 
 export const sitesRelations = relations(sites, ({ one, many }) => ({
   user: one(users, { fields: [sites.userId], references: [users.id] }),
-  organisation: one(organisations, {
-    fields: [sites.organisationId],
-    references: [organisations.id],
-  }),
+  organisation: one(organisations, { fields: [sites.organisationId], references: [organisations.id] }),
   audits: many(audits),
 }));
 
@@ -420,10 +378,7 @@ export const findingsRelations = relations(findings, ({ one, many }) => ({
 }));
 
 export const actionsRelations = relations(actions, ({ one }) => ({
-  finding: one(findings, {
-    fields: [actions.findingId],
-    references: [findings.id],
-  }),
+  finding: one(findings, { fields: [actions.findingId], references: [findings.id] }),
 }));
 
 export const resultatsRelations = relations(resultats, ({ one }) => ({
@@ -432,25 +387,13 @@ export const resultatsRelations = relations(resultats, ({ one }) => ({
 }));
 
 export const mdrRoleQualificationsRelations = relations(mdrRoleQualifications, ({ one }) => ({
-  user: one(users, {
-    fields: [mdrRoleQualifications.userId],
-    references: [users.id],
-  }),
-  site: one(sites, {
-    fields: [mdrRoleQualifications.siteId],
-    references: [sites.id],
-  }),
+  user: one(users, { fields: [mdrRoleQualifications.userId], references: [users.id] }),
+  site: one(sites, { fields: [mdrRoleQualifications.siteId], references: [sites.id] }),
 }));
 
 export const mdrEvidenceFilesRelations = relations(mdrEvidenceFiles, ({ one }) => ({
-  user: one(users, {
-    fields: [mdrEvidenceFiles.userId],
-    references: [users.id],
-  }),
-  audit: one(audits, {
-    fields: [mdrEvidenceFiles.auditId],
-    references: [audits.id],
-  }),
+  user: one(users, { fields: [mdrEvidenceFiles.userId], references: [users.id] }),
+  audit: one(audits, { fields: [mdrEvidenceFiles.auditId], references: [audits.id] }),
 }));
 
 /* =========================
@@ -460,6 +403,4 @@ export const referentials = referentiels;
 export const auditResponses = audit_responses;
 export const evidenceFiles = mdrEvidenceFiles;
 export const auditChecklistAnswers = audit_responses;
-
-// ✅ FIX: typo (referentielsTable must point to referentiels)
 export const referentielsTable = referentiels;
