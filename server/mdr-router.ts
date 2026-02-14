@@ -329,6 +329,15 @@ export const mdrRouter = router({
    * - endDate is usually nullable
    * - We keep auditType in input for backward compat, but we write `type` into DB.
    */
+    /**
+   * ✅ Step 1 Wizard: Create or Update draft audit
+   *
+   * PATCH:
+   * - Certains schémas Drizzle mappent la colonne DB `type` sur la clé TS `auditType`
+   *   (ex: auditType: varchar("type"...)).
+   * - Donc on écrit dynamiquement sur la clé existante dans `audits`.
+   * - On loggue l'erreur MySQL complète (errno/sqlState/sqlMessage) pour ne plus être aveugles.
+   */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
       z.object({
@@ -336,7 +345,7 @@ export const mdrRouter = router({
         siteId: z.number(),
         name: z.string().min(1),
 
-        // ✅ accept both (frontend may send auditType, DB uses type)
+        // On accepte les 2
         auditType: z.string().optional(),
         type: z.string().optional(),
 
@@ -349,9 +358,9 @@ export const mdrRouter = router({
         auditorName: z.string().nullable().optional(),
         auditorEmail: z.string().nullable().optional(),
 
-        // ✅ NEW: dates to satisfy DB schema
-        startDate: z.string().datetime().optional().nullable(),
-        endDate: z.string().datetime().optional().nullable(),
+        // dates
+        startDate: z.string().optional().nullable(),
+        endDate: z.string().optional().nullable(),
 
         economicRole: z.enum(["fabricant", "importateur", "distributeur", "mandataire"]).optional(),
       })
@@ -362,25 +371,38 @@ export const mdrRouter = router({
 
       const now = new Date();
 
-      // ✅ resolve DB fields
-      const resolvedType = (input.type ?? input.auditType ?? "internal").toString();
+      // 1) Résoudre le type d'audit
+      const resolvedType = String(input.type ?? input.auditType ?? "internal");
 
-      // ✅ startDate default to now (avoid NOT NULL crash)
+      // 2) Dates robustes (évite NOT NULL)
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
-
-      // ✅ endDate optional
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
+
+      // 3) Choisir LA BONNE clé Drizzle pour écrire dans la colonne DB `type`
+      // - si ton schema a `audits.type`, on écrit `type`
+      // - si ton schema a `audits.auditType` (mappé vers "type"), on écrit `auditType`
+      const hasTypeKey = Boolean((audits as any).type);
+      const hasAuditTypeKey = Boolean((audits as any).auditType);
+
+      const typePatch: Record<string, any> = {};
+      if (hasTypeKey) typePatch.type = resolvedType;
+      if (!hasTypeKey && hasAuditTypeKey) typePatch.auditType = resolvedType;
+
+      // Si ni l'un ni l'autre, on loggue (ça expliquerait le DEFAULT)
+      if (!hasTypeKey && !hasAuditTypeKey) {
+        console.warn("[MDR] audits table has no `type` nor `auditType` key in drizzle schema. Using DB default.");
+      }
 
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
         name: input.name,
 
-        // ✅ IMPORTANT: write into DB expected column
-        type: resolvedType,
+        ...typePatch,
 
         status: input.status,
 
+        // JSON (stocké en TEXT/JSON selon ton schema)
         referentialIds: JSON.stringify(input.referentialIds ?? []),
         processIds: JSON.stringify(input.processIds ?? []),
 
@@ -389,7 +411,6 @@ export const mdrRouter = router({
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
 
-        // ✅ DB date columns
         startDate: resolvedStartDate,
         endDate: resolvedEndDate,
 
@@ -400,46 +421,62 @@ export const mdrRouter = router({
 
       const insertValues: any = { ...valuesToSave, createdAt: now };
 
-      if (input.auditId) {
-        const [existing] = await db
-          .select()
-          .from(audits)
-          .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
-          .limit(1);
+      try {
+        if (input.auditId) {
+          const [existing] = await db
+            .select()
+            .from(audits)
+            .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+            .limit(1);
 
-        if (!existing) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Audit not found or not owned by user" });
+          if (!existing) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Audit not found or not owned by user" });
+          }
+
+          await db.update(audits).set(valuesToSave).where(eq(audits.id, input.auditId));
+
+          const [updated] = await db
+            .select()
+            .from(audits)
+            .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+            .limit(1);
+
+          const normalized = normalizeAuditForFrontend(updated);
+          return { auditId: Number(normalized.id), audit: normalized };
         }
 
-        await db.update(audits).set(valuesToSave).where(eq(audits.id, input.auditId));
+        await db.insert(audits).values(insertValues);
 
-        const [updated] = await db
+        // récupère le dernier audit de cet user+site+name
+        const [created] = await db
           .select()
           .from(audits)
-          .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+          .where(and(eq(audits.userId, ctx.user.id), eq(audits.siteId, input.siteId), eq(audits.name, input.name)))
+          .orderBy(sql`${audits.id} desc`)
           .limit(1);
 
-        const normalized = normalizeAuditForFrontend(updated);
+        if (!created) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Audit created but could not be fetched" });
+        }
+
+        const normalized = normalizeAuditForFrontend(created);
         return { auditId: Number(normalized.id), audit: normalized };
+      } catch (e: any) {
+        // ✅ Log MySQL complet (la pièce qui manque pour arrêter de tourner en rond)
+        const mysql = e?.cause ?? e;
+        console.error("[MDR] createOrUpdateAuditDraft failed:", {
+          message: e?.message,
+          errno: mysql?.errno,
+          code: mysql?.code,
+          sqlState: mysql?.sqlState,
+          sqlMessage: mysql?.sqlMessage,
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: mysql?.sqlMessage || e?.message || "Unable to create/update audit",
+        });
       }
-
-      await db.insert(audits).values(insertValues);
-
-      const [created] = await db
-        .select()
-        .from(audits)
-        .where(and(eq(audits.userId, ctx.user.id), eq(audits.siteId, input.siteId), eq(audits.name, input.name)))
-        .orderBy(sql`${audits.id} desc`)
-        .limit(1);
-
-      if (!created) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Audit created but could not be fetched" });
-      }
-
-      const normalized = normalizeAuditForFrontend(created);
-      return { auditId: Number(normalized.id), audit: normalized };
     }),
-
   /**
    * ✅ REQUIRED by frontend
    */
