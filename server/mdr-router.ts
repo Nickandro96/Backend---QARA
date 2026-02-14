@@ -322,6 +322,12 @@ export const mdrRouter = router({
 
   /**
    * ✅ Step 1 Wizard: Create or Update draft audit
+   *
+   * ✅ PATCH WIZARD:
+   * - DB expects `type` (NOT `auditType`)
+   * - DB often expects `startDate` (NOT NULL)
+   * - endDate is usually nullable
+   * - We keep auditType in input for backward compat, but we write `type` into DB.
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
@@ -329,7 +335,11 @@ export const mdrRouter = router({
         auditId: z.number().optional(),
         siteId: z.number(),
         name: z.string().min(1),
-        auditType: z.string().default("internal"),
+
+        // ✅ accept both (frontend may send auditType, DB uses type)
+        auditType: z.string().optional(),
+        type: z.string().optional(),
+
         status: z.string().default("draft"),
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
@@ -338,6 +348,10 @@ export const mdrRouter = router({
         siteLocation: z.string().nullable().optional(),
         auditorName: z.string().nullable().optional(),
         auditorEmail: z.string().nullable().optional(),
+
+        // ✅ NEW: dates to satisfy DB schema
+        startDate: z.string().datetime().optional().nullable(),
+        endDate: z.string().datetime().optional().nullable(),
 
         economicRole: z.enum(["fabricant", "importateur", "distributeur", "mandataire"]).optional(),
       })
@@ -348,11 +362,26 @@ export const mdrRouter = router({
 
       const now = new Date();
 
+      // ✅ resolve DB fields
+      const resolvedType = (input.type ?? input.auditType ?? "internal").toString();
+
+      // ✅ startDate default to now (avoid NOT NULL crash)
+      const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
+
+      // ✅ endDate optional
+      const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
+
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
         name: input.name,
-        auditType: input.auditType,
+
+        // ✅ IMPORTANT: write into DB expected column
+        type: resolvedType,
+
+        // ❌ do NOT write auditType to DB (unless your schema has it)
+        // auditType: input.auditType,
+
         status: input.status,
 
         referentialIds: JSON.stringify(input.referentialIds ?? []),
@@ -362,6 +391,10 @@ export const mdrRouter = router({
         siteLocation: input.siteLocation ?? null,
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
+
+        // ✅ DB date columns
+        startDate: resolvedStartDate,
+        endDate: resolvedEndDate,
 
         economicRole: input.economicRole ?? null,
 
@@ -636,7 +669,11 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
+        db,
+        ctx.user.id,
+        input.auditId
+      );
 
       console.log(
         `[MDR] getQuestionsForAudit audit=${auditId} role=${economicRole} processIds=${JSON.stringify(processIds)} referentials=${JSON.stringify(
@@ -693,8 +730,15 @@ export const mdrRouter = router({
         const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
 
         const rows = finalWhere
-          ? await db.select().from(questions).where(finalWhere).orderBy((questions as any).displayOrder, (questions as any).id)
-          : await db.select().from(questions).orderBy((questions as any).displayOrder, (questions as any).id);
+          ? await db
+              .select()
+              .from(questions)
+              .where(finalWhere)
+              .orderBy((questions as any).displayOrder, (questions as any).id)
+          : await db
+              .select()
+              .from(questions)
+              .orderBy((questions as any).displayOrder, (questions as any).id);
 
         console.log(`[MDR] DB filtered questions count: ${rows.length}`);
 
