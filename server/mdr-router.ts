@@ -379,9 +379,6 @@ export const mdrRouter = router({
         // ✅ IMPORTANT: write into DB expected column
         type: resolvedType,
 
-        // ❌ do NOT write auditType to DB (unless your schema has it)
-        // auditType: input.auditType,
-
         status: input.status,
 
         referentialIds: JSON.stringify(input.referentialIds ?? []),
