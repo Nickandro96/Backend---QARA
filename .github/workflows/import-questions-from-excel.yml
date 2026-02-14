@@ -1,0 +1,43 @@
+name: Import Questions from Excel (MDR)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXCEL_PATH: "data/MDR_questionnaire_V7_CORRIGE.xlsx"
+      SHEET_NAME: "Sheet1"
+      REFERENTIAL_ID: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate env
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is missing"
+            exit 1
+          fi
+          if [ ! -f "$EXCEL_PATH" ]; then
+            echo "Excel file not found at: $EXCEL_PATH"
+            ls -la
+            exit 1
+          fi
+          echo "OK: DATABASE_URL present, Excel found."
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl mysql-connector-python
+
+      - name: Import Excel into MySQL (replace questions table)
+        run: |
+          python scripts/import_questions_from_excel.py
