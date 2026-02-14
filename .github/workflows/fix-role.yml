@@ -21,9 +21,5 @@ jobs:
 
       - name: Run fix script
         env:
-          MYSQLHOST: ${{ secrets.MYSQLHOST }}
-          MYSQLPORT: ${{ secrets.MYSQLPORT }}
-          MYSQLUSER: ${{ secrets.MYSQLUSER }}
-          MYSQLPASSWORD: ${{ secrets.MYSQLPASSWORD }}
-          MYSQLDATABASE: ${{ secrets.MYSQLDATABASE }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/fix_economic_role_from_title.py
