@@ -100,7 +100,6 @@ function normalizeRisksValue(v: any): any {
   if (typeof v === "string") {
     const s = v.trim();
     if (!s) return null;
-    // Sometimes risks are stored as JSON string (e.g. '["..",".."]')
     if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
       try {
         return JSON.parse(s);
@@ -316,16 +315,6 @@ export const mdrRouter = router({
 
   /**
    * ✅ Step 1 Wizard: Create or Update draft audit
-   *
-   * ✅ NOW OK because columns were added to Railway:
-   * - clientOrganization
-   * - siteLocation
-   * - auditorName
-   * - auditorEmail
-   *
-   * Also handles:
-   * - DB uses `type` column (frontend may send `auditType`)
-   * - startDate/endDate robust
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
@@ -334,7 +323,6 @@ export const mdrRouter = router({
         siteId: z.number(),
         name: z.string().min(1),
 
-        // accept both
         auditType: z.string().optional(),
         type: z.string().optional(),
 
@@ -358,9 +346,7 @@ export const mdrRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const now = new Date();
-
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
-
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
@@ -369,15 +355,12 @@ export const mdrRouter = router({
         siteId: input.siteId,
         name: input.name,
 
-        // DB column
         type: resolvedType,
-
         status: input.status,
 
         referentialIds: JSON.stringify(input.referentialIds ?? []),
         processIds: JSON.stringify(input.processIds ?? []),
 
-        // ✅ now columns exist in Railway
         clientOrganization: input.clientOrganization ?? null,
         siteLocation: input.siteLocation ?? null,
         auditorName: input.auditorName ?? null,
@@ -683,18 +666,29 @@ export const mdrRouter = router({
       const processCandidates = await buildApplicableProcessCandidates(db, processIds || []);
       const hasProcessFilter = processCandidates.length > 0;
 
-      // ---- DB-first (FAST & CORRECT) ----
+      // ---- DB-first ----
       try {
         const whereParts: any[] = [];
 
-        // ✅ economicRole filter (table column is JSON in your schema)
-        // Accept questions where role is NULL/empty OR contains the role
+        /**
+         * ✅ FIX CRITIQUE:
+         * `questions.economicRole` est un VARCHAR chez toi.
+         * On filtre donc en mode "string", ET on supporte le cas JSON array via JSON_VALID().
+         * (sinon MySQL throw sur JSON_CONTAINS/JSON_LENGTH)
+         */
         if (economicRole && economicRole !== "all") {
           whereParts.push(
             sql`(
               ${(questions as any).economicRole} IS NULL
-              OR JSON_LENGTH(${(questions as any).economicRole}) = 0
-              OR JSON_CONTAINS(${(questions as any).economicRole}, ${JSON.stringify(economicRole)})
+              OR ${(questions as any).economicRole} = ''
+              OR LOWER(${(questions as any).economicRole}) = LOWER(${economicRole})
+              OR (
+                JSON_VALID(${(questions as any).economicRole})
+                AND (
+                  JSON_LENGTH(${(questions as any).economicRole}) = 0
+                  OR JSON_CONTAINS(${(questions as any).economicRole}, ${JSON.stringify(economicRole)})
+                )
+              )
             )`
           );
         }
@@ -709,8 +703,11 @@ export const mdrRouter = router({
           );
         }
 
-        // ✅ processes filter via JSON_CONTAINS(applicableProcesses, '"candidate"')
-        // Accept questions where applicableProcesses is NULL/empty OR contains any selected candidate
+        /**
+         * ✅ processes filter:
+         * applicableProcesses est JSON -> OK
+         * mais on garde JSON_VALID en sécurité.
+         */
         if (hasProcessFilter) {
           const conds = processCandidates.map((cand) =>
             sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, ${JSON.stringify(cand)})`
@@ -719,7 +716,7 @@ export const mdrRouter = router({
           whereParts.push(
             sql`(
               ${(questions as any).applicableProcesses} IS NULL
-              OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0
+              OR (JSON_VALID(${(questions as any).applicableProcesses}) AND JSON_LENGTH(${(questions as any).applicableProcesses}) = 0)
               OR (${sql.join(conds, sql` OR `)})
             )`
           );
@@ -733,10 +730,7 @@ export const mdrRouter = router({
               .from(questions)
               .where(finalWhere)
               .orderBy((questions as any).displayOrder, (questions as any).id)
-          : await db
-              .select()
-              .from(questions)
-              .orderBy((questions as any).displayOrder, (questions as any).id);
+          : await db.select().from(questions).orderBy((questions as any).displayOrder, (questions as any).id);
 
         console.log(`[MDR] DB filtered questions count: ${rows.length}`);
 
@@ -753,7 +747,6 @@ export const mdrRouter = router({
             expectedEvidence: q.expectedEvidence ?? null,
             criticality: q.criticality ?? null,
 
-            // ✅ unify risks (support risk/risk*s*)
             risks: normalizeRisksValue(q.risks ?? q.risk ?? null),
 
             interviewFunctions: safeParseArray(q.interviewFunctions),
@@ -763,7 +756,6 @@ export const mdrRouter = router({
             referentialId: q.referentialId ?? null,
             processId: q.processId ?? null,
 
-            // optional debug fields (safe)
             displayOrder: q.displayOrder ?? null,
           }));
 
