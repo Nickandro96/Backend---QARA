@@ -1,22 +1,46 @@
 import os
 import json
+import hashlib
 import pandas as pd
 import mysql.connector
 from urllib.parse import urlparse
 
 EXCEL_PATH = "data/MDR_questionnaire_V7_CORRIGE.xlsx"
+DEFAULT_REFERENTIAL_ID = 1  # MDR
+DEFAULT_ECONOMIC_ROLE = None  # or "fabricant"/"importateur"/etc if you want to force
+DEFAULT_ANNEXE = None
 
-def j(v):
-    if not v:
+def safe_str(v):
+    if v is None:
+        return ""
+    s = str(v).strip()
+    return s
+
+def to_json_array_from_csv(v):
+    # Excel column "Fonctions interrogées" might be "QA, RA, ..." or already something else
+    s = safe_str(v)
+    if not s:
         return json.dumps([])
-    return json.dumps([x.strip() for x in str(v).split(",") if x.strip()])
+    # split by comma
+    arr = [x.strip() for x in s.split(",") if x.strip()]
+    return json.dumps(arr)
+
+def to_json_array_single(v):
+    # for applicableProcesses: put ONE process token in array
+    s = safe_str(v)
+    if not s:
+        return json.dumps([])
+    return json.dumps([s])
+
+def make_question_key(article, process_token, question_text):
+    base = f"{safe_str(article)}|{safe_str(process_token)}|{safe_str(question_text)}"
+    h = hashlib.md5(base.encode("utf-8")).hexdigest()
+    return f"q_{h}"
 
 def get_db_config():
-    # ✅ Preferred: DATABASE_URL (same as drizzle)
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         u = urlparse(database_url)
-        # mysql://user:pass@host:port/dbname
         host = u.hostname
         port = u.port or 3306
         user = u.username
@@ -26,20 +50,17 @@ def get_db_config():
             raise RuntimeError("DATABASE_URL is set but missing required parts (host/user/password/db).")
         return host, port, user, password, db
 
-    # Fallback: split vars
     host = os.getenv("DB_HOST")
     port = int(os.getenv("DB_PORT", "3306"))
     user = os.getenv("DB_USER")
     password = os.getenv("DB_PASSWORD")
     db = os.getenv("DB_NAME")
-
     if not all([host, user, password, db]):
         raise RuntimeError(
             "Missing DB connection env vars. Set DATABASE_URL (recommended) "
             "or DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME."
         )
     return host, port, user, password, db
-
 
 print("📥 Lecture Excel...")
 df = pd.read_excel(EXCEL_PATH, engine="openpyxl").fillna("")
@@ -56,7 +77,6 @@ conn = mysql.connector.connect(
     database=dbname,
     connection_timeout=30
 )
-
 cursor = conn.cursor()
 
 print("🧹 Suppression anciennes questions...")
@@ -64,37 +84,79 @@ cursor.execute("DELETE FROM questions")
 
 insert_sql = """
 INSERT INTO questions (
-    processId,
-    article,
-    title,
-    referenceLabel,
-    questionText,
-    questionType,
-    risk,
-    expectedEvidence,
-    interviewFunctions,
-    criticality
+  referentialId,
+  processId,
+  questionKey,
+  article,
+  annexe,
+  title,
+  economicRole,
+  applicableProcesses,
+  questionType,
+  questionText,
+  expectedEvidence,
+  criticality,
+  risk,
+  risks,
+  interviewFunctions,
+  displayOrder,
+  createdAt
 )
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
 """
 
 count = 0
-for _, row in df.iterrows():
-    process = str(row["Processus concerné"]).strip().lower().replace(" ", "_")
+display_order = 1
 
-    cursor.execute(insert_sql, (
-        process,
-        str(row["Clause MDR"]).strip(),
-        str(row["Objectif du processus"]).strip(),
-        str(row["Intitulé"]).strip(),
-        str(row["Question d’audit détaillée"]).strip(),
-        str(row["Type"]).strip(),
-        str(row["Risque en cas de NC"]).strip(),
-        str(row["Preuves attendues"]).strip(),
-        j(row["Fonctions interrogées"]),
-        str(row["Criticité"]).strip()
-    ))
+for _, row in df.iterrows():
+    # Excel headers:
+    # Processus concerné | Objectif du processus | Clause MDR | Intitulé | Question d’audit détaillée
+    # Type | Risque en cas de NC | Preuves attendues | Fonctions interrogées | Criticité
+
+    process_token = safe_str(row.get("Processus concerné", "")).lower().replace(" ", "_")
+    objective = safe_str(row.get("Objectif du processus", ""))
+    clause = safe_str(row.get("Clause MDR", ""))
+    intitulé = safe_str(row.get("Intitulé", ""))
+    question_text = safe_str(row.get("Question d’audit détaillée", ""))
+    qtype = safe_str(row.get("Type", ""))
+    risk_nc = safe_str(row.get("Risque en cas de NC", ""))
+    evidence = safe_str(row.get("Preuves attendues", ""))
+    functions = row.get("Fonctions interrogées", "")
+    criticality = safe_str(row.get("Criticité", ""))
+
+    # Skip empty question rows
+    if not question_text:
+        continue
+
+    # Build title: prefer "Intitulé", fallback objective
+    title = intitulé if intitulé else (objective if objective else None)
+
+    question_key = make_question_key(clause, process_token, question_text)
+
+    cursor.execute(
+        insert_sql,
+        (
+            DEFAULT_REFERENTIAL_ID,
+            None,  # processId is INT in DB; we don't have numeric ID -> keep NULL
+            question_key,
+            clause if clause else None,
+            DEFAULT_ANNEXE,
+            title,
+            DEFAULT_ECONOMIC_ROLE,
+            to_json_array_single(process_token) if process_token else json.dumps([]),
+            qtype if qtype else None,
+            question_text,
+            evidence if evidence else None,
+            criticality if criticality else None,
+            risk_nc if risk_nc else None,
+            risk_nc if risk_nc else None,  # store same in risks too (your UI reads risks OR risk)
+            to_json_array_from_csv(functions),
+            display_order,
+        ),
+    )
+
     count += 1
+    display_order += 1
 
 conn.commit()
 cursor.close()
