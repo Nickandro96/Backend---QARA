@@ -79,48 +79,39 @@ function normalizeEconomicRole(v: any): string {
 }
 
 /**
- * ✅ SAFE ARRAY PARSER (robuste)
- * Gère :
- * - vrai tableau
- * - JSON string d'un tableau: '["ra"]'
- * - double encodé: '"[\\"ra\\"]"'
- * - triple encodé (rare)
+ * ✅ IMPORTANT: safeParseArray robuste
+ * - supporte JSON array
+ * - supporte le cas double-encodé: "\"[\"purchasing_suppliers\"]\""
  */
 function safeParseArray(v: any): any[] {
-  if (v === null || v === undefined) return [];
+  if (!v) return [];
   if (Array.isArray(v)) return v;
 
-  let cur: any = v;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed;
 
-  // MySQL JSON column can sometimes return object already, or string
-  for (let i = 0; i < 3; i++) {
-    if (Array.isArray(cur)) return cur;
-
-    if (typeof cur === "string") {
-      const s = cur.trim();
-      if (!s) return [];
-
-      try {
-        const parsed = JSON.parse(s);
-        cur = parsed;
-        continue;
-      } catch {
-        // if it's a comma-separated string, fallback split (optional)
-        if (s.includes(",") && !s.startsWith("[") && !s.startsWith("{")) {
-          return s
-            .split(",")
-            .map((x) => x.trim())
-            .filter(Boolean);
+      // double-encoded array as string
+      if (typeof parsed === "string") {
+        try {
+          const parsed2 = JSON.parse(parsed);
+          return Array.isArray(parsed2) ? parsed2 : [];
+        } catch {
+          return [];
         }
-        return [];
       }
-    }
 
-    // if after parsing we got something else than string/array
-    break;
+      return [];
+    } catch {
+      return [];
+    }
   }
 
-  return Array.isArray(cur) ? cur : [];
+  // drizzle json() peut remonter un objet non-array
+  return [];
 }
 
 function normalizeRisksValue(v: any): any {
@@ -144,7 +135,7 @@ function normalizeRisksValue(v: any): any {
 /**
  * Normalize audit row for frontend:
  * - auditId MUST be a number
- * - referentialIds/processIds MUST be arrays
+ * - referentialIds/processIds MUST be arrays (not JSON strings)
  */
 function normalizeAuditForFrontend(audit: any) {
   const referentialIds = safeParseArray(audit?.referentialIds)
@@ -169,26 +160,31 @@ function normalizeAuditForFrontend(audit: any) {
 }
 
 /**
- * ✅ Build candidates matching questions.applicableProcesses
+ * ✅ Build process candidates matching questions.applicableProcesses
+ * - tokens + canonical names
+ * - numeric ids -> DB processus.name
  */
 async function buildApplicableProcessCandidates(db: any, selected: string[]) {
   if (!selected || selected.length === 0) return [];
 
-  const cleaned = selected.map((x) => String(x).trim()).filter(Boolean).filter((x) => x !== "all");
+  const tokens = selected
+    .filter((x) => x && x !== "all" && !isNumericString(String(x)))
+    .map(String);
 
-  const tokens = cleaned.filter((x) => !isNumericString(x));
-  const numeric = cleaned.filter((x) => isNumericString(x)).map((x) => Number(x));
+  const numeric = selected
+    .filter((x) => x && x !== "all" && isNumericString(String(x)))
+    .map((x) => Number(x));
 
   const candidates: string[] = [];
 
-  // 1) Tokens: add token + canonical name if known
+  // 1) tokens
   for (const t of tokens) {
     candidates.push(t);
     const p = MDR_PROCESSES.find((x) => x.id === t);
     if (p?.name) candidates.push(p.name);
   }
 
-  // 2) Numeric process ids -> map to DB processus.name
+  // 2) numeric -> processus.name
   if (numeric.length > 0) {
     try {
       const rows = await db
@@ -240,7 +236,10 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
     economicRole = normalizeEconomicRole(qualification?.economicRole);
   }
 
+  // ✅ IMPORTANT: processIds/referentialIds are JSON columns -> they must be arrays
+  // but can be double-encoded in old data => safeParseArray handles it.
   const processIds = safeParseArray((audit as any).processIds).map(String);
+
   const referentialIds = safeParseArray((audit as any).referentialIds)
     .map((n: any) => Number(n))
     .filter((n: any) => !Number.isNaN(n));
@@ -266,7 +265,7 @@ async function loadQuestionsFromDb(db: any) {
   }
 }
 
-// ✅ shared zod enum used by frontend buttons
+// shared zod enum used by frontend buttons
 const ResponseValueEnum = z.enum(["compliant", "non_compliant", "not_applicable", "partial", "in_progress"]);
 
 export const mdrRouter = router({
@@ -283,7 +282,7 @@ export const mdrRouter = router({
     }
 
     try {
-      // ✅ must be user-scoped
+      // must be user-scoped
       const rows = await db.select().from(sites).where(eq(sites.userId, ctx.user.id));
       return rows;
     } catch (e) {
@@ -301,7 +300,7 @@ export const mdrRouter = router({
   }),
 
   /**
-   * ✅ Step 1 Wizard: Create or Update draft audit
+   * Step 1 Wizard: Create or Update draft audit
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
@@ -339,7 +338,10 @@ export const mdrRouter = router({
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
-      // ✅ IMPORTANT: columns are JSON type -> DO NOT JSON.stringify()
+      /**
+       * ✅ IMPORTANT:
+       * processIds / referentialIds are JSON columns => store ARRAYS, NOT JSON strings
+       */
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
@@ -348,8 +350,8 @@ export const mdrRouter = router({
         type: resolvedType,
         status: input.status,
 
-        referentialIds: (input.referentialIds ?? []) as any,
-        processIds: (input.processIds ?? []) as any,
+        referentialIds: input.referentialIds ?? [],
+        processIds: input.processIds ?? [],
 
         clientOrganization: input.clientOrganization ?? null,
         siteLocation: input.siteLocation ?? null,
@@ -389,30 +391,13 @@ export const mdrRouter = router({
           return { auditId: Number(normalized.id), audit: normalized };
         }
 
-        const res: any = await db.insert(audits).values(insertValues);
-        const insertedId = Number(res?.insertId);
-
-        if (!insertedId || Number.isNaN(insertedId)) {
-          // fallback (should be rare)
-          const [createdFallback] = await db
-            .select()
-            .from(audits)
-            .where(and(eq(audits.userId, ctx.user.id), eq(audits.siteId, input.siteId), eq(audits.name, input.name)))
-            .orderBy(sql`${audits.id} desc`)
-            .limit(1);
-
-          if (!createdFallback) {
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Audit created but could not be fetched" });
-          }
-
-          const normalized = normalizeAuditForFrontend(createdFallback);
-          return { auditId: Number(normalized.id), audit: normalized };
-        }
+        await db.insert(audits).values(insertValues);
 
         const [created] = await db
           .select()
           .from(audits)
-          .where(and(eq(audits.id, insertedId), eq(audits.userId, ctx.user.id)))
+          .where(and(eq(audits.userId, ctx.user.id), eq(audits.siteId, input.siteId), eq(audits.name, input.name)))
+          .orderBy(sql`${audits.id} desc`)
           .limit(1);
 
         if (!created) {
@@ -438,7 +423,7 @@ export const mdrRouter = router({
     }),
 
   /**
-   * ✅ REQUIRED by frontend
+   * REQUIRED by frontend
    */
   getAuditContext: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -491,11 +476,14 @@ export const mdrRouter = router({
         )
         .limit(1);
 
+      /**
+       * ✅ IMPORTANT: targetMarkets/deviceClasses are JSON columns => store arrays, not JSON strings
+       */
       const qualificationData = {
         economicRole: input.economicRole,
         hasAuthorizedRepresentative: input.hasAuthorizedRepresentative,
-        targetMarkets: input.targetMarkets ? JSON.stringify(input.targetMarkets) : null,
-        deviceClasses: input.deviceClasses ? JSON.stringify(input.deviceClasses) : null,
+        targetMarkets: input.targetMarkets ?? [],
+        deviceClasses: input.deviceClasses ?? [],
         updatedAt: new Date(),
       };
 
@@ -550,7 +538,8 @@ export const mdrRouter = router({
     }),
 
   /**
-   * ✅ Get existing responses for this audit (for current user)
+   * Get existing responses for this audit (for current user)
+   * select only needed columns
    */
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -598,7 +587,7 @@ export const mdrRouter = router({
     }),
 
   /**
-   * ✅ Save response (upsert)
+   * Save response (upsert) for current user + audit
    */
   saveResponse: protectedProcedure
     .input(
@@ -609,7 +598,7 @@ export const mdrRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(),
+        processId: z.string().optional().nullable(), // token or numeric string
         evidenceFiles: z.array(z.string()).optional().default([]),
       })
     )
@@ -617,18 +606,22 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      // ownership check
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       const now = new Date();
       const normalizedProcessId = input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
 
+      /**
+       * ✅ IMPORTANT: evidenceFiles is JSON column => store array (not JSON.stringify)
+       */
       const values: any = {
         auditId: input.auditId,
         questionKey: input.questionKey,
         responseValue: input.responseValue,
         responseComment: input.responseComment ?? "",
         note: input.note ?? "",
-        evidenceFiles: JSON.stringify(input.evidenceFiles ?? []),
+        evidenceFiles: input.evidenceFiles ?? [],
         role: input.role ?? null,
         processId: normalizedProcessId,
         updatedAt: now,
@@ -657,13 +650,24 @@ export const mdrRouter = router({
         await db.insert(auditResponses).values(insertValues);
         return { success: true, mode: "created" as const };
       } catch (e: any) {
-        console.error("[MDR] saveResponse failed:", e);
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to save response" });
+        const mysql = e?.cause ?? e;
+        console.error("[MDR] saveResponse failed:", {
+          message: e?.message,
+          errno: mysql?.errno,
+          code: mysql?.code,
+          sqlState: mysql?.sqlState,
+          sqlMessage: mysql?.sqlMessage,
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: mysql?.sqlMessage || e?.message || "Unable to save response",
+        });
       }
     }),
 
   /**
-   * ✅ Get questions for a given MDR audit, filtered BY DB
+   * Get questions for a given MDR audit, filtered BY DB
+   * economicRole is VARCHAR in DB
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -677,19 +681,21 @@ export const mdrRouter = router({
         input.auditId
       );
 
-      console.log(
-        `[MDR] getQuestionsForAudit audit=${auditId} role=${economicRole} processIds=${JSON.stringify(processIds)} referentials=${JSON.stringify(
-          referentialIds
-        )}`
-      );
-
-      const processCandidates = await buildApplicableProcessCandidates(db, processIds || []);
+      const normalizedProcessIds = (processIds || []).map(String);
+      const processCandidates = await buildApplicableProcessCandidates(db, normalizedProcessIds);
       const hasProcessFilter = processCandidates.length > 0;
 
+      console.log(
+        `[MDR] getQuestionsForAudit audit=${auditId} role=${economicRole} processIds=${JSON.stringify(
+          normalizedProcessIds
+        )} processCandidates=${JSON.stringify(processCandidates)} referentials=${JSON.stringify(referentialIds)}`
+      );
+
+      // ---- DB-first ----
       try {
         const whereParts: any[] = [];
 
-        // ✅ economicRole is VARCHAR (or nullable)
+        // economicRole VARCHAR (or nullable)
         if (economicRole && economicRole !== "all") {
           whereParts.push(
             sql`(
@@ -700,7 +706,7 @@ export const mdrRouter = router({
           );
         }
 
-        // ✅ referentials filter
+        // referentials filter
         if (referentialIds && referentialIds.length > 0) {
           whereParts.push(
             sql`${(questions as any).referentialId} in (${sql.join(
@@ -710,11 +716,18 @@ export const mdrRouter = router({
           );
         }
 
-        // ✅ processes filter
+        /**
+         * ✅ processes filter
+         * - applicableProcesses is JSON array of strings
+         * - JSON_CONTAINS(col, CAST('"token"' AS JSON))
+         * - also allow NULL / empty array => considered applicable
+         */
         if (hasProcessFilter) {
-          const conds = processCandidates.map((cand) =>
-            sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, JSON_QUOTE(${cand}))`
-          );
+          const conds = processCandidates.map((cand) => {
+            // candJson => '"purchasing_suppliers"'
+            const candJson = JSON.stringify(String(cand));
+            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
+          });
 
           whereParts.push(
             sql`(
@@ -749,14 +762,19 @@ export const mdrRouter = router({
             article: q.article,
             annexe: q.annexe,
             title: q.title,
+
             expectedEvidence: q.expectedEvidence ?? null,
             criticality: q.criticality ?? null,
+
             risks: normalizeRisksValue(q.risks ?? q.risk ?? null),
+
             interviewFunctions: safeParseArray(q.interviewFunctions),
             economicRole: q.economicRole ?? null,
             applicableProcesses: safeParseArray(q.applicableProcesses),
+
             referentialId: q.referentialId ?? null,
             processId: q.processId ?? null,
+
             displayOrder: q.displayOrder ?? null,
           }));
 
@@ -765,7 +783,7 @@ export const mdrRouter = router({
             meta: {
               auditId,
               economicRole,
-              selectedProcessIds: processIds || [],
+              selectedProcessIds: normalizedProcessIds,
               processCandidates,
               referentialIds: referentialIds || [],
               total: out.length,
@@ -788,7 +806,7 @@ export const mdrRouter = router({
 
       let filtered = allQuestions;
 
-      // role filter
+      // role filter for VARCHAR
       if (economicRole && economicRole !== "all") {
         filtered = filtered.filter((q: any) => {
           if (!q.economicRole) return true;
@@ -836,7 +854,7 @@ export const mdrRouter = router({
         meta: {
           auditId,
           economicRole,
-          selectedProcessIds: processIds || [],
+          selectedProcessIds: normalizedProcessIds,
           processCandidates,
           referentialIds: referentialIds || [],
           total: out.length,
