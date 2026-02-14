@@ -4,28 +4,20 @@
 """
 Import MDR questions from an Excel file into Railway MySQL.
 
-✅ Features / fixes included:
+✅ Fixes included:
 - Reads Excel with pandas + openpyxl
 - Connects to Railway MySQL using env vars (DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME) OR DATABASE_URL
-- Detects actual DB columns for `processus` and `questions` and adapts queries
-- Deletes existing questions before importing (full replace)
+- Introspects actual DB schema (columns + types) for `processus` and `questions`
+- Full replace: deletes existing questions before importing
 - Ensures processId is NEVER null (creates missing processes)
-- Ensures economicRole is NEVER null (DB NOT NULL on Railway) => defaults to "all"
-- Avoids inserting columns that do not exist in DB (e.g. referenceLabel, updatedAt)
-- Cleans/normalizes input values and skips empty rows safely
-- Generates stable questionKey when missing
+- Ensures economicRole is NEVER null (defaults to "all" if DB NOT NULL)
+- Detects ENUM columns (criticality/questionType/...) and maps Excel values to allowed enum values
+- Avoids inserting columns that do not exist in DB
+- Generates stable questionKey
 
 Expected Excel headers (French):
-- "Processus concerné"
-- "Objectif du processus"
-- "Clause MDR"
-- "Intitulé"
-- "Question d’audit détaillée"
-- "Type"
-- "Risque en cas de NC"
-- "Preuves attendues"
-- "Fonctions interrogées"
-- "Criticité"
+Processus concerné | Objectif du processus | Clause MDR | Intitulé | Question d’audit détaillée |
+Type | Risque en cas de NC | Preuves attendues | Fonctions interrogées | Criticité
 """
 
 import os
@@ -45,10 +37,9 @@ import mysql.connector
 
 EXCEL_PATH = os.getenv("EXCEL_PATH", "data/MDR_questionnaire_V7_CORRIGE.xlsx")
 DEFAULT_REFERENTIAL_ID = int(os.getenv("DEFAULT_REFERENTIAL_ID", "1"))
-DEFAULT_ECONOMIC_ROLE = os.getenv("DEFAULT_ECONOMIC_ROLE", "all")  # ✅ NOT NULL on Railway
+DEFAULT_ECONOMIC_ROLE = os.getenv("DEFAULT_ECONOMIC_ROLE", "all")  # ✅ your DB seems NOT NULL
 DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
 
-# Mapping helpers for DB column names (some DBs use different casing)
 PROCESS_TABLE = os.getenv("PROCESS_TABLE", "processus")
 QUESTIONS_TABLE = os.getenv("QUESTIONS_TABLE", "questions")
 
@@ -70,7 +61,6 @@ def norm_str(v):
     if v is None:
         return ""
     s = str(v).strip()
-    # normalize weird non-breaking spaces etc.
     s = s.replace("\u00a0", " ").strip()
     return s
 
@@ -84,9 +74,11 @@ def safe_json_array(v):
     if isinstance(v, (list, tuple)):
         arr = [norm_str(x) for x in v if norm_str(x)]
         return json.dumps(arr, ensure_ascii=False)
+
     s = norm_str(v)
     if not s:
         return json.dumps([])
+
     # Try parse JSON
     if (s.startswith("[") and s.endswith("]")) or (s.startswith("{") and s.endswith("}")):
         try:
@@ -96,7 +88,8 @@ def safe_json_array(v):
                 return json.dumps(arr, ensure_ascii=False)
         except Exception:
             pass
-    # Fallback: split by comma / newline / semicolon
+
+    # Fallback split
     parts = re.split(r"[,\n;]+", s)
     arr = [norm_str(p) for p in parts if norm_str(p)]
     return json.dumps(arr, ensure_ascii=False)
@@ -126,12 +119,11 @@ def parse_database_url(url: str):
 
 
 def get_mysql_config():
-    # Prefer explicit vars
-    host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST") or os.getenv("HOST")
-    port = os.getenv("DB_PORT") or os.getenv("MYSQL_PORT") or os.getenv("PORT")
-    user = os.getenv("DB_USER") or os.getenv("MYSQL_USER") or os.getenv("USER")
-    password = os.getenv("DB_PASSWORD") or os.getenv("MYSQL_PASSWORD") or os.getenv("PASSWORD")
-    database = os.getenv("DB_NAME") or os.getenv("MYSQL_DATABASE") or os.getenv("DATABASE")
+    host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST")
+    port = os.getenv("DB_PORT") or os.getenv("MYSQL_PORT")
+    user = os.getenv("DB_USER") or os.getenv("MYSQL_USER")
+    password = os.getenv("DB_PASSWORD") or os.getenv("MYSQL_PASSWORD")
+    database = os.getenv("DB_NAME") or os.getenv("MYSQL_DATABASE")
 
     if host and user and database:
         return {
@@ -142,7 +134,6 @@ def get_mysql_config():
             "database": database,
         }
 
-    # Fallback DATABASE_URL
     db_url = os.getenv("DATABASE_URL")
     if db_url:
         return parse_database_url(db_url)
@@ -150,20 +141,88 @@ def get_mysql_config():
     die("❌ Missing DB connection env vars. Provide DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME or DATABASE_URL.")
 
 
-def fetch_table_columns(cursor, table_name: str):
+def fetch_table_schema(cursor, table_name: str):
+    """
+    Returns:
+      - cols: list of column names
+      - types: dict colName -> sqlType string (e.g., "varchar(50)", "enum('a','b')")
+      - nullables: dict colName -> bool (True if NULL allowed)
+    """
     cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
-    cols = [row[0] for row in cursor.fetchall()]
-    return cols
+    cols = []
+    types = {}
+    nullables = {}
+    for field, col_type, is_null, key, default, extra in cursor.fetchall():
+        cols.append(field)
+        types[field] = col_type
+        nullables[field] = (str(is_null).upper() == "YES")
+    return cols, types, nullables
 
 
 def pick_col(cols, *candidates):
-    """
-    Return the first candidate that exists in cols.
-    """
     for c in candidates:
         if c in cols:
             return c
     return None
+
+
+def parse_enum_values(sql_type: str):
+    """
+    If sql_type like "enum('low','medium','high')" return ['low','medium','high'] else None.
+    """
+    if not sql_type:
+        return None
+    s = sql_type.strip().lower()
+    if not s.startswith("enum("):
+        return None
+    inside = s[len("enum("):-1]  # remove enum( and trailing )
+    # split by ',' while keeping quoted values
+    # easiest: regex capture between single quotes
+    vals = re.findall(r"'([^']*)'", inside)
+    return vals if vals else None
+
+
+def normalize_to_enum(value_raw: str, allowed: list, fallback: str = None):
+    """
+    Map arbitrary string (French/various) to one of allowed enum values.
+    """
+    if not allowed:
+        return value_raw
+
+    v = norm_str(value_raw).lower()
+    allowed_l = [a.lower() for a in allowed]
+
+    # exact match
+    if v in allowed_l:
+        return allowed[allowed_l.index(v)]
+
+    # keyword mapping for common criticality labels
+    # (works for both EN and FR)
+    def pick(targets):
+        for t in targets:
+            if t in allowed_l:
+                return allowed[allowed_l.index(t)]
+        return None
+
+    # Criticality heuristics
+    if any(k in v for k in ["crit", "critical", "majeur", "major", "high", "élev", "eleve", "severe", "sévère"]):
+        return pick(["critical", "high", "majeur", "major"]) or (fallback or allowed[0])
+
+    if any(k in v for k in ["moy", "medium", "moderate", "modéré", "modere", "interm"]):
+        return pick(["medium", "moderate", "moyen"]) or (fallback or allowed[0])
+
+    if any(k in v for k in ["faible", "low", "minor", "mineur", "min"]):
+        return pick(["low", "minor", "faible", "mineur"]) or (fallback or allowed[0])
+
+    # For questionType / other enums: try partial contains
+    for i, a in enumerate(allowed_l):
+        if a and a in v:
+            return allowed[i]
+
+    # default
+    if fallback and fallback.lower() in allowed_l:
+        return allowed[allowed_l.index(fallback.lower())]
+    return allowed[0]
 
 
 # ----------------------------
@@ -175,13 +234,9 @@ def main():
     if not os.path.exists(EXCEL_PATH):
         die(f"❌ Excel file not found: {EXCEL_PATH}")
 
-    # Read excel
-    df = pd.read_excel(EXCEL_PATH, engine="openpyxl")
-    df = df.fillna("")
-
+    df = pd.read_excel(EXCEL_PATH, engine="openpyxl").fillna("")
     log(f"📊 Lignes détectées: {len(df)}")
 
-    # Connect DB
     cfg = get_mysql_config()
     log(f"🔌 Connexion MySQL -> host={cfg['host']} port={cfg['port']} db={cfg['database']} user={cfg['user']}")
 
@@ -196,23 +251,22 @@ def main():
     )
     cursor = conn.cursor()
 
-    # Introspect columns
-    process_cols = fetch_table_columns(cursor, PROCESS_TABLE)
-    questions_cols = fetch_table_columns(cursor, QUESTIONS_TABLE)
+    # Introspect schema
+    process_cols, process_types, process_nullables = fetch_table_schema(cursor, PROCESS_TABLE)
+    questions_cols, questions_types, questions_nullables = fetch_table_schema(cursor, QUESTIONS_TABLE)
+
     log(f"🧭 Colonnes table processus: {process_cols}")
     log(f"🧾 Colonnes table questions: {questions_cols}")
 
-    # Determine process table columns
+    # Determine process columns
     process_id_col = pick_col(process_cols, "id")
     process_name_col = pick_col(process_cols, "name")
-    process_created_col = pick_col(process_cols, "createdAt", "created_at", "created_at_ts")
-    # updatedAt might not exist on Railway in your case; we won't use it.
-    process_updated_col = pick_col(process_cols, "updatedAt", "updated_at")
+    process_created_col = pick_col(process_cols, "createdAt", "created_at")
 
     if not process_id_col or not process_name_col:
         die("❌ process table must have at least columns: id, name")
 
-    # Preload processes into map: name_lower -> id
+    # Preload processes
     log("🧭 Chargement table processus...")
     cursor.execute(f"SELECT `{process_id_col}`, `{process_name_col}` FROM `{PROCESS_TABLE}`")
     process_map = {}
@@ -221,14 +275,9 @@ def main():
             continue
         process_map[norm_str(pname).lower()] = int(pid)
 
-    # Helper to create process if missing
     def get_or_create_process_id(process_name: str) -> int:
-        pname = norm_str(process_name)
-        if not pname:
-            # last resort (shouldn't happen because processId NOT NULL)
-            pname = "Non défini"
+        pname = norm_str(process_name) or "Non défini"
         key = pname.lower()
-
         if key in process_map:
             return process_map[key]
 
@@ -238,15 +287,15 @@ def main():
             log(f"🧪 DRY_RUN: Processus créé: '{pname}' -> id={fake_id}")
             return fake_id
 
-        # Build insert dynamically based on existing columns
         cols = [process_name_col]
         placeholders = ["%s"]
         params = [pname]
 
         if process_created_col in process_cols:
+            # Some schemas use defaultNow; but NOW() is safe too
             cols.append(process_created_col)
             placeholders.append("NOW()")
-        # don't add updatedAt if not present
+
         insert_sql = f"INSERT INTO `{PROCESS_TABLE}` ({', '.join([f'`{c}`' for c in cols])}) VALUES ({', '.join(placeholders)})"
         cursor.execute(insert_sql, tuple(params))
         new_id = cursor.lastrowid
@@ -254,12 +303,21 @@ def main():
         log(f"➕ Processus créé: '{pname}' -> id={new_id}")
         return int(new_id)
 
-    # Wipe questions
+    # Detect ENUM allowed values for criticality & questionType (and any other if needed)
+    criticality_enum = parse_enum_values(questions_types.get("criticality", ""))
+    questiontype_enum = parse_enum_values(questions_types.get("questionType", ""))
+
+    if criticality_enum:
+        log(f"🧩 criticality ENUM détecté: {criticality_enum}")
+    if questiontype_enum:
+        log(f"🧩 questionType ENUM détecté: {questiontype_enum}")
+
+    # Full replace
     log("🧹 Suppression anciennes questions...")
     if not DRY_RUN:
         cursor.execute(f"DELETE FROM `{QUESTIONS_TABLE}`")
 
-    # Excel header helpers (French)
+    # Excel headers
     COL_PROCESS = "Processus concerné"
     COL_OBJECTIF = "Objectif du processus"
     COL_CLAUSE = "Clause MDR"
@@ -271,7 +329,7 @@ def main():
     COL_FUNCS = "Fonctions interrogées"
     COL_CRIT = "Criticité"
 
-    # DB insert column builder:
+    # Build insert dynamically
     insert_cols = []
     insert_placeholders = []
     extractors = []
@@ -281,86 +339,79 @@ def main():
         insert_placeholders.append(placeholder)
         extractors.append(extractor)
 
-    # Required-ish / common columns
     if "referentialId" in questions_cols:
         add_col("referentialId", "%s", lambda r: DEFAULT_REFERENTIAL_ID)
 
-    # processId must not be null on Railway for your table
     if "processId" in questions_cols:
         add_col("processId", "%s", lambda r: get_or_create_process_id(r.get(COL_PROCESS, "")))
 
-    # questionKey
     if "questionKey" in questions_cols:
         def _qkey(r):
-            article = r.get(COL_CLAUSE, "")
-            proc = r.get(COL_PROCESS, "")
-            qtext = r.get(COL_QTEXT, "")
-            key = gen_question_key(article, proc, qtext)
-            # trim to 255 just in case (varchar(255))
+            key = gen_question_key(r.get(COL_CLAUSE, ""), r.get(COL_PROCESS, ""), r.get(COL_QTEXT, ""))
             return key[:255]
         add_col("questionKey", "%s", _qkey)
 
-    # article
     if "article" in questions_cols:
-        add_col("article", "%s", lambda r: norm_str(r.get(COL_CLAUSE, ""))[:255] or None)
+        add_col("article", "%s", lambda r: (norm_str(r.get(COL_CLAUSE, ""))[:255] or None))
 
-    # title
     if "title" in questions_cols:
-        add_col("title", "%s", lambda r: norm_str(r.get(COL_INTITULE, ""))[:255] or None)
+        add_col("title", "%s", lambda r: (norm_str(r.get(COL_INTITULE, ""))[:255] or None))
 
-    # questionText
     if "questionText" in questions_cols:
-        add_col("questionText", "%s", lambda r: norm_str(r.get(COL_QTEXT, "")) or None)
+        add_col("questionText", "%s", lambda r: (norm_str(r.get(COL_QTEXT, "")) or None))
 
-    # questionType
     if "questionType" in questions_cols:
-        add_col("questionType", "%s", lambda r: norm_str(r.get(COL_TYPE, ""))[:50] or None)
+        def _qtype(r):
+            raw = norm_str(r.get(COL_TYPE, ""))
+            if questiontype_enum:
+                return normalize_to_enum(raw, questiontype_enum, fallback=questiontype_enum[0])
+            # fallback varchar
+            return raw[:50] if raw else None
+        add_col("questionType", "%s", _qtype)
 
-    # expectedEvidence
     if "expectedEvidence" in questions_cols:
-        add_col("expectedEvidence", "%s", lambda r: norm_str(r.get(COL_EVID, "")) or None)
+        add_col("expectedEvidence", "%s", lambda r: (norm_str(r.get(COL_EVID, "")) or None))
 
-    # criticality
     if "criticality" in questions_cols:
-        add_col("criticality", "%s", lambda r: norm_str(r.get(COL_CRIT, ""))[:50] or None)
+        def _crit(r):
+            raw = norm_str(r.get(COL_CRIT, ""))
+            if criticality_enum:
+                return normalize_to_enum(raw, criticality_enum, fallback=criticality_enum[0])
+            # fallback varchar(50)
+            return raw[:50] if raw else None
+        add_col("criticality", "%s", _crit)
 
-    # risk / risks
-    # Your DB has both risk and risks (text). We'll put Excel risk into `risk`, and also mirror in `risks`.
-    excel_risk_extractor = lambda r: norm_str(r.get(COL_RISK, "")) or None
+    excel_risk_extractor = lambda r: (norm_str(r.get(COL_RISK, "")) or None)
     if "risk" in questions_cols:
         add_col("risk", "%s", excel_risk_extractor)
     if "risks" in questions_cols:
         add_col("risks", "%s", excel_risk_extractor)
 
-    # interviewFunctions JSON
     if "interviewFunctions" in questions_cols:
         add_col("interviewFunctions", "%s", lambda r: safe_json_array(r.get(COL_FUNCS, "")))
 
-    # applicableProcesses JSON: store the process name as an applicable process
     if "applicableProcesses" in questions_cols:
-        add_col("applicableProcesses", "%s", lambda r: json.dumps([norm_str(r.get(COL_PROCESS, ""))], ensure_ascii=False))
+        add_col("applicableProcesses", "%s", lambda r: json.dumps([norm_str(r.get(COL_PROCESS, "")) or "Non défini"], ensure_ascii=False))
 
-    # economicRole NOT NULL on Railway (your error)
+    # economicRole (NOT NULL on your DB => must always be set)
     if "economicRole" in questions_cols:
-        add_col("economicRole", "%s", lambda r: DEFAULT_ECONOMIC_ROLE)
+        def _role(_r):
+            # you can later improve this by reading from Excel if you add a column
+            return DEFAULT_ECONOMIC_ROLE
+        add_col("economicRole", "%s", _role)
 
-    # displayOrder: optional, we can generate sequential ordering
     if "displayOrder" in questions_cols:
-        # will be overwritten per row using index
         add_col("displayOrder", "%s", lambda r: int(r.get("__row_index__", 0)) + 1)
 
-    # createdAt: let DB default, but if column exists and NOT defaulted, we can set NOW()
-    # We'll only set it if it exists AND has no default? Hard to know. We keep it simple:
+    # createdAt: safe set NOW()
     if "createdAt" in questions_cols:
-        # Use NOW() to be safe if your DB column doesn't default
         insert_cols.append("createdAt")
         insert_placeholders.append("NOW()")
-        extractors.append(lambda r: None)  # ignored
+        extractors.append(lambda r: None)
 
     if not insert_cols:
         die("❌ No compatible columns found to insert into questions table.")
 
-    # Build INSERT statement (skip NOW() params)
     cols_sql = ", ".join([f"`{c}`" for c in insert_cols])
     placeholders_sql = ", ".join(insert_placeholders)
     insert_sql = f"INSERT INTO `{QUESTIONS_TABLE}` ({cols_sql}) VALUES ({placeholders_sql})"
@@ -369,30 +420,23 @@ def main():
     inserted = 0
     skipped = 0
 
-    # Insert row by row (safe + clear errors)
     for idx, row in df.iterrows():
         r = {k: row[k] for k in df.columns}
         r["__row_index__"] = idx
 
         qtext = norm_str(r.get(COL_QTEXT, ""))
-        proc = norm_str(r.get(COL_PROCESS, ""))
-
-        # Skip rows without question text (avoid questionText null / garbage)
         if not qtext:
             skipped += 1
             continue
 
-        # If process missing, still create "Non défini" so processId isn't null
-        if not proc:
+        if not norm_str(r.get(COL_PROCESS, "")):
             r[COL_PROCESS] = "Non défini"
 
         params = []
-        # Extract in same order; ignore NOW() placeholders (we put a lambda None)
         for col, ph, ex in zip(insert_cols, insert_placeholders, extractors):
             if ph.strip().upper() == "NOW()":
                 continue
-            val = ex(r)
-            params.append(val)
+            params.append(ex(r))
 
         if DRY_RUN:
             inserted += 1
@@ -404,11 +448,11 @@ def main():
         except Exception as e:
             log(f"❌ Insert failed at Excel row={idx+2} (1-based with header). Error: {e}")
             log(f"   Process='{norm_str(r.get(COL_PROCESS,''))}' Clause='{norm_str(r.get(COL_CLAUSE,''))}'")
+            log(f"   Criticité Excel='{norm_str(r.get(COL_CRIT,''))}' -> mapped='{_crit(r) if 'criticality' in questions_cols else None}'")
             log(f"   Question='{qtext[:200]}'")
             conn.rollback()
             raise
 
-        # Commit in batches
         if inserted % 200 == 0:
             conn.commit()
             log(f"✅ {inserted} questions importées...")
@@ -417,7 +461,6 @@ def main():
         conn.commit()
 
     log(f"✅ Import terminé. Inserted={inserted} Skipped(empty question)={skipped}")
-
     cursor.close()
     conn.close()
 
