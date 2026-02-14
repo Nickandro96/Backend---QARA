@@ -13,20 +13,31 @@ DEFAULT_ANNEXE = None
 def safe_str(v):
     if v is None:
         return ""
-    s = str(v).strip()
+    return str(v).strip()
+
+def normalize_process_name(raw):
+    # Keep a readable name for DB processus.name
+    s = safe_str(raw)
+    # fallback if empty
+    return s if s else "Non défini"
+
+def process_token_from_name(raw):
+    # Token stored in applicableProcesses JSON array
+    s = safe_str(raw).lower()
+    s = s.replace("’", "'")
+    s = s.replace("/", " ")
+    s = " ".join(s.split())
+    s = s.replace(" ", "_")
     return s
 
 def to_json_array_from_csv(v):
-    # Excel column "Fonctions interrogées" might be "QA, RA, ..." or already something else
     s = safe_str(v)
     if not s:
         return json.dumps([])
-    # split by comma
     arr = [x.strip() for x in s.split(",") if x.strip()]
     return json.dumps(arr)
 
 def to_json_array_single(v):
-    # for applicableProcesses: put ONE process token in array
     s = safe_str(v)
     if not s:
         return json.dumps([])
@@ -79,8 +90,37 @@ conn = mysql.connector.connect(
 )
 cursor = conn.cursor()
 
+# ---- Load / build process map ----
+print("🧭 Chargement table processus...")
+cursor.execute("SELECT id, name FROM processus")
+rows = cursor.fetchall()
+
+process_name_to_id = {}
+for pid, pname in rows:
+    if pname is None:
+        continue
+    process_name_to_id[str(pname).strip().lower()] = int(pid)
+
+def get_or_create_process_id(process_name: str) -> int:
+    key = process_name.strip().lower()
+    if key in process_name_to_id:
+        return process_name_to_id[key]
+
+    # create
+    cursor.execute(
+        "INSERT INTO processus (name, createdAt, updatedAt) VALUES (%s, NOW(), NOW())",
+        (process_name,)
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    process_name_to_id[key] = int(new_id)
+    print(f"➕ Processus créé: '{process_name}' -> id={new_id}")
+    return int(new_id)
+
+# ---- Clean questions ----
 print("🧹 Suppression anciennes questions...")
 cursor.execute("DELETE FROM questions")
+conn.commit()
 
 insert_sql = """
 INSERT INTO questions (
@@ -113,7 +153,10 @@ for _, row in df.iterrows():
     # Processus concerné | Objectif du processus | Clause MDR | Intitulé | Question d’audit détaillée
     # Type | Risque en cas de NC | Preuves attendues | Fonctions interrogées | Criticité
 
-    process_token = safe_str(row.get("Processus concerné", "")).lower().replace(" ", "_")
+    process_raw = row.get("Processus concerné", "")
+    process_name = normalize_process_name(process_raw)
+    process_token = process_token_from_name(process_raw)
+
     objective = safe_str(row.get("Objectif du processus", ""))
     clause = safe_str(row.get("Clause MDR", ""))
     intitulé = safe_str(row.get("Intitulé", ""))
@@ -128,6 +171,9 @@ for _, row in df.iterrows():
     if not question_text:
         continue
 
+    # processId must NOT be null
+    process_id = get_or_create_process_id(process_name)
+
     # Build title: prefer "Intitulé", fallback objective
     title = intitulé if intitulé else (objective if objective else None)
 
@@ -137,7 +183,7 @@ for _, row in df.iterrows():
         insert_sql,
         (
             DEFAULT_REFERENTIAL_ID,
-            None,  # processId is INT in DB; we don't have numeric ID -> keep NULL
+            process_id,  # ✅ NOT NULL now
             question_key,
             clause if clause else None,
             DEFAULT_ANNEXE,
@@ -149,7 +195,7 @@ for _, row in df.iterrows():
             evidence if evidence else None,
             criticality if criticality else None,
             risk_nc if risk_nc else None,
-            risk_nc if risk_nc else None,  # store same in risks too (your UI reads risks OR risk)
+            risk_nc if risk_nc else None,
             to_json_array_from_csv(functions),
             display_order,
         ),
