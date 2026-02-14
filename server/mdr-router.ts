@@ -132,10 +132,10 @@ function normalizeAuditForFrontend(audit: any) {
     siteId: audit?.siteId === null || audit?.siteId === undefined ? null : Number(audit?.siteId),
     referentialIds,
     processIds,
-    clientOrganization: audit?.clientOrganization ?? null,
-    siteLocation: audit?.siteLocation ?? null,
-    auditorName: audit?.auditorName ?? null,
-    auditorEmail: audit?.auditorEmail ?? null,
+    clientOrganization: (audit as any)?.clientOrganization ?? null,
+    siteLocation: (audit as any)?.siteLocation ?? null,
+    auditorName: (audit as any)?.auditorName ?? null,
+    auditorEmail: (audit as any)?.auditorEmail ?? null,
     status: audit?.status ?? "draft",
   };
 }
@@ -185,12 +185,6 @@ async function mapSelectedProcessesToDbProcessIds(db: any, selected: string[]) {
 
 /**
  * ✅ NEW: Build process "candidates" that can match questions.applicableProcesses.
- * Because your data may store either:
- * - tokens like "qms" / "ra"
- * - OR names like "Système de management qualité (QMS)"
- * - OR user selected numeric IDs (from DB table `processus`)
- *
- * We return a list of strings to use with JSON_CONTAINS(applicableProcesses, '"candidate"').
  */
 async function buildApplicableProcessCandidates(db: any, selected: string[]) {
   if (!selected || selected.length === 0) return [];
@@ -320,14 +314,18 @@ export const mdrRouter = router({
     return { processes: MDR_PROCESSES };
   }),
 
-    /**
+  /**
    * ✅ Step 1 Wizard: Create or Update draft audit
    *
-   * PATCH:
-   * - Ta table `audits` ne contient pas `clientOrganization` (et souvent pas siteLocation/auditorName/auditorEmail)
-   * - Donc on N'INSÈRE PAS ces champs tant que la migration n'a pas été faite.
-   * - On gère aussi `type` vs `auditType` (colonne DB `type`)
-   * - On log l'erreur MySQL complète
+   * ✅ NOW OK because columns were added to Railway:
+   * - clientOrganization
+   * - siteLocation
+   * - auditorName
+   * - auditorEmail
+   *
+   * Also handles:
+   * - DB uses `type` column (frontend may send `auditType`)
+   * - startDate/endDate robust
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
@@ -344,7 +342,6 @@ export const mdrRouter = router({
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
 
-        // ✅ on accepte encore ces champs (frontend), mais on NE LES ÉCRIT PLUS en DB pour éviter "Unknown column"
         clientOrganization: z.string().nullable().optional(),
         siteLocation: z.string().nullable().optional(),
         auditorName: z.string().nullable().optional(),
@@ -362,34 +359,29 @@ export const mdrRouter = router({
 
       const now = new Date();
 
-      // resolve DB type
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
 
-      // robust dates
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
-
-      // choose drizzle key for DB column "type"
-      const hasTypeKey = Boolean((audits as any).type);
-      const hasAuditTypeKey = Boolean((audits as any).auditType);
-      const typePatch: Record<string, any> = {};
-      if (hasTypeKey) typePatch.type = resolvedType;
-      if (!hasTypeKey && hasAuditTypeKey) typePatch.auditType = resolvedType;
 
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
         name: input.name,
 
-        ...typePatch,
+        // DB column
+        type: resolvedType,
 
         status: input.status,
 
         referentialIds: JSON.stringify(input.referentialIds ?? []),
         processIds: JSON.stringify(input.processIds ?? []),
 
-        // ✅ IMPORTANT: on ne met PAS clientOrganization/siteLocation/auditorName/auditorEmail ici
-        // car ta table `audits` ne contient pas ces colonnes -> "Unknown column ..."
+        // ✅ now columns exist in Railway
+        clientOrganization: input.clientOrganization ?? null,
+        siteLocation: input.siteLocation ?? null,
+        auditorName: input.auditorName ?? null,
+        auditorEmail: input.auditorEmail ?? null,
 
         startDate: resolvedStartDate,
         endDate: resolvedEndDate,
@@ -455,6 +447,7 @@ export const mdrRouter = router({
         });
       }
     }),
+
   /**
    * ✅ REQUIRED by frontend
    */
@@ -667,13 +660,6 @@ export const mdrRouter = router({
 
   /**
    * ✅ Get questions for a given MDR audit, filtered BY DB:
-   * - economicRole via JSON_CONTAINS(questions.economicRole, '"fabricant"')
-   * - applicableProcesses via JSON_CONTAINS(questions.applicableProcesses, '"qms"' OR '"Système ..."' ...)
-   * - referentials via IN (...)
-   *
-   * Notes:
-   * - We allow "unscoped" questions where economicRole/applicableProcesses is NULL or empty.
-   * - We support process selection coming from numeric IDs (DB processus) OR MDR tokens.
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
