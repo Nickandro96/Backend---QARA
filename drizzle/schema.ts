@@ -151,6 +151,7 @@ export const audits = mysqlTable("audits", {
   status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
+  // ✅ JSON columns (store arrays directly in router; no stringify)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
@@ -180,10 +181,8 @@ export const questions = mysqlTable("questions", {
   annexe: varchar("annexe", { length: 255 }),
   title: varchar("title", { length: 255 }),
 
-  // ✅ VARCHAR dans ta DB (captures Railway)
   economicRole: varchar("economicRole", { length: 50 }),
 
-  // ✅ JSON array de strings (captures Railway)
   applicableProcesses: json("applicableProcesses"),
 
   questionType: varchar("questionType", { length: 50 }),
@@ -219,7 +218,6 @@ export const audit_responses = mysqlTable(
       .notNull()
       .references(() => audits.id),
 
-    // ✅ on le garde (ta DB peut l’avoir ou non)
     questionId: int("questionId"),
     questionKey: varchar("questionKey", { length: 255 }).notNull(),
 
@@ -230,7 +228,9 @@ export const audit_responses = mysqlTable(
     role: varchar("role", { length: 50 }),
     processId: int("processId"),
 
+    // ✅ JSON column (store arrays directly in router; no stringify)
     evidenceFiles: json("evidenceFiles"),
+
     answeredBy: int("answeredBy").references(() => users.id),
     answeredAt: timestamp("answeredAt"),
 
