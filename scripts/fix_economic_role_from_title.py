@@ -1,5 +1,6 @@
 import os
 import re
+from urllib.parse import urlparse, unquote
 import mysql.connector
 
 ROLE_MAP = {
@@ -12,7 +13,7 @@ ROLE_MAP = {
 }
 
 def norm(s: str) -> str:
-    s = s.strip().lower()
+    s = (s or "").strip().lower()
     s = (
         s.replace("é", "e")
          .replace("è", "e")
@@ -33,29 +34,42 @@ def extract_role_and_clean_title(title: str):
     role = ROLE_MAP.get(role_label)
     return role, clean_title
 
+def parse_database_url(db_url: str):
+    if not db_url:
+        raise SystemExit("❌ DATABASE_URL is missing.")
+    # Accept mysql:// or mysqls://
+    p = urlparse(db_url)
+
+    if p.scheme not in ("mysql", "mysqls"):
+        raise SystemExit(f"❌ DATABASE_URL must start with mysql:// (got scheme={p.scheme})")
+
+    host = p.hostname
+    port = p.port or 3306
+    user = unquote(p.username) if p.username else None
+    password = unquote(p.password) if p.password else None
+    database = (p.path or "").lstrip("/")
+
+    if not host or not user or password is None or not database:
+        raise SystemExit("❌ DATABASE_URL parse failed (host/user/password/database missing).")
+
+    return host, port, user, password, database
+
 def main():
-    db_host = os.environ.get("MYSQLHOST")
-    db_port = int(os.environ.get("MYSQLPORT", "3306"))
-    db_user = os.environ.get("MYSQLUSER")
-    db_pass = os.environ.get("MYSQLPASSWORD")
-    db_name = os.environ.get("MYSQLDATABASE")
+    db_url = os.environ.get("DATABASE_URL")
+    host, port, user, password, database = parse_database_url(db_url)
 
-    if not all([db_host, db_user, db_pass, db_name]):
-        raise SystemExit("❌ Missing MySQL env vars (MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE).")
-
-    print(f"🔌 Connexion MySQL -> host={db_host} port={db_port} db={db_name} user={db_user}")
+    print(f"🔌 Connexion MySQL -> host={host} port={port} db={database} user={user}")
 
     conn = mysql.connector.connect(
-        host=db_host,
-        port=db_port,
-        user=db_user,
-        password=db_pass,
-        database=db_name,
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
         autocommit=False,
     )
     cur = conn.cursor(dictionary=True)
 
-    # Corrige uniquement economicRole='all' et title commençant par '['
     cur.execute("""
         SELECT id, title
         FROM questions
@@ -79,7 +93,6 @@ def main():
             skipped += 1
             continue
 
-        # title nettoyé sans le [Rôle]
         new_title = clean_title if clean_title else title
 
         cur.execute(
@@ -93,6 +106,7 @@ def main():
 
     conn.commit()
     print(f"✅ Terminé. updated={updated} skipped={skipped}")
+
     cur.close()
     conn.close()
 
