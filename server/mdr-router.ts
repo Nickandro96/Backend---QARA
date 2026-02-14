@@ -320,23 +320,14 @@ export const mdrRouter = router({
     return { processes: MDR_PROCESSES };
   }),
 
-  /**
-   * ✅ Step 1 Wizard: Create or Update draft audit
-   *
-   * ✅ PATCH WIZARD:
-   * - DB expects `type` (NOT `auditType`)
-   * - DB often expects `startDate` (NOT NULL)
-   * - endDate is usually nullable
-   * - We keep auditType in input for backward compat, but we write `type` into DB.
-   */
     /**
    * ✅ Step 1 Wizard: Create or Update draft audit
    *
    * PATCH:
-   * - Certains schémas Drizzle mappent la colonne DB `type` sur la clé TS `auditType`
-   *   (ex: auditType: varchar("type"...)).
-   * - Donc on écrit dynamiquement sur la clé existante dans `audits`.
-   * - On loggue l'erreur MySQL complète (errno/sqlState/sqlMessage) pour ne plus être aveugles.
+   * - Ta table `audits` ne contient pas `clientOrganization` (et souvent pas siteLocation/auditorName/auditorEmail)
+   * - Donc on N'INSÈRE PAS ces champs tant que la migration n'a pas été faite.
+   * - On gère aussi `type` vs `auditType` (colonne DB `type`)
+   * - On log l'erreur MySQL complète
    */
   createOrUpdateAuditDraft: protectedProcedure
     .input(
@@ -345,7 +336,7 @@ export const mdrRouter = router({
         siteId: z.number(),
         name: z.string().min(1),
 
-        // On accepte les 2
+        // accept both
         auditType: z.string().optional(),
         type: z.string().optional(),
 
@@ -353,12 +344,12 @@ export const mdrRouter = router({
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
 
+        // ✅ on accepte encore ces champs (frontend), mais on NE LES ÉCRIT PLUS en DB pour éviter "Unknown column"
         clientOrganization: z.string().nullable().optional(),
         siteLocation: z.string().nullable().optional(),
         auditorName: z.string().nullable().optional(),
         auditorEmail: z.string().nullable().optional(),
 
-        // dates
         startDate: z.string().optional().nullable(),
         endDate: z.string().optional().nullable(),
 
@@ -371,27 +362,19 @@ export const mdrRouter = router({
 
       const now = new Date();
 
-      // 1) Résoudre le type d'audit
+      // resolve DB type
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
 
-      // 2) Dates robustes (évite NOT NULL)
+      // robust dates
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
-      // 3) Choisir LA BONNE clé Drizzle pour écrire dans la colonne DB `type`
-      // - si ton schema a `audits.type`, on écrit `type`
-      // - si ton schema a `audits.auditType` (mappé vers "type"), on écrit `auditType`
+      // choose drizzle key for DB column "type"
       const hasTypeKey = Boolean((audits as any).type);
       const hasAuditTypeKey = Boolean((audits as any).auditType);
-
       const typePatch: Record<string, any> = {};
       if (hasTypeKey) typePatch.type = resolvedType;
       if (!hasTypeKey && hasAuditTypeKey) typePatch.auditType = resolvedType;
-
-      // Si ni l'un ni l'autre, on loggue (ça expliquerait le DEFAULT)
-      if (!hasTypeKey && !hasAuditTypeKey) {
-        console.warn("[MDR] audits table has no `type` nor `auditType` key in drizzle schema. Using DB default.");
-      }
 
       const valuesToSave: any = {
         userId: ctx.user.id,
@@ -402,14 +385,11 @@ export const mdrRouter = router({
 
         status: input.status,
 
-        // JSON (stocké en TEXT/JSON selon ton schema)
         referentialIds: JSON.stringify(input.referentialIds ?? []),
         processIds: JSON.stringify(input.processIds ?? []),
 
-        clientOrganization: input.clientOrganization ?? null,
-        siteLocation: input.siteLocation ?? null,
-        auditorName: input.auditorName ?? null,
-        auditorEmail: input.auditorEmail ?? null,
+        // ✅ IMPORTANT: on ne met PAS clientOrganization/siteLocation/auditorName/auditorEmail ici
+        // car ta table `audits` ne contient pas ces colonnes -> "Unknown column ..."
 
         startDate: resolvedStartDate,
         endDate: resolvedEndDate,
@@ -447,7 +427,6 @@ export const mdrRouter = router({
 
         await db.insert(audits).values(insertValues);
 
-        // récupère le dernier audit de cet user+site+name
         const [created] = await db
           .select()
           .from(audits)
@@ -462,7 +441,6 @@ export const mdrRouter = router({
         const normalized = normalizeAuditForFrontend(created);
         return { auditId: Number(normalized.id), audit: normalized };
       } catch (e: any) {
-        // ✅ Log MySQL complet (la pièce qui manque pour arrêter de tourner en rond)
         const mysql = e?.cause ?? e;
         console.error("[MDR] createOrUpdateAuditDraft failed:", {
           message: e?.message,
