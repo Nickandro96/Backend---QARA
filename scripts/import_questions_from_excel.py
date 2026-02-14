@@ -7,8 +7,6 @@ from urllib.parse import urlparse
 
 EXCEL_PATH = "data/MDR_questionnaire_V7_CORRIGE.xlsx"
 DEFAULT_REFERENTIAL_ID = 1  # MDR
-DEFAULT_ECONOMIC_ROLE = None  # or "fabricant"/"importateur"/etc if you want to force
-DEFAULT_ANNEXE = None
 
 def safe_str(v):
     if v is None:
@@ -16,13 +14,10 @@ def safe_str(v):
     return str(v).strip()
 
 def normalize_process_name(raw):
-    # Keep a readable name for DB processus.name
     s = safe_str(raw)
-    # fallback if empty
     return s if s else "Non défini"
 
 def process_token_from_name(raw):
-    # Token stored in applicableProcesses JSON array
     s = safe_str(raw).lower()
     s = s.replace("’", "'")
     s = s.replace("/", " ")
@@ -73,6 +68,17 @@ def get_db_config():
         )
     return host, port, user, password, db
 
+def get_table_columns(cursor, dbname, table_name):
+    cursor.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+        """,
+        (dbname, table_name),
+    )
+    return {r[0] for r in cursor.fetchall()}
+
 print("📥 Lecture Excel...")
 df = pd.read_excel(EXCEL_PATH, engine="openpyxl").fillna("")
 print("📊 Lignes détectées:", len(df))
@@ -90,7 +96,14 @@ conn = mysql.connector.connect(
 )
 cursor = conn.cursor()
 
-# ---- Load / build process map ----
+# Detect real columns
+process_cols = get_table_columns(cursor, dbname, "processus")
+questions_cols = get_table_columns(cursor, dbname, "questions")
+
+print("🧭 Colonnes table processus:", sorted(process_cols))
+print("🧾 Colonnes table questions:", sorted(questions_cols))
+
+# ---- Load process map ----
 print("🧭 Chargement table processus...")
 cursor.execute("SELECT id, name FROM processus")
 rows = cursor.fetchall()
@@ -101,65 +114,123 @@ for pid, pname in rows:
         continue
     process_name_to_id[str(pname).strip().lower()] = int(pid)
 
+def insert_process(process_name: str) -> int:
+    # Build insert according to existing cols
+    cols = ["name"]
+    vals = [process_name]
+    placeholders = ["%s"]
+
+    # createdAt if exists
+    if "createdAt" in process_cols:
+        cols.append("createdAt")
+        placeholders.append("NOW()")
+    # updatedAt if exists
+    if "updatedAt" in process_cols:
+        cols.append("updatedAt")
+        placeholders.append("NOW()")
+
+    sql = f"INSERT INTO processus ({', '.join(cols)}) VALUES ({', '.join(placeholders)})"
+    cursor.execute(sql, tuple(vals))
+    conn.commit()
+    return int(cursor.lastrowid)
+
 def get_or_create_process_id(process_name: str) -> int:
     key = process_name.strip().lower()
     if key in process_name_to_id:
         return process_name_to_id[key]
 
-    # create
-    cursor.execute(
-        "INSERT INTO processus (name, createdAt, updatedAt) VALUES (%s, NOW(), NOW())",
-        (process_name,)
-    )
-    conn.commit()
-    new_id = cursor.lastrowid
-    process_name_to_id[key] = int(new_id)
+    new_id = insert_process(process_name)
+    process_name_to_id[key] = new_id
     print(f"➕ Processus créé: '{process_name}' -> id={new_id}")
-    return int(new_id)
+    return new_id
 
 # ---- Clean questions ----
 print("🧹 Suppression anciennes questions...")
 cursor.execute("DELETE FROM questions")
 conn.commit()
 
-insert_sql = """
-INSERT INTO questions (
-  referentialId,
-  processId,
-  questionKey,
-  article,
-  annexe,
-  title,
-  economicRole,
-  applicableProcesses,
-  questionType,
-  questionText,
-  expectedEvidence,
-  criticality,
-  risk,
-  risks,
-  interviewFunctions,
-  displayOrder,
-  createdAt
-)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
-"""
+# Build INSERT for questions based on existing columns
+# We will attempt to fill the most useful columns, but ONLY if present.
+insert_columns = []
+insert_values_sql = []  # placeholders / NOW()
+param_getters = []      # lambda row -> value
+
+def add_col(col_name, placeholder, getter=None):
+    insert_columns.append(col_name)
+    insert_values_sql.append(placeholder)
+    if getter is not None:
+        param_getters.append(getter)
+
+# Mandatory-ish
+if "referentialId" in questions_cols:
+    add_col("referentialId", "%s", lambda r: DEFAULT_REFERENTIAL_ID)
+
+if "processId" in questions_cols:
+    add_col("processId", "%s", lambda r: r["_process_id"])
+
+if "questionKey" in questions_cols:
+    add_col("questionKey", "%s", lambda r: r["_question_key"])
+
+if "article" in questions_cols:
+    add_col("article", "%s", lambda r: r["_clause"] or None)
+
+if "annexe" in questions_cols:
+    add_col("annexe", "%s", lambda r: None)
+
+if "title" in questions_cols:
+    add_col("title", "%s", lambda r: r["_title"] or None)
+
+if "economicRole" in questions_cols:
+    # keep null; filtering by role remains possible later
+    add_col("economicRole", "%s", lambda r: None)
+
+if "applicableProcesses" in questions_cols:
+    add_col("applicableProcesses", "%s", lambda r: r["_applicable_processes_json"])
+
+if "questionType" in questions_cols:
+    add_col("questionType", "%s", lambda r: r["_qtype"] or None)
+
+if "questionText" in questions_cols:
+    add_col("questionText", "%s", lambda r: r["_question_text"])
+
+if "expectedEvidence" in questions_cols:
+    add_col("expectedEvidence", "%s", lambda r: r["_evidence"] or None)
+
+if "criticality" in questions_cols:
+    add_col("criticality", "%s", lambda r: r["_criticality"] or None)
+
+# risk / risks : depends what exists
+if "risk" in questions_cols:
+    add_col("risk", "%s", lambda r: r["_risk"] or None)
+if "risks" in questions_cols:
+    add_col("risks", "%s", lambda r: r["_risk"] or None)
+
+if "interviewFunctions" in questions_cols:
+    add_col("interviewFunctions", "%s", lambda r: r["_functions_json"])
+
+if "displayOrder" in questions_cols:
+    add_col("displayOrder", "%s", lambda r: r["_display_order"])
+
+if "createdAt" in questions_cols:
+    add_col("createdAt", "NOW()")  # no param
+
+if not insert_columns:
+    raise RuntimeError("No compatible columns found for table 'questions'. Check table name / schema.")
+
+insert_sql = f"INSERT INTO questions ({', '.join(insert_columns)}) VALUES ({', '.join(insert_values_sql)})"
+print("🧾 SQL INSERT questions prêt.")
 
 count = 0
 display_order = 1
 
 for _, row in df.iterrows():
-    # Excel headers:
-    # Processus concerné | Objectif du processus | Clause MDR | Intitulé | Question d’audit détaillée
-    # Type | Risque en cas de NC | Preuves attendues | Fonctions interrogées | Criticité
-
     process_raw = row.get("Processus concerné", "")
     process_name = normalize_process_name(process_raw)
     process_token = process_token_from_name(process_raw)
 
-    objective = safe_str(row.get("Objectif du processus", ""))
     clause = safe_str(row.get("Clause MDR", ""))
     intitulé = safe_str(row.get("Intitulé", ""))
+    objective = safe_str(row.get("Objectif du processus", ""))
     question_text = safe_str(row.get("Question d’audit détaillée", ""))
     qtype = safe_str(row.get("Type", ""))
     risk_nc = safe_str(row.get("Risque en cas de NC", ""))
@@ -167,39 +238,34 @@ for _, row in df.iterrows():
     functions = row.get("Fonctions interrogées", "")
     criticality = safe_str(row.get("Criticité", ""))
 
-    # Skip empty question rows
     if not question_text:
         continue
 
-    # processId must NOT be null
     process_id = get_or_create_process_id(process_name)
-
-    # Build title: prefer "Intitulé", fallback objective
     title = intitulé if intitulé else (objective if objective else None)
-
     question_key = make_question_key(clause, process_token, question_text)
 
-    cursor.execute(
-        insert_sql,
-        (
-            DEFAULT_REFERENTIAL_ID,
-            process_id,  # ✅ NOT NULL now
-            question_key,
-            clause if clause else None,
-            DEFAULT_ANNEXE,
-            title,
-            DEFAULT_ECONOMIC_ROLE,
-            to_json_array_single(process_token) if process_token else json.dumps([]),
-            qtype if qtype else None,
-            question_text,
-            evidence if evidence else None,
-            criticality if criticality else None,
-            risk_nc if risk_nc else None,
-            risk_nc if risk_nc else None,
-            to_json_array_from_csv(functions),
-            display_order,
-        ),
-    )
+    # Make a dict to pass to getters
+    ctx = {
+        "_process_id": process_id,
+        "_question_key": question_key,
+        "_clause": clause,
+        "_title": title,
+        "_qtype": qtype,
+        "_question_text": question_text,
+        "_risk": risk_nc,
+        "_evidence": evidence,
+        "_criticality": criticality,
+        "_functions_json": to_json_array_from_csv(functions),
+        "_applicable_processes_json": to_json_array_single(process_token) if process_token else json.dumps([]),
+        "_display_order": display_order,
+    }
+
+    params = []
+    for getter in param_getters:
+        params.append(getter(ctx))
+
+    cursor.execute(insert_sql, tuple(params))
 
     count += 1
     display_order += 1
