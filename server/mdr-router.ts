@@ -608,6 +608,8 @@ export const mdrRouter = router({
             evidenceFiles: (auditResponses as any).evidenceFiles,
             role: (auditResponses as any).role,
             processId: (auditResponses as any).processId,
+            answeredBy: (auditResponses as any).answeredBy,
+            answeredAt: (auditResponses as any).answeredAt,
             updatedAt: (auditResponses as any).updatedAt,
           })
           .from(auditResponses)
@@ -627,6 +629,8 @@ export const mdrRouter = router({
             evidenceFiles: safeParseArray(r.evidenceFiles),
             role: r.role ?? null,
             processId: r.processId ?? null,
+            answeredBy: r.answeredBy ?? null,
+            answeredAt: r.answeredAt ?? null,
             updatedAt: r.updatedAt ?? null,
           })),
         };
@@ -650,6 +654,8 @@ export const mdrRouter = router({
         role: z.string().optional().nullable(),
         processId: z.string().optional().nullable(),
         evidenceFiles: z.array(z.string()).optional().default([]),
+        answeredBy: z.union([z.number(), z.string()]).optional().nullable(),
+        answeredAt: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -660,6 +666,12 @@ export const mdrRouter = router({
 
       const now = new Date();
       const normalizedProcessId = input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
+      const normalizedAnsweredBy =
+        input.answeredBy === null || input.answeredBy === undefined || input.answeredBy === ""
+          ? ctx.user.id
+          : Number(input.answeredBy);
+
+      const normalizedAnsweredAt = input.answeredAt ? new Date(input.answeredAt) : now;
 
       const values: any = {
         auditId: input.auditId,
@@ -670,6 +682,8 @@ export const mdrRouter = router({
         evidenceFiles: input.evidenceFiles ?? [],
         role: input.role ?? null,
         processId: normalizedProcessId,
+        answeredBy: Number.isFinite(normalizedAnsweredBy) ? normalizedAnsweredBy : ctx.user.id,
+        answeredAt: normalizedAnsweredAt,
         updatedAt: now,
         userId: ctx.user.id,
       };
@@ -703,6 +717,14 @@ export const mdrRouter = router({
           code: mysql?.code,
           sqlState: mysql?.sqlState,
           sqlMessage: mysql?.sqlMessage,
+          payload: {
+            auditId: input.auditId,
+            questionKey: input.questionKey,
+            responseValue: input.responseValue,
+            answeredBy: values?.answeredBy,
+            answeredAt: values?.answeredAt,
+            userId: ctx.user.id,
+          },
         });
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
