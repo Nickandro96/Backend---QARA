@@ -711,6 +711,8 @@ export const mdrRouter = router({
 
   /**
    * ✅ Get questions for a given MDR audit, filtered BY DB
+   * IMPORTANT: this endpoint now returns an ARRAY (not {questions, meta})
+   * because the frontend typically does data.map(...)
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -866,19 +868,8 @@ export const mdrRouter = router({
           displayOrder: q.displayOrder ?? null,
         }));
 
-        return {
-          questions: out,
-          meta: {
-            auditId,
-            economicRole,
-            selectedProcessIds: normalizedProcessIds,
-            processDbIds,
-            processCandidates,
-            referentialIds: referentialIds || [],
-            total: out.length,
-            filteredByDb: true,
-          },
-        };
+        // ✅ IMPORTANT: return ARRAY for frontend compatibility
+        return out;
       } catch (e: any) {
         console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
       }
@@ -889,7 +880,7 @@ export const mdrRouter = router({
 
       if (allQuestions.length === 0) {
         console.warn("[MDR] No questions found in DB or JSON file.");
-        return { questions: [] as any[], meta: { auditId, total: 0, filteredByDb: false } };
+        return [] as any[];
       }
 
       let filtered = allQuestions;
@@ -904,7 +895,11 @@ export const mdrRouter = router({
           if (v === "distributor" && r === "distributeur") return true;
           if (v === "importer" && r === "importateur") return true;
           if (v === "manufacturer" && r === "fabricant") return true;
-          if ((v === "authorized representative" || v === "authorised representative" || v === "ar") && r === "mandataire") return true;
+          if (
+            (v === "authorized representative" || v === "authorised representative" || v === "ar") &&
+            r === "mandataire"
+          )
+            return true;
           return false;
         });
       }
@@ -955,18 +950,7 @@ export const mdrRouter = router({
         displayOrder: q.displayOrder ?? null,
       }));
 
-      return {
-        questions: out,
-        meta: {
-          auditId,
-          economicRole,
-          selectedProcessIds: normalizedProcessIds,
-          processDbIds,
-          processCandidates,
-          referentialIds: referentialIds || [],
-          total: out.length,
-          filteredByDb: false,
-        },
-      };
+      // ✅ IMPORTANT: return ARRAY for frontend compatibility
+      return out;
     }),
 });
