@@ -75,6 +75,11 @@ function normalizeEconomicRole(v: any): string {
   if (!v) return "fabricant";
   const s = String(v).toLowerCase().trim();
   if (["fabricant", "importateur", "distributeur", "mandataire"].includes(s)) return s;
+  // tolérance EN si jamais
+  if (["manufacturer"].includes(s)) return "fabricant";
+  if (["importer"].includes(s)) return "importateur";
+  if (["distributor"].includes(s)) return "distributeur";
+  if (["authorized representative", "authorised representative", "ar"].includes(s)) return "mandataire";
   return "fabricant";
 }
 
@@ -163,8 +168,6 @@ function normalizeAuditForFrontend(audit: any) {
  * ✅ RÉSOUDRE les process sélectionnés en IDs DB (processus.id)
  * - entrée: slugs (distribution_logistics) et/ou IDs numériques (string)
  * - sortie: array number[] (IDs DB)
- *
- * NOTE: matching robuste (accents/espaces/variantes)
  */
 async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[]> {
   const sel = (selected || []).map((x) => String(x)).filter(Boolean);
@@ -175,62 +178,36 @@ async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[
 
   // 2) slugs -> names (via MDR_PROCESSES)
   const slugs = sel.filter((x) => !isNumericString(x) && x !== "all");
-  const targetNames = slugs
+  const names = slugs
     .map((slug) => MDR_PROCESSES.find((p) => p.id === slug)?.name)
     .filter(Boolean) as string[];
 
   let dbIds: number[] = [...numericIds];
 
-  if (targetNames.length === 0) {
-    return Array.from(new Set(dbIds)).filter((n) => Number.isFinite(n));
+  // 3) names -> ids via DB (processus)
+  if (names.length > 0) {
+    try {
+      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
+      const rows = await db
+        .select({
+          id: (processus as any).id,
+          name: (processus as any).name,
+        })
+        .from(processus)
+        .where(
+          sql`${(processus as any).name} in (${sql.join(
+            names.map((n) => sql`${n}`),
+            sql`, `
+          )})`
+        );
+
+      dbIds.push(...(rows || []).map((r: any) => Number(r.id)));
+    } catch (e) {
+      console.warn("[MDR] resolveProcessDbIds failed (names->ids):", e);
+    }
   }
 
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // remove accents
-      .replace(/\s+/g, " ");
-
-  try {
-    // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
-    const rows = await db
-      .select({
-        id: (processus as any).id,
-        name: (processus as any).name,
-      })
-      .from(processus);
-
-    const mapNormToId = new Map<string, number>();
-    for (const r of rows || []) {
-      const n = (r as any)?.name ? norm(String((r as any).name)) : "";
-      const id = Number((r as any)?.id);
-      if (n && Number.isFinite(id)) mapNormToId.set(n, id);
-    }
-
-    // exact match (normalized)
-    for (const tn of targetNames) {
-      const hit = mapNormToId.get(norm(tn));
-      if (hit) dbIds.push(hit);
-    }
-
-    // fuzzy inclusion (fallback)
-    for (const tn of targetNames) {
-      const ntn = norm(tn);
-      if (mapNormToId.has(ntn)) continue;
-
-      for (const [k, id] of mapNormToId.entries()) {
-        if (k.includes(ntn) || ntn.includes(k)) {
-          dbIds.push(id);
-          break;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("[MDR] resolveProcessDbIds failed:", e);
-  }
-
+  // dedupe + keep finite
   dbIds = Array.from(new Set(dbIds)).filter((n) => Number.isFinite(n));
   return dbIds;
 }
@@ -284,7 +261,7 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
     }
   }
 
-  // 3) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "7" en string)
+  // 3) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "11" en string)
   for (const n of numeric) candidates.push(String(n));
 
   return [...new Set(candidates.map((s) => String(s).trim()).filter(Boolean))];
@@ -318,8 +295,6 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
     economicRole = normalizeEconomicRole(qualification?.economicRole);
   }
 
-  // ✅ IMPORTANT: processIds/referentialIds are JSON columns -> they must be arrays
-  // but can be double-encoded in old data => safeParseArray handles it.
   const processIds = safeParseArray((audit as any).processIds).map(String);
 
   const referentialIds = safeParseArray((audit as any).referentialIds)
@@ -420,10 +395,6 @@ export const mdrRouter = router({
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
-      /**
-       * ✅ IMPORTANT:
-       * processIds / referentialIds are JSON columns => store ARRAYS, NOT JSON strings
-       */
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
@@ -558,9 +529,6 @@ export const mdrRouter = router({
         )
         .limit(1);
 
-      /**
-       * ✅ IMPORTANT: targetMarkets/deviceClasses are JSON columns => store arrays, not JSON strings
-       */
       const qualificationData = {
         economicRole: input.economicRole,
         hasAuthorizedRepresentative: input.hasAuthorizedRepresentative,
@@ -621,7 +589,6 @@ export const mdrRouter = router({
 
   /**
    * Get existing responses for this audit (for current user)
-   * select only needed columns
    */
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -629,7 +596,6 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      // ownership check
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       try {
@@ -680,7 +646,7 @@ export const mdrRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(), // token or numeric string
+        processId: z.string().optional().nullable(),
         evidenceFiles: z.array(z.string()).optional().default([]),
       })
     )
@@ -688,15 +654,11 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      // ownership check
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       const now = new Date();
       const normalizedProcessId = input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
 
-      /**
-       * ✅ IMPORTANT: evidenceFiles is JSON column => store array (not JSON.stringify)
-       */
       const values: any = {
         auditId: input.auditId,
         questionKey: input.questionKey,
@@ -748,13 +710,7 @@ export const mdrRouter = router({
     }),
 
   /**
-   * Get questions for a given MDR audit, filtered BY DB
-   * economicRole is VARCHAR in DB
-   *
-   * ✅ FIXES:
-   * - mapping slug -> processDbIds (robuste)
-   * - filtres "NULL-friendly" (si la DB n'a pas tagué processId/referentialId => on n'exclut pas)
-   * - JSON applicableProcesses conservé
+   * ✅ Get questions for a given MDR audit, filtered BY DB
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -770,10 +726,10 @@ export const mdrRouter = router({
 
       const normalizedProcessIds = (processIds || []).map(String);
 
-      // ✅ slug(s) -> IDs DB (robuste)
+      // slug(s) -> IDs DB
       const processDbIds = await resolveProcessDbIds(db, normalizedProcessIds);
 
-      // ✅ candidates (utile si applicableProcesses est utilisé)
+      // candidates for applicableProcesses JSON matching (names + tokens)
       const processCandidates = await buildApplicableProcessCandidates(db, normalizedProcessIds);
 
       console.log(
@@ -788,58 +744,87 @@ export const mdrRouter = router({
       try {
         const whereParts: any[] = [];
 
-        // economicRole VARCHAR (or nullable)
+        // economicRole VARCHAR (or nullable) – accept generic questions too
         if (economicRole && economicRole !== "all") {
           whereParts.push(
             sql`(
               ${(questions as any).economicRole} IS NULL
               OR ${(questions as any).economicRole} = ''
               OR LOWER(${(questions as any).economicRole}) = LOWER(${economicRole})
+              OR (
+                LOWER(${(questions as any).economicRole}) = 'distributor' AND LOWER(${economicRole}) = 'distributeur'
+              )
+              OR (
+                LOWER(${(questions as any).economicRole}) = 'importer' AND LOWER(${economicRole}) = 'importateur'
+              )
+              OR (
+                LOWER(${(questions as any).economicRole}) = 'manufacturer' AND LOWER(${economicRole}) = 'fabricant'
+              )
+              OR (
+                (LOWER(${(questions as any).economicRole}) = 'authorized representative'
+                 OR LOWER(${(questions as any).economicRole}) = 'authorised representative'
+                 OR LOWER(${(questions as any).economicRole}) = 'ar')
+                AND LOWER(${economicRole}) = 'mandataire'
+              )
             )`
           );
         }
 
-        // referentials filter (NULL-friendly)
+        // referentials filter
         if (referentialIds && referentialIds.length > 0) {
           whereParts.push(
-            sql`(
-              ${(questions as any).referentialId} IS NULL
-              OR ${(questions as any).referentialId} in (${sql.join(
-                referentialIds.map((n: number) => sql`${n}`),
-                sql`, `
-              )})
-            )`
+            sql`${(questions as any).referentialId} in (${sql.join(
+              referentialIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )})`
           );
         }
 
-        // processId FK filter (NULL-friendly)
-        if (processDbIds.length > 0) {
-          whereParts.push(
-            sql`(
-              ${(questions as any).processId} IS NULL
-              OR ${(questions as any).processId} in (${sql.join(
+        /**
+         * ✅ FIX IMPORTANT:
+         * On ne fait PAS:
+         *   processId IN (...)  AND  JSON_CONTAINS(...)
+         * car ça tue tout si la DB n’a pas les deux tags.
+         *
+         * On fait un SEUL bloc OR:
+         * - match via questions.processId
+         * - OU questions.applicableProcesses vide/null
+         * - OU JSON_CONTAINS(applicableProcesses, candidate)
+         */
+        const hasAnyProcessFilter = processDbIds.length > 0 || processCandidates.length > 0;
+
+        if (hasAnyProcessFilter) {
+          const orParts: any[] = [];
+
+          if (processDbIds.length > 0) {
+            orParts.push(
+              sql`${(questions as any).processId} in (${sql.join(
                 processDbIds.map((n: number) => sql`${n}`),
                 sql`, `
-              )})
-            )`
-          );
-        }
+              )})`
+            );
+          }
 
-        // applicableProcesses JSON filter (NULL/empty-friendly)
-        if (processCandidates.length > 0) {
-          const conds = processCandidates.map((cand) => {
-            const s = String(cand);
-            const candJson = JSON.stringify(s); // => '"token"'
-            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
-          });
-
-          whereParts.push(
-            sql`(
-              ${(questions as any).applicableProcesses} IS NULL
-              OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0
-              OR (${sql.join(conds, sql` OR `)})
-            )`
+          // allow generic (no applicableProcesses) questions
+          orParts.push(
+            sql`${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0`
           );
+
+          if (processCandidates.length > 0) {
+            const conds = processCandidates.map((cand) => {
+              const s = String(cand);
+              if (isNumericString(s)) {
+                const n = Number(s);
+                return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
+              }
+              const candJson = JSON.stringify(s); // => '"Distribution & logistique"'
+              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
+            });
+
+            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+          }
+
+          whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
         }
 
         const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
@@ -907,37 +892,47 @@ export const mdrRouter = router({
         return { questions: [] as any[], meta: { auditId, total: 0, filteredByDb: false } };
       }
 
-      // ✅ Fallback "safe": ne PAS exclure si fields manquants en DB
       let filtered = allQuestions;
 
-      // role (NULL-friendly)
+      // role filter
       if (economicRole && economicRole !== "all") {
         filtered = filtered.filter((q: any) => {
           if (!q.economicRole) return true;
-          return String(q.economicRole).toLowerCase().trim() === economicRole.toLowerCase().trim();
+          const v = String(q.economicRole).toLowerCase().trim();
+          const r = String(economicRole).toLowerCase().trim();
+          if (v === r) return true;
+          if (v === "distributor" && r === "distributeur") return true;
+          if (v === "importer" && r === "importateur") return true;
+          if (v === "manufacturer" && r === "fabricant") return true;
+          if ((v === "authorized representative" || v === "authorised representative" || v === "ar") && r === "mandataire") return true;
+          return false;
         });
       }
 
-      // referential (NULL-friendly)
       if (referentialIds && referentialIds.length > 0) {
         filtered = filtered.filter((q: any) => {
-          if (q.referentialId === null || q.referentialId === undefined || q.referentialId === "") return true;
+          if (!q.referentialId) return true;
           return referentialIds.includes(Number(q.referentialId));
         });
       }
 
-      // process (NULL-friendly)
-      if (processDbIds.length > 0) {
-        filtered = filtered.filter((q: any) => {
-          if (q.processId === null || q.processId === undefined || q.processId === "") return true;
-          return processDbIds.includes(Number(q.processId));
-        });
-      } else if (processCandidates.length > 0) {
+      // process filter fallback: OR logic too
+      if (processDbIds.length > 0 || processCandidates.length > 0) {
         const wanted = processCandidates.map((x) => String(x).toLowerCase());
         filtered = filtered.filter((q: any) => {
-          if (!q.applicableProcesses) return true;
-          const qApplicable = safeParseArray(q.applicableProcesses).map((p: any) => String(p).toLowerCase());
-          return wanted.some((w) => qApplicable.includes(w));
+          const pidOk =
+            processDbIds.length > 0 &&
+            q.processId !== null &&
+            q.processId !== undefined &&
+            processDbIds.includes(Number(q.processId));
+
+          const ap = safeParseArray(q.applicableProcesses).map((p: any) => String(p).toLowerCase());
+          const apOk =
+            !q.applicableProcesses ||
+            ap.length === 0 ||
+            (wanted.length > 0 && wanted.some((w) => ap.includes(w)));
+
+          return pidOk || apOk;
         });
       }
 
