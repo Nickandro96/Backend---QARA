@@ -187,7 +187,7 @@ async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[
   // 3) names -> ids via DB (processus)
   if (names.length > 0) {
     try {
-      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
+      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour viter l'erreur updatedAt manquant
       const rows = await db
         .select({
           id: (processus as any).id,
@@ -671,7 +671,9 @@ export const mdrRouter = router({
           ? ctx.user.id
           : Number(input.answeredBy);
 
-      const normalizedAnsweredAt = input.answeredAt ? new Date(input.answeredAt) : now;
+      const parsedAnsweredAt = input.answeredAt ? new Date(input.answeredAt) : null;
+      const normalizedAnsweredAt =
+        parsedAnsweredAt && !Number.isNaN(parsedAnsweredAt.getTime()) ? parsedAnsweredAt : now;
 
       const values: any = {
         auditId: input.auditId,
