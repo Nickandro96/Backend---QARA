@@ -589,6 +589,10 @@ export const mdrRouter = router({
 
   /**
    * Get existing responses for this audit (for current user)
+   *
+   * ✅ FIX API shape:
+   * Frontend-friendly payload: { responses: [...] }
+   * (au lieu de renvoyer directement un array)
    */
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -618,7 +622,7 @@ export const mdrRouter = router({
             )
           );
 
-        return (rows || []).map((r: any) => ({
+        const responses = (rows || []).map((r: any) => ({
           questionKey: r.questionKey,
           responseValue: r.responseValue,
           responseComment: r.responseComment ?? "",
@@ -628,6 +632,8 @@ export const mdrRouter = router({
           processId: r.processId ?? null,
           updatedAt: r.updatedAt ?? null,
         }));
+
+        return { responses };
       } catch (e: any) {
         console.error("[MDR] getResponses failed:", e);
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to load responses" });
@@ -711,8 +717,6 @@ export const mdrRouter = router({
 
   /**
    * ✅ Get questions for a given MDR audit, filtered BY DB
-   * IMPORTANT: this endpoint now returns an ARRAY (not {questions, meta})
-   * because the frontend typically does data.map(...)
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -784,11 +788,7 @@ export const mdrRouter = router({
 
         /**
          * ✅ FIX IMPORTANT:
-         * On ne fait PAS:
-         *   processId IN (...)  AND  JSON_CONTAINS(...)
-         * car ça tue tout si la DB n’a pas les deux tags.
-         *
-         * On fait un SEUL bloc OR:
+         * OR logic:
          * - match via questions.processId
          * - OU questions.applicableProcesses vide/null
          * - OU JSON_CONTAINS(applicableProcesses, candidate)
@@ -819,7 +819,7 @@ export const mdrRouter = router({
                 const n = Number(s);
                 return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
               }
-              const candJson = JSON.stringify(s); // => '"Distribution & logistique"'
+              const candJson = JSON.stringify(s);
               return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
             });
 
@@ -868,8 +868,19 @@ export const mdrRouter = router({
           displayOrder: q.displayOrder ?? null,
         }));
 
-        // ✅ IMPORTANT: return ARRAY for frontend compatibility
-        return out;
+        return {
+          questions: out,
+          meta: {
+            auditId,
+            economicRole,
+            selectedProcessIds: normalizedProcessIds,
+            processDbIds,
+            processCandidates,
+            referentialIds: referentialIds || [],
+            total: out.length,
+            filteredByDb: true,
+          },
+        };
       } catch (e: any) {
         console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
       }
@@ -880,7 +891,7 @@ export const mdrRouter = router({
 
       if (allQuestions.length === 0) {
         console.warn("[MDR] No questions found in DB or JSON file.");
-        return [] as any[];
+        return { questions: [] as any[], meta: { auditId, total: 0, filteredByDb: false } };
       }
 
       let filtered = allQuestions;
@@ -923,9 +934,7 @@ export const mdrRouter = router({
 
           const ap = safeParseArray(q.applicableProcesses).map((p: any) => String(p).toLowerCase());
           const apOk =
-            !q.applicableProcesses ||
-            ap.length === 0 ||
-            (wanted.length > 0 && wanted.some((w) => ap.includes(w)));
+            !q.applicableProcesses || ap.length === 0 || (wanted.length > 0 && wanted.some((w) => ap.includes(w)));
 
           return pidOk || apOk;
         });
@@ -950,7 +959,18 @@ export const mdrRouter = router({
         displayOrder: q.displayOrder ?? null,
       }));
 
-      // ✅ IMPORTANT: return ARRAY for frontend compatibility
-      return out;
+      return {
+        questions: out,
+        meta: {
+          auditId,
+          economicRole,
+          selectedProcessIds: normalizedProcessIds,
+          processDbIds,
+          processCandidates,
+          referentialIds: referentialIds || [],
+          total: out.length,
+          filteredByDb: false,
+        },
+      };
     }),
 });
