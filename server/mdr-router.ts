@@ -589,8 +589,6 @@ export const mdrRouter = router({
 
   /**
    * Get existing responses for this audit (for current user)
-   *
-   * NOTE: si ton front attend data.responses, garde ce shape.
    */
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -620,18 +618,18 @@ export const mdrRouter = router({
             )
           );
 
-        const responses = (rows || []).map((r: any) => ({
-          questionKey: r.questionKey,
-          responseValue: r.responseValue,
-          responseComment: r.responseComment ?? "",
-          note: r.note ?? "",
-          evidenceFiles: safeParseArray(r.evidenceFiles),
-          role: r.role ?? null,
-          processId: r.processId ?? null,
-          updatedAt: r.updatedAt ?? null,
-        }));
-
-        return { responses };
+        return {
+          responses: (rows || []).map((r: any) => ({
+            questionKey: r.questionKey,
+            responseValue: r.responseValue,
+            responseComment: r.responseComment ?? "",
+            note: r.note ?? "",
+            evidenceFiles: safeParseArray(r.evidenceFiles),
+            role: r.role ?? null,
+            processId: r.processId ?? null,
+            updatedAt: r.updatedAt ?? null,
+          })),
+        };
       } catch (e: any) {
         console.error("[MDR] getResponses failed:", e);
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to load responses" });
@@ -715,8 +713,6 @@ export const mdrRouter = router({
 
   /**
    * ✅ Get questions for a given MDR audit, filtered BY DB
-   *
-   * ✅ FIX SHAPE: retourne DIRECTEMENT un ARRAY (compat front)
    */
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -787,7 +783,12 @@ export const mdrRouter = router({
         }
 
         /**
-         * ✅ OR logique process:
+         * ✅ FIX IMPORTANT:
+         * On ne fait PAS:
+         *   processId IN (...)  AND  JSON_CONTAINS(...)
+         * car ça tue tout si la DB n’a pas les deux tags.
+         *
+         * On fait un SEUL bloc OR:
          * - match via questions.processId
          * - OU questions.applicableProcesses vide/null
          * - OU JSON_CONTAINS(applicableProcesses, candidate)
@@ -867,8 +868,20 @@ export const mdrRouter = router({
           displayOrder: q.displayOrder ?? null,
         }));
 
-        // ✅ IMPORTANT: RETURN ARRAY ONLY (compat front)
-        return out;
+        // ✅ Standard return shape for frontend (wizard expects { questions })
+        return {
+          questions: out,
+          meta: {
+            auditId,
+            economicRole,
+            selectedProcessIds: normalizedProcessIds,
+            processDbIds,
+            processCandidates,
+            referentialIds: referentialIds || [],
+            total: out.length,
+            filteredByDb: true,
+          },
+        };
       } catch (e: any) {
         console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
       }
@@ -879,7 +892,10 @@ export const mdrRouter = router({
 
       if (allQuestions.length === 0) {
         console.warn("[MDR] No questions found in DB or JSON file.");
-        return [] as any[];
+        return {
+          questions: [] as any[],
+          meta: { auditId, total: 0, filteredByDb: false },
+        };
       }
 
       let filtered = allQuestions;
@@ -894,11 +910,7 @@ export const mdrRouter = router({
           if (v === "distributor" && r === "distributeur") return true;
           if (v === "importer" && r === "importateur") return true;
           if (v === "manufacturer" && r === "fabricant") return true;
-          if (
-            (v === "authorized representative" || v === "authorised representative" || v === "ar") &&
-            r === "mandataire"
-          )
-            return true;
+          if ((v === "authorized representative" || v === "authorised representative" || v === "ar") && r === "mandataire") return true;
           return false;
         });
       }
@@ -949,7 +961,19 @@ export const mdrRouter = router({
         displayOrder: q.displayOrder ?? null,
       }));
 
-      // ✅ IMPORTANT: RETURN ARRAY ONLY (compat front)
-      return out;
+      // ✅ Standard return shape for frontend (wizard expects { questions })
+      return {
+        questions: out,
+        meta: {
+          auditId,
+          economicRole,
+          selectedProcessIds: normalizedProcessIds,
+          processDbIds,
+          processCandidates,
+          referentialIds: referentialIds || [],
+          total: out.length,
+          filteredByDb: false,
+        },
+      };
     }),
 });
