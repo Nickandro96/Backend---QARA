@@ -174,10 +174,7 @@ export const appRouter = router({
 
         const result: any = await database.insert(sitesTable).values(values);
 
-        const insertedId =
-          result?.[0]?.insertId ??
-          result?.insertId ??
-          null;
+        const insertedId = result?.[0]?.insertId ?? result?.insertId ?? null;
 
         return { id: insertedId, ...values };
       }),
@@ -214,10 +211,7 @@ export const appRouter = router({
       };
 
       const result: any = await database.insert(sitesTable).values(values);
-      const insertedId =
-        result?.[0]?.insertId ??
-        result?.insertId ??
-        null;
+      const insertedId = result?.[0]?.insertId ?? result?.insertId ?? null;
 
       return { id: insertedId, ...values };
     }),
@@ -729,6 +723,53 @@ export const appRouter = router({
       )
       .query(async ({ ctx, input }) => {
         return await dashboardV2.getDashboardStats(ctx.user.id, input);
+      }),
+
+    // ==========================================================
+    // ✅ COMPATIBILITY LAYER (for legacy /dashboard frontend calls)
+    // ==========================================================
+
+    // Front expects: trpc.dashboard.getKPIs()
+    getKPIs: protectedProcedure.query(async ({ ctx }) => {
+      const stats: any = await dashboardV2.getDashboardStats(ctx.user.id, {});
+
+      // We return a stable shape even if dashboardV2 changes internally
+      return {
+        scoreGlobal: stats?.globalScore ?? stats?.scoreGlobal ?? 0,
+        progression: stats?.completionRate ?? stats?.progression ?? 0,
+        conforme: stats?.okCount ?? stats?.conforme ?? 0,
+        nonConforme: stats?.nokCount ?? stats?.nonConforme ?? 0,
+        nonConformitiesCount: stats?.nokCount ?? stats?.nonConformitiesCount ?? 0,
+      };
+    }),
+
+    // Front expects: trpc.dashboard.getScoreTrend()
+    getScoreTrend: protectedProcedure.query(async ({ ctx }) => {
+      // If V2 already returns a timeseries array, we forward it.
+      // If it returns an object, we still forward (frontend should adapt).
+      return await dashboardV2.getDashboardTimeseries(ctx.user.id, {});
+    }),
+
+    // Front expects: trpc.dashboard.getProcessProgress()
+    getProcessProgress: protectedProcedure.query(async ({ ctx }) => {
+      const radar: any = await dashboardV2.getDashboardRadar(ctx.user.id, {});
+      // If V2 provides process progress, return it; else fallback to empty.
+      return radar?.processProgress ?? radar?.processes ?? radar?.items ?? [];
+    }),
+
+    // Front expects: trpc.dashboard.getRecentFindings({ limit })
+    getRecentFindings: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(50).default(5) }))
+      .query(async ({ ctx, input }) => {
+        const drill: any = await dashboardV2.getDashboardDrilldown(
+          ctx.user.id,
+          "findings",
+          {},
+          { page: 1, pageSize: input.limit },
+          { field: "createdAt", order: "desc" }
+        );
+
+        return drill?.items ?? drill?.data ?? [];
       }),
   }),
 
