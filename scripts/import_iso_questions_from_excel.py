@@ -24,21 +24,41 @@ import json
 import os
 import re
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import mysql.connector
 import pandas as pd
 
-EXCEL_PATH = os.getenv("EXCEL_PATH", "")
-DEFAULT_REFERENTIAL_ID = int(os.getenv("DEFAULT_REFERENTIAL_ID", "2"))
-DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
+
+def getenv_str(name: str, default: str) -> str:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    v = str(v).strip()
+    return v if v else default
+
+
+def getenv_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(str(raw).strip())
+    except ValueError:
+        print(f"[WARN] {name}='{raw}' is invalid, fallback to {default}")
+        return default
+
+
+EXCEL_PATH = getenv_str("EXCEL_PATH", "")
+DEFAULT_REFERENTIAL_ID = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
+DRY_RUN = getenv_str("DRY_RUN", "0") == "1"
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "port": int(os.getenv("DB_PORT", "3306")),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "qara"),
+    "host": getenv_str("DB_HOST", "127.0.0.1"),
+    "port": getenv_int("DB_PORT", 3306),
+    "user": getenv_str("DB_USER", "root"),
+    "password": getenv_str("DB_PASSWORD", ""),
+    "database": getenv_str("DB_NAME", "qara"),
 }
 
 
