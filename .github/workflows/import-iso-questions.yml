@@ -1,156 +1,166 @@
-name: Import Questions from Excel (ISO)
-
-on:
-  workflow_dispatch:
-    inputs:
-      referential_id:
-        description: "2 = ISO9001, 3 = ISO13485"
-        required: true
-        default: "2"
-      excel_path:
-        description: "Path in repo (ex: data/Questionnaires audits iso 9001.xlsx)"
-        required: true
-        default: "data/Questionnaires audits iso 9001.xlsx"
-      dry_run:
-        description: "1 = dry-run, 0 = real import"
-        required: true
-        default: "1"
-
-jobs:
-  import-iso:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas openpyxl mysql-connector-python
-
-      - name: Validate inputs
-        run: |
-          echo "referential_id=${{ github.event.inputs.referential_id }}"
-          echo "excel_path=${{ github.event.inputs.excel_path }}"
-          echo "dry_run=${{ github.event.inputs.dry_run }}"
-
-          if [ "${{ github.event.inputs.referential_id }}" != "2" ] && [ "${{ github.event.inputs.referential_id }}" != "3" ]; then
-            echo "ERROR: referential_id must be 2 or 3"
-            exit 1
-          fi
-
-          if [ ! -f "${{ github.event.inputs.excel_path }}" ]; then
-            echo "ERROR: excel file not found: ${{ github.event.inputs.excel_path }}"
-            ls -la data || true
-            exit 1
-          fi
-
-      - name: Resolve DB env (DATABASE_URL OR DB_* OR MYSQL*)
-        env:
-          DATABASE_URL_RAW: ${{ secrets.DATABASE_URL }}
-          DB_HOST_RAW: ${{ secrets.DB_HOST }}
-          DB_PORT_RAW: ${{ secrets.DB_PORT }}
-          DB_USER_RAW: ${{ secrets.DB_USER }}
-          DB_PASSWORD_RAW: ${{ secrets.DB_PASSWORD }}
-          DB_NAME_RAW: ${{ secrets.DB_NAME }}
-          MYSQLHOST_RAW: ${{ secrets.MYSQLHOST }}
-          MYSQLPORT_RAW: ${{ secrets.MYSQLPORT }}
-          MYSQLUSER_RAW: ${{ secrets.MYSQLUSER }}
-          MYSQLPASSWORD_RAW: ${{ secrets.MYSQLPASSWORD }}
-          MYSQLDATABASE_RAW: ${{ secrets.MYSQLDATABASE }}
-        run: |
-          set -euo pipefail
-
-          # Prefer DATABASE_URL if present and non-empty
-          if [ -n "${DATABASE_URL_RAW:-}" ]; then
-            python - <<'PY'
-import os
-from urllib.parse import urlparse, unquote
-
-url = os.environ["DATABASE_URL_RAW"].strip()
-p = urlparse(url)
-
-host = p.hostname or ""
-port = str(p.port or 3306)
-user = unquote(p.username or "")
-password = unquote(p.password or "")
-db = (p.path or "").lstrip("/")
-
-if not host or not user or not db:
-    raise SystemExit("ERROR: DATABASE_URL invalid (need host/user/dbname)")
-
-with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-    f.write(f"DB_HOST={host}\n")
-    f.write(f"DB_PORT={port}\n")
-    f.write(f"DB_USER={user}\n")
-    f.write(f"DB_PASSWORD={password}\n")
-    f.write(f"DB_NAME={db}\n")
-PY
-          else
-            DB_HOST_VAL="${DB_HOST_RAW:-${MYSQLHOST_RAW:-}}"
-            DB_PORT_VAL="${DB_PORT_RAW:-${MYSQLPORT_RAW:-3306}}"
-            DB_USER_VAL="${DB_USER_RAW:-${MYSQLUSER_RAW:-}}"
-            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-${MYSQLPASSWORD_RAW:-}}"
-            DB_NAME_VAL="${DB_NAME_RAW:-${MYSQLDATABASE_RAW:-}}"
-
-            # Important: if secret exists but empty string, fallback to 3306
-            if [ -z "${DB_PORT_VAL}" ]; then DB_PORT_VAL="3306"; fi
-
-            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: host secret missing (DB_HOST or MYSQLHOST or DATABASE_URL)"; exit 1; }
-            [ -n "$DB_USER_VAL" ] || { echo "ERROR: user secret missing (DB_USER or MYSQLUSER or DATABASE_URL)"; exit 1; }
-            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: db secret missing (DB_NAME or MYSQLDATABASE or DATABASE_URL)"; exit 1; }
-
-            {
-              echo "DB_HOST=$DB_HOST_VAL"
-              echo "DB_PORT=$DB_PORT_VAL"
-              echo "DB_USER=$DB_USER_VAL"
-              echo "DB_PASSWORD=$DB_PASSWORD_VAL"
-              echo "DB_NAME=$DB_NAME_VAL"
-            } >> "$GITHUB_ENV"
-          fi
-
-      - name: Debug resolved DB env (masked)
-        run: |
-          echo "DB_HOST is set? -> $([ -n "${DB_HOST:-}" ] && echo yes || echo no)"
-          echo "DB_PORT='${DB_PORT:-<empty>}'"
-          echo "DB_USER is set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
-          echo "DB_NAME is set? -> $([ -n "${DB_NAME:-}" ] && echo yes || echo no)"
-
-      - name: Verify script path + runtime
-        run: |
-          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
-            TARGET="scripts/import_iso_questions_from_excel.py"
-          elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
-            TARGET="backend/scripts/import_iso_questions_from_excel.py"
-          else
-            echo "ERROR: import_iso_questions_from_excel.py not found"
-            exit 1
-          fi
-
-          echo "Using script: $TARGET"
-          python --version
-          head -n 50 "$TARGET"
-
-      - name: Run ISO import script
-        env:
-          EXCEL_PATH: ${{ github.event.inputs.excel_path }}
-          DEFAULT_REFERENTIAL_ID: ${{ github.event.inputs.referential_id }}
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-          DB_NAME: ${{ env.DB_NAME }}
-        run: |
-          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
-            python scripts/import_iso_questions_from_excel.py
-          else
-            python backend/scripts/import_iso_questions_from_excel.py
-          fi
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/.github/workflows/import-iso-questions.yml b/.github/workflows/import-iso-questions.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..1858c245c236117d2b60b963ab9e8f37c4869d8c
+--- /dev/null
++++ b/.github/workflows/import-iso-questions.yml
+@@ -0,0 +1,156 @@
++name: Import Questions from Excel (ISO)
++
++on:
++  workflow_dispatch:
++    inputs:
++      referential_id:
++        description: "2 = ISO9001, 3 = ISO13485"
++        required: true
++        default: "2"
++      excel_path:
++        description: "Path in repo (ex: data/Questionnaires audits iso 9001.xlsx)"
++        required: true
++        default: "data/Questionnaires audits iso 9001.xlsx"
++      dry_run:
++        description: "1 = dry-run, 0 = real import"
++        required: true
++        default: "1"
++
++jobs:
++  import-iso:
++    runs-on: ubuntu-latest
++    timeout-minutes: 20
++
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.11"
++
++      - name: Install dependencies
++        run: |
++          python -m pip install --upgrade pip
++          pip install pandas openpyxl mysql-connector-python
++
++      - name: Validate inputs
++        run: |
++          echo "referential_id=${{ github.event.inputs.referential_id }}"
++          echo "excel_path=${{ github.event.inputs.excel_path }}"
++          echo "dry_run=${{ github.event.inputs.dry_run }}"
++
++          if [ "${{ github.event.inputs.referential_id }}" != "2" ] && [ "${{ github.event.inputs.referential_id }}" != "3" ]; then
++            echo "ERROR: referential_id must be 2 or 3"
++            exit 1
++          fi
++
++          if [ ! -f "${{ github.event.inputs.excel_path }}" ]; then
++            echo "ERROR: excel file not found: ${{ github.event.inputs.excel_path }}"
++            ls -la data || true
++            exit 1
++          fi
++
++      - name: Resolve DB env (DATABASE_URL OR DB_* OR MYSQL*)
++        env:
++          DATABASE_URL_RAW: ${{ secrets.DATABASE_URL }}
++          DB_HOST_RAW: ${{ secrets.DB_HOST }}
++          DB_PORT_RAW: ${{ secrets.DB_PORT }}
++          DB_USER_RAW: ${{ secrets.DB_USER }}
++          DB_PASSWORD_RAW: ${{ secrets.DB_PASSWORD }}
++          DB_NAME_RAW: ${{ secrets.DB_NAME }}
++          MYSQLHOST_RAW: ${{ secrets.MYSQLHOST }}
++          MYSQLPORT_RAW: ${{ secrets.MYSQLPORT }}
++          MYSQLUSER_RAW: ${{ secrets.MYSQLUSER }}
++          MYSQLPASSWORD_RAW: ${{ secrets.MYSQLPASSWORD }}
++          MYSQLDATABASE_RAW: ${{ secrets.MYSQLDATABASE }}
++        run: |
++          set -euo pipefail
++
++          # Prefer DATABASE_URL if present and non-empty
++          if [ -n "${DATABASE_URL_RAW:-}" ]; then
++          python - <<'PY'
++          import os
++          from urllib.parse import unquote, urlparse
++
++          url = os.environ["DATABASE_URL_RAW"].strip()
++          p = urlparse(url)
++
++          host = p.hostname or ""
++          port = str(p.port or 3306)
++          user = unquote(p.username or "")
++          password = unquote(p.password or "")
++          db = (p.path or "").lstrip("/")
++
++          if not host or not user or not db:
++              raise SystemExit("ERROR: DATABASE_URL invalid (need host/user/dbname)")
++
++          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
++              f.write(f"DB_HOST={host}\\n")
++              f.write(f"DB_PORT={port}\\n")
++              f.write(f"DB_USER={user}\\n")
++              f.write(f"DB_PASSWORD={password}\\n")
++              f.write(f"DB_NAME={db}\\n")
++          PY
++          else
++            DB_HOST_VAL="${DB_HOST_RAW:-${MYSQLHOST_RAW:-}}"
++            DB_PORT_VAL="${DB_PORT_RAW:-${MYSQLPORT_RAW:-3306}}"
++            DB_USER_VAL="${DB_USER_RAW:-${MYSQLUSER_RAW:-}}"
++            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-${MYSQLPASSWORD_RAW:-}}"
++            DB_NAME_VAL="${DB_NAME_RAW:-${MYSQLDATABASE_RAW:-}}"
++
++            # Important: if secret exists but empty string, fallback to 3306
++            if [ -z "${DB_PORT_VAL}" ]; then DB_PORT_VAL="3306"; fi
++
++            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: host secret missing (DB_HOST or MYSQLHOST or DATABASE_URL)"; exit 1; }
++            [ -n "$DB_USER_VAL" ] || { echo "ERROR: user secret missing (DB_USER or MYSQLUSER or DATABASE_URL)"; exit 1; }
++            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: db secret missing (DB_NAME or MYSQLDATABASE or DATABASE_URL)"; exit 1; }
++
++            {
++              echo "DB_HOST=$DB_HOST_VAL"
++              echo "DB_PORT=$DB_PORT_VAL"
++              echo "DB_USER=$DB_USER_VAL"
++              echo "DB_PASSWORD=$DB_PASSWORD_VAL"
++              echo "DB_NAME=$DB_NAME_VAL"
++            } >> "$GITHUB_ENV"
++          fi
++
++      - name: Debug resolved DB env (masked)
++        run: |
++          echo "DB_HOST is set? -> $([ -n "${DB_HOST:-}" ] && echo yes || echo no)"
++          echo "DB_PORT='${DB_PORT:-<empty>}'"
++          echo "DB_USER is set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
++          echo "DB_NAME is set? -> $([ -n "${DB_NAME:-}" ] && echo yes || echo no)"
++
++      - name: Verify script path + runtime
++        run: |
++          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
++            TARGET="scripts/import_iso_questions_from_excel.py"
++          elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
++            TARGET="backend/scripts/import_iso_questions_from_excel.py"
++          else
++            echo "ERROR: import_iso_questions_from_excel.py not found"
++            exit 1
++          fi
++
++          echo "Using script: $TARGET"
++          python --version
++          head -n 50 "$TARGET"
++
++      - name: Run ISO import script
++        env:
++          EXCEL_PATH: ${{ github.event.inputs.excel_path }}
++          DEFAULT_REFERENTIAL_ID: ${{ github.event.inputs.referential_id }}
++          DRY_RUN: ${{ github.event.inputs.dry_run }}
++          DB_HOST: ${{ env.DB_HOST }}
++          DB_PORT: ${{ env.DB_PORT }}
++          DB_USER: ${{ env.DB_USER }}
++          DB_PASSWORD: ${{ env.DB_PASSWORD }}
++          DB_NAME: ${{ env.DB_NAME }}
++        run: |
++          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
++            python scripts/import_iso_questions_from_excel.py
++          else
++            python backend/scripts/import_iso_questions_from_excel.py
++          fi
+ 
+EOF
+)
