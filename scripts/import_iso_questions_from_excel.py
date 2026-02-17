@@ -150,10 +150,23 @@ def resolve_sheet_value(row: pd.Series, aliases: List[str]) -> Optional[str]:
     return None
 
 
+def _pick_field(row: Optional[Dict[str, Any]], *names: str) -> Optional[Any]:
+    """Pick a field from a dict row, case-insensitive, supporting different driver key casing."""
+    if not row:
+        return None
+    lower = {str(k).lower(): k for k in row.keys()}
+    for name in names:
+        k = lower.get(name.lower())
+        if k is not None:
+            return row.get(k)
+    return None
+
+
 def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
+    # Use explicit aliases to avoid driver differences (TABLE_NAME vs table_name)
     cur.execute(
         """
-        SELECT table_name
+        SELECT table_name AS table_name
         FROM information_schema.tables
         WHERE table_schema = %s
           AND table_name IN ('processus', 'processes')
@@ -163,21 +176,31 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
         (db_name,),
     )
     row = cur.fetchone()
-    if not row:
+
+    table_name = _pick_field(row, "table_name", "TABLE_NAME")
+    if not table_name:
         raise SystemExit("Table process manquante (attendu: processus ou processes)")
-    return row["table_name"]
+    return str(table_name)
 
 
 def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
+    # Alias column name to a stable key
     cur.execute(
         """
-        SELECT COLUMN_NAME
+        SELECT COLUMN_NAME AS column_name
         FROM information_schema.columns
         WHERE table_schema = %s AND table_name = 'questions'
         """,
         (db_name,),
     )
-    q_columns = {r["COLUMN_NAME"] for r in cur.fetchall()}
+    rows = cur.fetchall()
+    q_columns: set[str] = set()
+
+    for r in rows:
+        col = _pick_field(r, "column_name", "COLUMN_NAME")
+        if col:
+            q_columns.add(str(col))
+
     if not q_columns:
         raise SystemExit("Table 'questions' introuvable dans le schéma cible")
 
@@ -278,7 +301,6 @@ def main() -> None:
         before = count_questions(cur, q_cols, referential_id)
         print(f"Questions already in DB for referential {referential_id}: {before}")
         print(f"Process table detected: {process_table}")
-        print(f"Questions columns mapping: {q_cols}")
 
         if not dry_run:
             purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
@@ -351,7 +373,7 @@ def main() -> None:
             if "annexe" in q_cols:
                 values[q_cols["annexe"]] = annexe
             if "economic_role" in q_cols:
-                values[q_cols["economic_role"]] = None  # ISO -> no economic roles
+                values[q_cols["economic_role"]] = None
             if "applicable" in q_cols:
                 values[q_cols["applicable"]] = json.dumps([process_name], ensure_ascii=False)
 
