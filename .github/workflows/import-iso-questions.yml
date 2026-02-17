@@ -52,23 +52,29 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve DB env (DATABASE_URL or DB_*)
+      - name: Resolve DB env (DATABASE_URL OR DB_* OR MYSQL*)
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_RAW: ${{ secrets.DATABASE_URL }}
           DB_HOST_RAW: ${{ secrets.DB_HOST }}
           DB_PORT_RAW: ${{ secrets.DB_PORT }}
           DB_USER_RAW: ${{ secrets.DB_USER }}
           DB_PASSWORD_RAW: ${{ secrets.DB_PASSWORD }}
           DB_NAME_RAW: ${{ secrets.DB_NAME }}
+          MYSQLHOST_RAW: ${{ secrets.MYSQLHOST }}
+          MYSQLPORT_RAW: ${{ secrets.MYSQLPORT }}
+          MYSQLUSER_RAW: ${{ secrets.MYSQLUSER }}
+          MYSQLPASSWORD_RAW: ${{ secrets.MYSQLPASSWORD }}
+          MYSQLDATABASE_RAW: ${{ secrets.MYSQLDATABASE }}
         run: |
           set -euo pipefail
 
-          if [ -n "${DATABASE_URL:-}" ]; then
+          # Prefer DATABASE_URL if present and non-empty
+          if [ -n "${DATABASE_URL_RAW:-}" ]; then
             python - <<'PY'
 import os
 from urllib.parse import urlparse, unquote
 
-url = os.environ["DATABASE_URL"].strip()
+url = os.environ["DATABASE_URL_RAW"].strip()
 p = urlparse(url)
 
 host = p.hostname or ""
@@ -88,15 +94,18 @@ with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
     f.write(f"DB_NAME={db}\n")
 PY
           else
-            DB_HOST_VAL="${DB_HOST_RAW:-}"
-            DB_PORT_VAL="${DB_PORT_RAW:-3306}"
-            DB_USER_VAL="${DB_USER_RAW:-}"
-            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-}"
-            DB_NAME_VAL="${DB_NAME_RAW:-}"
+            DB_HOST_VAL="${DB_HOST_RAW:-${MYSQLHOST_RAW:-}}"
+            DB_PORT_VAL="${DB_PORT_RAW:-${MYSQLPORT_RAW:-3306}}"
+            DB_USER_VAL="${DB_USER_RAW:-${MYSQLUSER_RAW:-}}"
+            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-${MYSQLPASSWORD_RAW:-}}"
+            DB_NAME_VAL="${DB_NAME_RAW:-${MYSQLDATABASE_RAW:-}}"
 
-            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: DB_HOST missing (or set DATABASE_URL)"; exit 1; }
-            [ -n "$DB_USER_VAL" ] || { echo "ERROR: DB_USER missing (or set DATABASE_URL)"; exit 1; }
-            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: DB_NAME missing (or set DATABASE_URL)"; exit 1; }
+            # Important: if secret exists but empty string, fallback to 3306
+            if [ -z "${DB_PORT_VAL}" ]; then DB_PORT_VAL="3306"; fi
+
+            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: host secret missing (DB_HOST or MYSQLHOST or DATABASE_URL)"; exit 1; }
+            [ -n "$DB_USER_VAL" ] || { echo "ERROR: user secret missing (DB_USER or MYSQLUSER or DATABASE_URL)"; exit 1; }
+            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: db secret missing (DB_NAME or MYSQLDATABASE or DATABASE_URL)"; exit 1; }
 
             {
               echo "DB_HOST=$DB_HOST_VAL"
@@ -106,6 +115,28 @@ PY
               echo "DB_NAME=$DB_NAME_VAL"
             } >> "$GITHUB_ENV"
           fi
+
+      - name: Debug resolved DB env (masked)
+        run: |
+          echo "DB_HOST is set? -> $([ -n "${DB_HOST:-}" ] && echo yes || echo no)"
+          echo "DB_PORT='${DB_PORT:-<empty>}'"
+          echo "DB_USER is set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
+          echo "DB_NAME is set? -> $([ -n "${DB_NAME:-}" ] && echo yes || echo no)"
+
+      - name: Verify script path + runtime
+        run: |
+          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
+            TARGET="scripts/import_iso_questions_from_excel.py"
+          elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
+            TARGET="backend/scripts/import_iso_questions_from_excel.py"
+          else
+            echo "ERROR: import_iso_questions_from_excel.py not found"
+            exit 1
+          fi
+
+          echo "Using script: $TARGET"
+          python --version
+          head -n 50 "$TARGET"
 
       - name: Run ISO import script
         env:
@@ -120,9 +151,6 @@ PY
         run: |
           if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
             python scripts/import_iso_questions_from_excel.py
-          elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
-            python backend/scripts/import_iso_questions_from_excel.py
           else
-            echo "ERROR: import_iso_questions_from_excel.py not found"
-            exit 1
+            python backend/scripts/import_iso_questions_from_excel.py
           fi
