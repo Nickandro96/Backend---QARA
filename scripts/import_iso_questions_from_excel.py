@@ -2,20 +2,14 @@
 """
 ISO questions importer (ISO 9001 / ISO 13485) for MySQL.
 
-Key goals:
-- Header starts at row index 2 (header=2)
-- Purge/reimport ONLY the targeted referential
-- Resolve/create process from "Processus concerné"
-- Stable questionKey = "q_" + md5(referentialId|article|processId|questionText)
-- Compatible with snake_case and camelCase DB schemas
-- Handles process table WITH or WITHOUT "slug"
-- Handles economicRole when DB column is NOT NULL (uses 'N/A' fallback)
-
-Env variables:
-- EXCEL_PATH (required)
-- DEFAULT_REFERENTIAL_ID (2 or 3)
-- DRY_RUN (0/1)
-- DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+Robust features:
+- header=2
+- purge per referential
+- auto-create missing processes
+- questionKey = q_ + md5(...)
+- supports process table with/without slug
+- supports economicRole NOT NULL (uses 'N/A')
+- ensures referentialId exists in referentials (avoids FK failure)
 """
 
 from __future__ import annotations
@@ -161,6 +155,35 @@ def _pick_field(row: Optional[Dict[str, Any]], *names: str) -> Optional[Any]:
     return None
 
 
+def table_exists(cur: MySQLCursorDict, db_name: str, table: str) -> bool:
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM information_schema.tables
+        WHERE table_schema=%s AND table_name=%s
+        """,
+        (db_name, table),
+    )
+    row = cur.fetchone()
+    return bool(row and int(_pick_field(row, "c", "C", "count", "COUNT") or 0) > 0)
+
+
+def resolve_table_columns(cur: MySQLCursorDict, db_name: str, table_name: str) -> List[Dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT
+          COLUMN_NAME AS column_name,
+          IS_NULLABLE AS is_nullable,
+          DATA_TYPE AS data_type,
+          COLUMN_TYPE AS column_type
+        FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = %s
+        """,
+        (db_name, table_name),
+    )
+    return cur.fetchall()
+
+
 def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
     cur.execute(
         """
@@ -178,22 +201,6 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
     if not table_name:
         raise SystemExit("Table process manquante (attendu: processus ou processes)")
     return str(table_name)
-
-
-def resolve_table_columns(cur: MySQLCursorDict, db_name: str, table_name: str) -> List[Dict[str, Any]]:
-    cur.execute(
-        """
-        SELECT
-          COLUMN_NAME AS column_name,
-          IS_NULLABLE AS is_nullable,
-          DATA_TYPE AS data_type,
-          COLUMN_TYPE AS column_type
-        FROM information_schema.columns
-        WHERE table_schema = %s AND table_name = %s
-        """,
-        (db_name, table_name),
-    )
-    return cur.fetchall()
 
 
 def resolve_process_columns(cur: MySQLCursorDict, db_name: str, process_table: str) -> set[str]:
@@ -262,6 +269,78 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Tuple[Dict[
     return ({k: v for k, v in columns.items() if v is not None}, meta)
 
 
+def ensure_referential_exists(
+    *,
+    cur: MySQLCursorDict,
+    db_name: str,
+    referential_id: int,
+    dry_run: bool,
+) -> None:
+    if not table_exists(cur, db_name, "referentials"):
+        raise SystemExit("Table 'referentials' introuvable (FK referentialId -> referentials.id).")
+
+    cur.execute("SELECT id FROM referentials WHERE id = %s", (referential_id,))
+    row = cur.fetchone()
+    if row:
+        return
+
+    # Not found -> try to create it (best effort, adapt to columns)
+    ref_name = "ISO 9001" if referential_id == 2 else "ISO 13485"
+    ref_code = "ISO9001" if referential_id == 2 else "ISO13485"
+
+    cols_info = resolve_table_columns(cur, db_name, "referentials")
+    cols = {str(_pick_field(r, "column_name", "COLUMN_NAME")) for r in cols_info if _pick_field(r, "column_name", "COLUMN_NAME")}
+    cols_lower = {c.lower() for c in cols}
+
+    if dry_run:
+        print(f"[DRY_RUN] Would ensure referential exists: id={referential_id}, name={ref_name}, code={ref_code}")
+        return
+
+    # Build insert with available columns
+    insert_cols: List[str] = []
+    insert_vals: List[Any] = []
+
+    # We prefer forcing the id to match FK expectations
+    if "id" in cols_lower:
+        insert_cols.append("id")
+        insert_vals.append(referential_id)
+    else:
+        raise SystemExit("Table 'referentials' has no 'id' column? Cannot satisfy FK.")
+
+    if "name" in cols_lower:
+        insert_cols.append("name")
+        insert_vals.append(ref_name)
+
+    if "code" in cols_lower:
+        insert_cols.append("code")
+        insert_vals.append(ref_code)
+
+    # Common timestamp fields
+    if "createdat" in cols_lower:
+        insert_cols.append("createdAt")
+        insert_vals.append(None)
+    if "updatedat" in cols_lower:
+        insert_cols.append("updatedAt")
+        insert_vals.append(None)
+
+    if len(insert_cols) < 1:
+        raise SystemExit(f"Cannot build INSERT for referentials; detected cols: {sorted(cols)}")
+
+    cols_sql = ", ".join(quote_identifier(c) for c in insert_cols)
+    placeholders = ", ".join(["%s"] * len(insert_cols))
+
+    sql = f"INSERT INTO referentials ({cols_sql}) VALUES ({placeholders})"
+    try:
+        cur.execute(sql, tuple(insert_vals))
+        print(f"Created referential: id={referential_id} name='{ref_name}' (cols used={insert_cols})")
+    except Exception as e:
+        raise SystemExit(
+            "Failed to create referential automatically. "
+            f"Please create row in 'referentials' with id={referential_id} manually. "
+            f"Detected columns: {sorted(cols)}. Error: {e}"
+        )
+
+
 def load_process_map(cur: MySQLCursorDict, process_table: str) -> Dict[str, int]:
     cur.execute(f"SELECT id, name FROM {quote_identifier(process_table)}")
     return {str(r["name"]).strip().lower(): int(r["id"]) for r in cur.fetchall()}
@@ -307,7 +386,7 @@ def count_questions(cur: MySQLCursorDict, q_cols: Dict[str, str], referential_id
     sql = f"SELECT COUNT(*) AS c FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
     cur.execute(sql, (referential_id,))
     row = cur.fetchone()
-    return int(row["c"]) if row and "c" in row else 0
+    return int(_pick_field(row, "c", "C") or 0)
 
 
 def main() -> None:
@@ -327,6 +406,9 @@ def main() -> None:
         conn = mysql.connector.connect(**db_config)
         cur = conn.cursor(dictionary=True)
 
+        # Ensure FK referential exists
+        ensure_referential_exists(cur=cur, db_name=db_config["database"], referential_id=referential_id, dry_run=dry_run)
+
         process_table = resolve_process_table(cur, db_config["database"])
         process_columns = resolve_process_columns(cur, db_config["database"], process_table)
         q_cols, q_meta = resolve_questions_columns(cur, db_config["database"])
@@ -336,11 +418,10 @@ def main() -> None:
         print(f"Questions already in DB for referential {referential_id}: {before}")
         print(f"Process table detected: {process_table} (cols: {sorted(process_columns)})")
 
-        # economicRole nullable?
         economic_role_col = q_cols.get("economic_role")
         economic_role_is_nullable = None
         if economic_role_col and economic_role_col in q_meta:
-            economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]  # 'YES' / 'NO'
+            economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]  # YES/NO
         print(f"EconomicRole column: {economic_role_col} (nullable={economic_role_is_nullable})")
 
         if not dry_run:
@@ -415,12 +496,8 @@ def main() -> None:
             if "annexe" in q_cols:
                 values[q_cols["annexe"]] = annexe
 
-            # IMPORTANT: economicRole handling
             if economic_role_col:
-                if economic_role_is_nullable == "NO":
-                    values[economic_role_col] = "N/A"
-                else:
-                    values[economic_role_col] = None
+                values[economic_role_col] = "N/A" if economic_role_is_nullable == "NO" else None
 
             if "applicable" in q_cols:
                 values[q_cols["applicable"]] = json.dumps([process_name], ensure_ascii=False)
