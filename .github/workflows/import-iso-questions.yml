@@ -48,39 +48,79 @@ jobs:
 
           if [ ! -f "${{ github.event.inputs.excel_path }}" ]; then
             echo "ERROR: excel file not found: ${{ github.event.inputs.excel_path }}"
-            echo "Repository tree (data):"
             ls -la data || true
             exit 1
           fi
 
-      - name: Validate DB secrets presence
+      - name: Resolve DB env (DATABASE_URL or DB_* secrets)
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: ${{ secrets.DB_NAME }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_HOST_RAW: ${{ secrets.DB_HOST }}
+          DB_PORT_RAW: ${{ secrets.DB_PORT }}
+          DB_USER_RAW: ${{ secrets.DB_USER }}
+          DB_PASSWORD_RAW: ${{ secrets.DB_PASSWORD }}
+          DB_NAME_RAW: ${{ secrets.DB_NAME }}
         run: |
-          [ -n "$DB_HOST" ] || { echo "ERROR: DB_HOST secret missing"; exit 1; }
-          [ -n "$DB_USER" ] || { echo "ERROR: DB_USER secret missing"; exit 1; }
-          [ -n "$DB_NAME" ] || { echo "ERROR: DB_NAME secret missing"; exit 1; }
-          # DB_PASSWORD can be empty depending on provider config
-          echo "DB secrets basic validation OK"
+          set -euo pipefail
+
+          # 1) If DATABASE_URL exists, parse it
+          if [ -n "${DATABASE_URL:-}" ]; then
+            python - <<'PY'
+import os
+from urllib.parse import urlparse, unquote
+
+url = os.environ["DATABASE_URL"].strip()
+p = urlparse(url)
+
+host = p.hostname or ""
+port = str(p.port or 3306)
+user = unquote(p.username or "")
+password = unquote(p.password or "")
+db = (p.path or "").lstrip("/")
+
+if not host or not user or not db:
+    raise SystemExit("ERROR: DATABASE_URL is present but missing host/user/db")
+
+with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+    f.write(f"DB_HOST={host}\n")
+    f.write(f"DB_PORT={port}\n")
+    f.write(f"DB_USER={user}\n")
+    f.write(f"DB_PASSWORD={password}\n")
+    f.write(f"DB_NAME={db}\n")
+PY
+          else
+            # 2) Fallback to individual secrets
+            DB_HOST_VAL="${DB_HOST_RAW:-}"
+            DB_PORT_VAL="${DB_PORT_RAW:-3306}"
+            DB_USER_VAL="${DB_USER_RAW:-}"
+            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-}"
+            DB_NAME_VAL="${DB_NAME_RAW:-}"
+
+            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: DB_HOST missing (or provide DATABASE_URL)"; exit 1; }
+            [ -n "$DB_USER_VAL" ] || { echo "ERROR: DB_USER missing (or provide DATABASE_URL)"; exit 1; }
+            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: DB_NAME missing (or provide DATABASE_URL)"; exit 1; }
+
+            {
+              echo "DB_HOST=$DB_HOST_VAL"
+              echo "DB_PORT=$DB_PORT_VAL"
+              echo "DB_USER=$DB_USER_VAL"
+              echo "DB_PASSWORD=$DB_PASSWORD_VAL"
+              echo "DB_NAME=$DB_NAME_VAL"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Run ISO import script
         env:
           EXCEL_PATH: ${{ github.event.inputs.excel_path }}
           DEFAULT_REFERENTIAL_ID: ${{ github.event.inputs.referential_id }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_NAME: ${{ env.DB_NAME }}
         run: |
-          # Avoid crash when DB_PORT secret exists but is empty
-          export DB_PORT="${DB_PORT:-3306}"
-
+          # Safe path resolution (repo root variants)
           if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
             python scripts/import_iso_questions_from_excel.py
           elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
