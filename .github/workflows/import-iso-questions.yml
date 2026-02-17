@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve DB env (DATABASE_URL or DB_* secrets)
+      - name: Resolve DB env (DATABASE_URL or DB_*)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DB_HOST_RAW: ${{ secrets.DB_HOST }}
@@ -63,7 +63,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 1) If DATABASE_URL exists, parse it
           if [ -n "${DATABASE_URL:-}" ]; then
             python - <<'PY'
 import os
@@ -79,7 +78,7 @@ password = unquote(p.password or "")
 db = (p.path or "").lstrip("/")
 
 if not host or not user or not db:
-    raise SystemExit("ERROR: DATABASE_URL is present but missing host/user/db")
+    raise SystemExit("ERROR: DATABASE_URL invalid (need host/user/dbname)")
 
 with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
     f.write(f"DB_HOST={host}\n")
@@ -89,16 +88,15 @@ with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
     f.write(f"DB_NAME={db}\n")
 PY
           else
-            # 2) Fallback to individual secrets
             DB_HOST_VAL="${DB_HOST_RAW:-}"
             DB_PORT_VAL="${DB_PORT_RAW:-3306}"
             DB_USER_VAL="${DB_USER_RAW:-}"
             DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-}"
             DB_NAME_VAL="${DB_NAME_RAW:-}"
 
-            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: DB_HOST missing (or provide DATABASE_URL)"; exit 1; }
-            [ -n "$DB_USER_VAL" ] || { echo "ERROR: DB_USER missing (or provide DATABASE_URL)"; exit 1; }
-            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: DB_NAME missing (or provide DATABASE_URL)"; exit 1; }
+            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: DB_HOST missing (or set DATABASE_URL)"; exit 1; }
+            [ -n "$DB_USER_VAL" ] || { echo "ERROR: DB_USER missing (or set DATABASE_URL)"; exit 1; }
+            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: DB_NAME missing (or set DATABASE_URL)"; exit 1; }
 
             {
               echo "DB_HOST=$DB_HOST_VAL"
@@ -120,7 +118,6 @@ PY
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
           DB_NAME: ${{ env.DB_NAME }}
         run: |
-          # Safe path resolution (repo root variants)
           if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
             python scripts/import_iso_questions_from_excel.py
           elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
