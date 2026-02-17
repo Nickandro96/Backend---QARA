@@ -9,9 +9,22 @@ on:
         default: "0"
 
 jobs:
-  import-iso9001:
+  import_iso9001:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    env:
+      # Excel + referential
+      EXCEL_PATH: "data/Questionnaires audits iso 9001.xlsx"
+      DEFAULT_REFERENTIAL_ID: "2"
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+
+      # DB secrets (prefer DB_* ; fallback to MYSQL*)
+      DB_HOST: ${{ secrets.DB_HOST != '' && secrets.DB_HOST || secrets.MYSQLHOST }}
+      DB_PORT: ${{ secrets.DB_PORT != '' && secrets.DB_PORT || secrets.MYSQLPORT }}
+      DB_USER: ${{ secrets.DB_USER != '' && secrets.DB_USER || secrets.MYSQLUSER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD != '' && secrets.DB_PASSWORD || secrets.MYSQLPASSWORD }}
+      DB_NAME: ${{ secrets.DB_NAME != '' && secrets.DB_NAME || secrets.MYSQLDATABASE }}
 
     steps:
       - name: Checkout
@@ -27,73 +40,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas openpyxl mysql-connector-python
 
-      - name: Resolve DB env (DATABASE_URL OR DB_* OR MYSQL*)
-        env:
-          DATABASE_URL_RAW: ${{ secrets.DATABASE_URL }}
-          DB_HOST_RAW: ${{ secrets.DB_HOST }}
-          DB_PORT_RAW: ${{ secrets.DB_PORT }}
-          DB_USER_RAW: ${{ secrets.DB_USER }}
-          DB_PASSWORD_RAW: ${{ secrets.DB_PASSWORD }}
-          DB_NAME_RAW: ${{ secrets.DB_NAME }}
-          MYSQLHOST_RAW: ${{ secrets.MYSQLHOST }}
-          MYSQLPORT_RAW: ${{ secrets.MYSQLPORT }}
-          MYSQLUSER_RAW: ${{ secrets.MYSQLUSER }}
-          MYSQLPASSWORD_RAW: ${{ secrets.MYSQLPASSWORD }}
-          MYSQLDATABASE_RAW: ${{ secrets.MYSQLDATABASE }}
+      - name: Debug (DB vars presence)
         run: |
-          set -euo pipefail
-
-          if [ -n "${DATABASE_URL_RAW:-}" ]; then
-            python -c "import os,sys; from urllib.parse import unquote,urlparse; \
-url=os.environ.get('DATABASE_URL_RAW','').strip(); p=urlparse(url); \
-host=p.hostname or ''; port=str(p.port or 3306); user=unquote(p.username or ''); pwd=unquote(p.password or ''); \
-db=(p.path or '').lstrip('/'); \
-(host and user and db) or sys.exit('ERROR: DATABASE_URL invalid (need host/user/dbname)'); \
-gh=os.environ['GITHUB_ENV']; \
-open(gh,'a',encoding='utf-8').write(f'DB_HOST={host}\\nDB_PORT={port}\\nDB_USER={user}\\nDB_PASSWORD={pwd}\\nDB_NAME={db}\\n')"
-          else
-            DB_HOST_VAL="${DB_HOST_RAW:-${MYSQLHOST_RAW:-}}"
-            DB_PORT_VAL="${DB_PORT_RAW:-${MYSQLPORT_RAW:-3306}}"
-            DB_USER_VAL="${DB_USER_RAW:-${MYSQLUSER_RAW:-}}"
-            DB_PASSWORD_VAL="${DB_PASSWORD_RAW:-${MYSQLPASSWORD_RAW:-}}"
-            DB_NAME_VAL="${DB_NAME_RAW:-${MYSQLDATABASE_RAW:-}}"
-
-            if [ -z "${DB_PORT_VAL}" ]; then DB_PORT_VAL="3306"; fi
-
-            [ -n "$DB_HOST_VAL" ] || { echo "ERROR: host secret missing (DB_HOST or MYSQLHOST or DATABASE_URL)"; exit 1; }
-            [ -n "$DB_USER_VAL" ] || { echo "ERROR: user secret missing (DB_USER or MYSQLUSER or DATABASE_URL)"; exit 1; }
-            [ -n "$DB_NAME_VAL" ] || { echo "ERROR: db secret missing (DB_NAME or MYSQLDATABASE or DATABASE_URL)"; exit 1; }
-
-            {
-              echo "DB_HOST=$DB_HOST_VAL"
-              echo "DB_PORT=$DB_PORT_VAL"
-              echo "DB_USER=$DB_USER_VAL"
-              echo "DB_PASSWORD=$DB_PASSWORD_VAL"
-              echo "DB_NAME=$DB_NAME_VAL"
-            } >> "$GITHUB_ENV"
-          fi
-
-      - name: Debug resolved DB env (masked)
-        run: |
+          echo "DRY_RUN=${DRY_RUN}"
+          echo "EXCEL_PATH=${EXCEL_PATH}"
+          echo "DEFAULT_REFERENTIAL_ID=${DEFAULT_REFERENTIAL_ID}"
           echo "DB_HOST set? -> $([ -n "${DB_HOST:-}" ] && echo yes || echo no)"
           echo "DB_PORT='${DB_PORT:-<empty>}'"
           echo "DB_USER set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
           echo "DB_NAME set? -> $([ -n "${DB_NAME:-}" ] && echo yes || echo no)"
-          echo "DRY_RUN='${{ github.event.inputs.dry_run }}'"
+          if [ -z "${DB_HOST:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_NAME:-}" ]; then
+            echo "ERROR: Missing DB secrets. Set DB_HOST/DB_USER/DB_NAME (or MYSQLHOST/MYSQLUSER/MYSQLDATABASE)."
+            exit 1
+          fi
 
       - name: Validate Excel exists
         run: |
-          test -f "data/Questionnaires audits iso 9001.xlsx" || (echo "Missing file: data/Questionnaires audits iso 9001.xlsx" && ls -la data && exit 1)
+          test -f "${EXCEL_PATH}" || (echo "Missing file: ${EXCEL_PATH}" && ls -la data && exit 1)
 
-      - name: Run import (ISO 9001)
-        env:
-          EXCEL_PATH: data/Questionnaires audits iso 9001.xlsx
-          DEFAULT_REFERENTIAL_ID: "2"
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-          DB_NAME: ${{ env.DB_NAME }}
+      - name: Run import script (ISO 9001)
         run: |
           python scripts/import_iso_questions_from_excel.py
