@@ -6,7 +6,7 @@ Key goals:
 - Header starts at row index 2 (header=2)
 - Purge/reimport ONLY the targeted referential
 - Resolve/create process from "Processus concerné"
-- Stable questionKey = md5(referentialId|article|processId|questionText)
+- Stable questionKey = q_ + md5(referentialId|article|processId|questionText)
 - Compatible with snake_case and camelCase DB schemas
 - Force economicRole = NULL for ISO
 
@@ -114,6 +114,17 @@ def first_existing(candidates: Iterable[str], existing_columns: set[str]) -> Opt
     return None
 
 
+def row_get_case_insensitive(row: Dict[str, Any], key: str) -> Any:
+    """Return dict value by key, ignoring key case (MySQL connector may uppercase aliases)."""
+    if key in row:
+        return row[key]
+    key_lower = key.lower()
+    for k, v in row.items():
+        if str(k).lower() == key_lower:
+            return v
+    raise KeyError(key)
+
+
 def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
     excel_path = getenv_str("EXCEL_PATH", "")
     referential_id = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
@@ -166,7 +177,7 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
     row = cur.fetchone()
     if not row:
         raise SystemExit("Table process manquante (attendu: processus ou processes)")
-    return row["table_name"]
+    return str(row_get_case_insensitive(row, "table_name"))
 
 
 def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
@@ -178,7 +189,7 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, s
         """,
         (db_name,),
     )
-    q_columns = {r["COLUMN_NAME"] for r in cur.fetchall()}
+    q_columns = {str(row_get_case_insensitive(r, "column_name")) for r in cur.fetchall()}
     if not q_columns:
         raise SystemExit("Table 'questions' introuvable dans le schéma cible")
 
@@ -301,7 +312,7 @@ def main() -> None:
             annexe = " | ".join([x for x in [iso14971, mdr] if x]) or None
 
             key_raw = f"{referential_id}|{article}|{process_id}|{question_text}"
-            question_key = hashlib.md5(key_raw.encode("utf-8")).hexdigest()
+            question_key = f"q_{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
             orders[(process_id, article)] += 1
             display_order = orders[(process_id, article)]
 
