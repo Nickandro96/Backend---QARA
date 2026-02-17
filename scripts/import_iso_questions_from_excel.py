@@ -24,18 +24,20 @@ import json
 import os
 import re
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import mysql.connector
 import pandas as pd
+from mysql.connector.connection import MySQLConnection
+from mysql.connector.cursor import MySQLCursorDict
 
 
 def getenv_str(name: str, default: str) -> str:
-    v = os.getenv(name)
-    if v is None:
+    value = os.getenv(name)
+    if value is None:
         return default
-    v = str(v).strip()
-    return v if v else default
+    value = str(value).strip()
+    return value if value else default
 
 
 def getenv_int(name: str, default: int) -> int:
@@ -49,30 +51,35 @@ def getenv_int(name: str, default: int) -> int:
         return default
 
 
-EXCEL_PATH = getenv_str("EXCEL_PATH", "")
-DEFAULT_REFERENTIAL_ID = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
-DRY_RUN = getenv_str("DRY_RUN", "0") == "1"
-
-DB_CONFIG = {
-    "host": getenv_str("DB_HOST", "127.0.0.1"),
-    "port": getenv_int("DB_PORT", 3306),
-    "user": getenv_str("DB_USER", "root"),
-    "password": getenv_str("DB_PASSWORD", ""),
-    "database": getenv_str("DB_NAME", "qara"),
-}
-
-
 def slugify(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
     return value.strip("-")
+
+
+def normalize_header(value: str) -> str:
+    value = (value or "").strip().lower()
+    value = (
+        value.replace("’", "'")
+        .replace("`", "'")
+        .replace("é", "e")
+        .replace("è", "e")
+        .replace("ê", "e")
+        .replace("à", "a")
+        .replace("ù", "u")
+        .replace("î", "i")
+        .replace("ï", "i")
+    )
+    value = re.sub(r"\s+", " ", value)
+    return value
 
 
 def norm_criticality(value: str) -> str:
     val = (value or "").strip().lower()
     mapping = {
         "haute": "high",
-        "élevée": "high",
         "elevee": "high",
+        "élevee": "high",
+        "élevée": "high",
         "high": "high",
         "moyenne": "medium",
         "medium": "medium",
@@ -83,166 +90,274 @@ def norm_criticality(value: str) -> str:
     return mapping.get(val, "medium")
 
 
-def str_or_none(v) -> Optional[str]:
-    if pd.isna(v):
+def str_or_none(value: Any) -> Optional[str]:
+    if pd.isna(value):
         return None
-    text = str(v).strip()
+    text = str(value).strip()
     return text if text else None
 
 
-def split_list(v: Optional[str]) -> List[str]:
-    if not v:
+def split_list(value: Optional[str]) -> List[str]:
+    if not value:
         return []
-    parts = re.split(r"[,;/|]", v)
-    return [p.strip() for p in parts if p and p.strip()]
+    return [part.strip() for part in re.split(r"[,;/|]", value) if part and part.strip()]
 
 
 def quote_identifier(name: str) -> str:
     return f"`{name}`"
 
 
-def first_existing(candidates: List[str], existing_columns: set[str]) -> Optional[str]:
-    for c in candidates:
-        if c in existing_columns:
-            return c
+def first_existing(candidates: Iterable[str], existing_columns: set[str]) -> Optional[str]:
+    for candidate in candidates:
+        if candidate in existing_columns:
+            return candidate
     return None
 
 
-if not EXCEL_PATH:
-    raise SystemExit("EXCEL_PATH is required")
+def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
+    excel_path = getenv_str("EXCEL_PATH", "")
+    referential_id = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
+    dry_run = getenv_str("DRY_RUN", "0") == "1"
 
-if DEFAULT_REFERENTIAL_ID not in (2, 3):
-    raise SystemExit("DEFAULT_REFERENTIAL_ID must be 2 (ISO9001) or 3 (ISO13485)")
+    if not excel_path:
+        raise SystemExit("EXCEL_PATH is required")
 
-sheet = pd.read_excel(EXCEL_PATH, header=2)
-conn = mysql.connector.connect(**DB_CONFIG)
-cur = conn.cursor(dictionary=True)
+    if referential_id not in (2, 3):
+        raise SystemExit("DEFAULT_REFERENTIAL_ID must be 2 (ISO9001) or 3 (ISO13485)")
 
-# Detect questions schema columns dynamically
-cur.execute(
-    """
-    SELECT COLUMN_NAME
-    FROM information_schema.columns
-    WHERE table_schema = %s AND table_name = 'questions'
-    """,
-    (DB_CONFIG["database"],),
-)
-q_columns = {r["COLUMN_NAME"] for r in cur.fetchall()}
-if not q_columns:
-    raise SystemExit("Table 'questions' introuvable dans le schéma cible")
-
-col_referential = first_existing(["referentialId", "referential_id"], q_columns)
-col_process = first_existing(["processId", "process_id"], q_columns)
-col_article = first_existing(["article"], q_columns)
-col_title = first_existing(["title"], q_columns)
-col_qtext = first_existing(["questionText", "question_text"], q_columns)
-col_expected = first_existing(["expectedEvidence", "expected_evidence"], q_columns)
-col_interview = first_existing(["interviewFunctions", "interview_functions"], q_columns)
-col_criticality = first_existing(["criticality"], q_columns)
-col_risk = first_existing(["risk", "risks"], q_columns)
-col_qtype = first_existing(["questionType", "question_type"], q_columns)
-col_annexe = first_existing(["annexe", "annex", "notes"], q_columns)
-col_qkey = first_existing(["questionKey", "question_key"], q_columns)
-col_display = first_existing(["displayOrder", "display_order"], q_columns)
-col_economic_role = first_existing(["economicRole", "economic_role"], q_columns)
-col_applicable = first_existing(["applicableProcesses", "applicable_processes"], q_columns)
-
-required = [
-    ("referentialId", col_referential),
-    ("processId", col_process),
-    ("article", col_article),
-    ("questionText", col_qtext),
-    ("questionKey", col_qkey),
-    ("displayOrder", col_display),
-]
-missing = [label for label, real_col in required if real_col is None]
-if missing:
-    raise SystemExit(f"Colonnes requises manquantes dans questions: {', '.join(missing)}")
-
-# Load process table
-cur.execute("SELECT id, name FROM processus")
-process_map = {r["name"].strip().lower(): r["id"] for r in cur.fetchall()}
-
-if not DRY_RUN:
-    purge_sql = f"DELETE FROM questions WHERE {quote_identifier(col_referential)} = %s"
-    cur.execute(purge_sql, (DEFAULT_REFERENTIAL_ID,))
-
-orders = defaultdict(int)
-inserted = 0
-
-for _, row in sheet.iterrows():
-    process_name = str_or_none(row.get("Processus concerné"))
-    article = str_or_none(row.get("Clause")) or "N/A"
-    title = str_or_none(row.get("Intitulé")) or ""
-    question_text = str_or_none(row.get("Question d’audit détaillée")) or ""
-
-    if not process_name or not question_text:
-        continue
-
-    process_key = process_name.lower()
-    process_id = process_map.get(process_key)
-    if not process_id:
-        slug = slugify(process_name)
-        if not DRY_RUN:
-            cur.execute("INSERT INTO processus(name, slug) VALUES (%s, %s)", (process_name, slug))
-            process_id = cur.lastrowid
-        else:
-            process_id = 0
-        process_map[process_key] = process_id
-
-    expected_evidence = str_or_none(row.get("Preuves attendues"))
-    interview_functions_raw = str_or_none(row.get("Fonctions interrogées"))
-    interview_functions = split_list(interview_functions_raw)
-    criticality = norm_criticality(str_or_none(row.get("Criticité")) or "")
-    risk = str_or_none(row.get("Risque"))
-    question_type = str_or_none(row.get("Type")) or "check"
-    iso14971 = str_or_none(row.get("ISO14971"))
-    mdr = str_or_none(row.get("MDR"))
-    annexe = " | ".join([x for x in [iso14971, mdr] if x]) or None
-
-    key_raw = f"{DEFAULT_REFERENTIAL_ID}|{article}|{process_id}|{question_text}"
-    question_key = hashlib.md5(key_raw.encode("utf-8")).hexdigest()
-    orders[(process_id, article)] += 1
-    display_order = orders[(process_id, article)]
-
-    values: Dict[str, object] = {
-        col_referential: DEFAULT_REFERENTIAL_ID,
-        col_process: process_id,
-        col_article: article,
-        col_qtext: question_text,
-        col_qkey: question_key,
-        col_display: display_order,
+    db_config = {
+        "host": getenv_str("DB_HOST", "127.0.0.1"),
+        "port": getenv_int("DB_PORT", 3306),
+        "user": getenv_str("DB_USER", "root"),
+        "password": getenv_str("DB_PASSWORD", ""),
+        "database": getenv_str("DB_NAME", "qara"),
     }
 
-    if col_title:
-        values[col_title] = title
-    if col_expected:
-        values[col_expected] = expected_evidence
-    if col_interview:
-        values[col_interview] = json.dumps(interview_functions, ensure_ascii=False)
-    if col_criticality:
-        values[col_criticality] = criticality
-    if col_risk:
-        values[col_risk] = risk
-    if col_qtype:
-        values[col_qtype] = question_type
-    if col_annexe:
-        values[col_annexe] = annexe
-    if col_economic_role:
-        values[col_economic_role] = None
-    if col_applicable:
-        values[col_applicable] = json.dumps([process_name], ensure_ascii=False)
+    return excel_path, referential_id, dry_run, db_config
 
-    inserted += 1
-    if not DRY_RUN:
-        cols = ", ".join(quote_identifier(c) for c in values.keys())
-        placeholders = ", ".join(["%s"] * len(values))
-        insert_sql = f"INSERT INTO questions ({cols}) VALUES ({placeholders})"
-        cur.execute(insert_sql, tuple(values.values()))
 
-if not DRY_RUN:
-    conn.commit()
+def build_sheet(path: str) -> pd.DataFrame:
+    sheet = pd.read_excel(path, header=2)
+    # Keep original columns for row.get with exact labels + a normalized lookup map.
+    return sheet
 
-print(f"Imported questions: {inserted} (dry_run={DRY_RUN}, referential={DEFAULT_REFERENTIAL_ID})")
-cur.close()
-conn.close()
+
+def resolve_sheet_value(row: pd.Series, aliases: List[str]) -> Optional[str]:
+    normalized = {normalize_header(str(col)): col for col in row.index}
+    for alias in aliases:
+        col = normalized.get(normalize_header(alias))
+        if col is not None:
+            return str_or_none(row.get(col))
+    return None
+
+
+def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
+    cur.execute(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = %s
+          AND table_name IN ('processus', 'processes')
+        ORDER BY CASE table_name WHEN 'processus' THEN 0 ELSE 1 END
+        LIMIT 1
+        """,
+        (db_name,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise SystemExit("Table process manquante (attendu: processus ou processes)")
+    return row["table_name"]
+
+
+def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
+    cur.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = 'questions'
+        """,
+        (db_name,),
+    )
+    q_columns = {r["COLUMN_NAME"] for r in cur.fetchall()}
+    if not q_columns:
+        raise SystemExit("Table 'questions' introuvable dans le schéma cible")
+
+    columns = {
+        "referential": first_existing(["referentialId", "referential_id"], q_columns),
+        "process": first_existing(["processId", "process_id"], q_columns),
+        "article": first_existing(["article"], q_columns),
+        "title": first_existing(["title"], q_columns),
+        "question_text": first_existing(["questionText", "question_text"], q_columns),
+        "expected": first_existing(["expectedEvidence", "expected_evidence"], q_columns),
+        "interview": first_existing(["interviewFunctions", "interview_functions"], q_columns),
+        "criticality": first_existing(["criticality"], q_columns),
+        "risk": first_existing(["risk", "risks"], q_columns),
+        "question_type": first_existing(["questionType", "question_type"], q_columns),
+        "annexe": first_existing(["annexe", "annex", "notes"], q_columns),
+        "question_key": first_existing(["questionKey", "question_key"], q_columns),
+        "display_order": first_existing(["displayOrder", "display_order"], q_columns),
+        "economic_role": first_existing(["economicRole", "economic_role"], q_columns),
+        "applicable": first_existing(["applicableProcesses", "applicable_processes"], q_columns),
+    }
+
+    required = [
+        ("referentialId", columns["referential"]),
+        ("processId", columns["process"]),
+        ("article", columns["article"]),
+        ("questionText", columns["question_text"]),
+        ("questionKey", columns["question_key"]),
+        ("displayOrder", columns["display_order"]),
+    ]
+    missing = [label for label, real_col in required if real_col is None]
+    if missing:
+        raise SystemExit(f"Colonnes requises manquantes dans questions: {', '.join(missing)}")
+
+    return {k: v for k, v in columns.items() if v is not None}
+
+
+def load_process_map(cur: MySQLCursorDict, process_table: str) -> Dict[str, int]:
+    cur.execute(f"SELECT id, name FROM {quote_identifier(process_table)}")
+    return {str(r["name"]).strip().lower(): int(r["id"]) for r in cur.fetchall()}
+
+
+def ensure_process_id(
+    *,
+    cur: MySQLCursorDict,
+    process_table: str,
+    process_map: Dict[str, int],
+    process_name: str,
+    dry_run: bool,
+) -> int:
+    key = process_name.strip().lower()
+    existing = process_map.get(key)
+    if existing is not None:
+        return existing
+
+    if dry_run:
+        deterministic = int(hashlib.md5(key.encode("utf-8")).hexdigest()[:8], 16)
+        process_map[key] = deterministic
+        return deterministic
+
+    slug = slugify(process_name)
+    cur.execute(
+        f"INSERT INTO {quote_identifier(process_table)}(name, slug) VALUES (%s, %s)",
+        (process_name, slug),
+    )
+    process_id = int(cur.lastrowid)
+    process_map[key] = process_id
+    return process_id
+
+
+def main() -> None:
+    excel_path, referential_id, dry_run, db_config = get_required_env()
+    sheet = build_sheet(excel_path)
+
+    conn: Optional[MySQLConnection] = None
+    cur: Optional[MySQLCursorDict] = None
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cur = conn.cursor(dictionary=True)
+
+        process_table = resolve_process_table(cur, db_config["database"])
+        q_cols = resolve_questions_columns(cur, db_config["database"])
+        process_map = load_process_map(cur, process_table)
+
+        if not dry_run:
+            purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
+            cur.execute(purge_sql, (referential_id,))
+
+        orders: defaultdict[Tuple[int, str], int] = defaultdict(int)
+        inserted = 0
+
+        for _, row in sheet.iterrows():
+            process_name = resolve_sheet_value(row, ["Processus concerné", "Processus concerne"])
+            article = resolve_sheet_value(row, ["Clause"]) or "N/A"
+            title = resolve_sheet_value(row, ["Intitulé", "Intitule"]) or ""
+            question_text = resolve_sheet_value(
+                row,
+                ["Question d’audit détaillée", "Question d'audit détaillée", "Question d audit detaillee"],
+            ) or ""
+
+            if not process_name or not question_text:
+                continue
+
+            process_id = ensure_process_id(
+                cur=cur,
+                process_table=process_table,
+                process_map=process_map,
+                process_name=process_name,
+                dry_run=dry_run,
+            )
+
+            expected_evidence = resolve_sheet_value(row, ["Preuves attendues"])
+            interview_functions_raw = resolve_sheet_value(row, ["Fonctions interrogées", "Fonctions interrogees"])
+            interview_functions = split_list(interview_functions_raw)
+            criticality = norm_criticality(resolve_sheet_value(row, ["Criticité", "Criticite"]) or "")
+            risk = resolve_sheet_value(row, ["Risque"])
+            question_type = (resolve_sheet_value(row, ["Type"]) or "check").strip().lower()
+            iso14971 = resolve_sheet_value(row, ["ISO14971"])
+            mdr = resolve_sheet_value(row, ["MDR"])
+            annexe = " | ".join([x for x in [iso14971, mdr] if x]) or None
+
+            key_raw = f"{referential_id}|{article}|{process_id}|{question_text}"
+            question_key = hashlib.md5(key_raw.encode("utf-8")).hexdigest()
+            orders[(process_id, article)] += 1
+            display_order = orders[(process_id, article)]
+
+            values: Dict[str, Any] = {
+                q_cols["referential"]: referential_id,
+                q_cols["process"]: process_id,
+                q_cols["article"]: article,
+                q_cols["question_text"]: question_text,
+                q_cols["question_key"]: question_key,
+                q_cols["display_order"]: display_order,
+            }
+
+            if "title" in q_cols:
+                values[q_cols["title"]] = title
+            if "expected" in q_cols:
+                values[q_cols["expected"]] = expected_evidence
+            if "interview" in q_cols:
+                values[q_cols["interview"]] = json.dumps(interview_functions, ensure_ascii=False)
+            if "criticality" in q_cols:
+                values[q_cols["criticality"]] = criticality
+            if "risk" in q_cols:
+                values[q_cols["risk"]] = risk
+            if "question_type" in q_cols:
+                values[q_cols["question_type"]] = question_type
+            if "annexe" in q_cols:
+                values[q_cols["annexe"]] = annexe
+            if "economic_role" in q_cols:
+                values[q_cols["economic_role"]] = None
+            if "applicable" in q_cols:
+                values[q_cols["applicable"]] = json.dumps([process_name], ensure_ascii=False)
+
+            inserted += 1
+            if not dry_run:
+                cols = ", ".join(quote_identifier(c) for c in values.keys())
+                placeholders = ", ".join(["%s"] * len(values))
+                sql = f"INSERT INTO questions ({cols}) VALUES ({placeholders})"
+                cur.execute(sql, tuple(values.values()))
+
+        if not dry_run:
+            conn.commit()
+
+        print(
+            f"Imported questions: {inserted} "
+            f"(dry_run={dry_run}, referential={referential_id}, process_table={process_table})"
+        )
+
+    except Exception:
+        if conn is not None and conn.is_connected():
+            conn.rollback()
+        raise
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+
+if __name__ == "__main__":
+    main()
