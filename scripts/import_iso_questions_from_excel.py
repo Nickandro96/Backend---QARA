@@ -8,8 +8,8 @@ Key goals:
 - Resolve/create process from "Processus concerné"
 - Stable questionKey = "q_" + md5(referentialId|article|processId|questionText)
 - Compatible with snake_case and camelCase DB schemas
-- Force economicRole = NULL for ISO
-- Compatible with process table WITH or WITHOUT "slug" column
+- Handles process table WITH or WITHOUT "slug"
+- Handles economicRole when DB column is NOT NULL (uses 'N/A' fallback)
 
 Env variables:
 - EXCEL_PATH (required)
@@ -180,17 +180,26 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
     return str(table_name)
 
 
-def resolve_process_columns(cur: MySQLCursorDict, db_name: str, process_table: str) -> set[str]:
+def resolve_table_columns(cur: MySQLCursorDict, db_name: str, table_name: str) -> List[Dict[str, Any]]:
     cur.execute(
         """
-        SELECT COLUMN_NAME AS column_name
+        SELECT
+          COLUMN_NAME AS column_name,
+          IS_NULLABLE AS is_nullable,
+          DATA_TYPE AS data_type,
+          COLUMN_TYPE AS column_type
         FROM information_schema.columns
         WHERE table_schema = %s AND table_name = %s
         """,
-        (db_name, process_table),
+        (db_name, table_name),
     )
+    return cur.fetchall()
+
+
+def resolve_process_columns(cur: MySQLCursorDict, db_name: str, process_table: str) -> set[str]:
+    rows = resolve_table_columns(cur, db_name, process_table)
     cols: set[str] = set()
-    for r in cur.fetchall():
+    for r in rows:
         col = _pick_field(r, "column_name", "COLUMN_NAME")
         if col:
             cols.add(str(col))
@@ -199,20 +208,23 @@ def resolve_process_columns(cur: MySQLCursorDict, db_name: str, process_table: s
     return cols
 
 
-def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
-    cur.execute(
-        """
-        SELECT COLUMN_NAME AS column_name
-        FROM information_schema.columns
-        WHERE table_schema = %s AND table_name = 'questions'
-        """,
-        (db_name,),
-    )
+def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Tuple[Dict[str, str], Dict[str, Dict[str, Any]]]:
+    rows = resolve_table_columns(cur, db_name, "questions")
+
     q_columns: set[str] = set()
-    for r in cur.fetchall():
+    meta: Dict[str, Dict[str, Any]] = {}
+
+    for r in rows:
         col = _pick_field(r, "column_name", "COLUMN_NAME")
-        if col:
-            q_columns.add(str(col))
+        if not col:
+            continue
+        col_name = str(col)
+        q_columns.add(col_name)
+        meta[col_name] = {
+            "is_nullable": str(_pick_field(r, "is_nullable", "IS_NULLABLE") or "").upper(),
+            "data_type": str(_pick_field(r, "data_type", "DATA_TYPE") or ""),
+            "column_type": str(_pick_field(r, "column_type", "COLUMN_TYPE") or ""),
+        }
 
     if not q_columns:
         raise SystemExit("Table 'questions' introuvable dans le schéma cible")
@@ -247,7 +259,7 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, s
     if missing:
         raise SystemExit(f"Colonnes requises manquantes dans questions: {', '.join(missing)}")
 
-    return {k: v for k, v in columns.items() if v is not None}
+    return ({k: v for k, v in columns.items() if v is not None}, meta)
 
 
 def load_process_map(cur: MySQLCursorDict, process_table: str) -> Dict[str, int]:
@@ -274,9 +286,6 @@ def ensure_process_id(
         process_map[key] = deterministic
         return deterministic
 
-    # Insert compatible with process table schemas:
-    # - (name, slug) if slug exists
-    # - (name) only otherwise
     if "slug" in process_columns:
         slug = slugify(process_name)
         cur.execute(
@@ -320,12 +329,19 @@ def main() -> None:
 
         process_table = resolve_process_table(cur, db_config["database"])
         process_columns = resolve_process_columns(cur, db_config["database"], process_table)
-        q_cols = resolve_questions_columns(cur, db_config["database"])
+        q_cols, q_meta = resolve_questions_columns(cur, db_config["database"])
         process_map = load_process_map(cur, process_table)
 
         before = count_questions(cur, q_cols, referential_id)
         print(f"Questions already in DB for referential {referential_id}: {before}")
         print(f"Process table detected: {process_table} (cols: {sorted(process_columns)})")
+
+        # economicRole nullable?
+        economic_role_col = q_cols.get("economic_role")
+        economic_role_is_nullable = None
+        if economic_role_col and economic_role_col in q_meta:
+            economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]  # 'YES' / 'NO'
+        print(f"EconomicRole column: {economic_role_col} (nullable={economic_role_is_nullable})")
 
         if not dry_run:
             purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
@@ -398,8 +414,14 @@ def main() -> None:
                 values[q_cols["question_type"]] = question_type
             if "annexe" in q_cols:
                 values[q_cols["annexe"]] = annexe
-            if "economic_role" in q_cols:
-                values[q_cols["economic_role"]] = None
+
+            # IMPORTANT: economicRole handling
+            if economic_role_col:
+                if economic_role_is_nullable == "NO":
+                    values[economic_role_col] = "N/A"
+                else:
+                    values[economic_role_col] = None
+
             if "applicable" in q_cols:
                 values[q_cols["applicable"]] = json.dumps([process_name], ensure_ascii=False)
 
