@@ -6,7 +6,7 @@ Key goals:
 - Header starts at row index 2 (header=2)
 - Purge/reimport ONLY the targeted referential
 - Resolve/create process from "Processus concerné"
-- Stable questionKey = q_ + md5(referentialId|article|processId|questionText)
+- Stable questionKey = "q_" + md5(referentialId|article|processId|questionText)
 - Compatible with snake_case and camelCase DB schemas
 - Force economicRole = NULL for ISO
 
@@ -114,17 +114,6 @@ def first_existing(candidates: Iterable[str], existing_columns: set[str]) -> Opt
     return None
 
 
-def row_get_case_insensitive(row: Dict[str, Any], key: str) -> Any:
-    """Return dict value by key, ignoring key case (MySQL connector may uppercase aliases)."""
-    if key in row:
-        return row[key]
-    key_lower = key.lower()
-    for k, v in row.items():
-        if str(k).lower() == key_lower:
-            return v
-    raise KeyError(key)
-
-
 def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
     excel_path = getenv_str("EXCEL_PATH", "")
     referential_id = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
@@ -148,9 +137,8 @@ def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
 
 
 def build_sheet(path: str) -> pd.DataFrame:
-    sheet = pd.read_excel(path, header=2)
-    # Keep original columns for row.get with exact labels + a normalized lookup map.
-    return sheet
+    # Header starts at 3rd Excel row (index 2)
+    return pd.read_excel(path, header=2)
 
 
 def resolve_sheet_value(row: pd.Series, aliases: List[str]) -> Optional[str]:
@@ -177,7 +165,7 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
     row = cur.fetchone()
     if not row:
         raise SystemExit("Table process manquante (attendu: processus ou processes)")
-    return str(row_get_case_insensitive(row, "table_name"))
+    return row["table_name"]
 
 
 def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
@@ -189,7 +177,7 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, s
         """,
         (db_name,),
     )
-    q_columns = {str(row_get_case_insensitive(r, "column_name")) for r in cur.fetchall()}
+    q_columns = {r["COLUMN_NAME"] for r in cur.fetchall()}
     if not q_columns:
         raise SystemExit("Table 'questions' introuvable dans le schéma cible")
 
@@ -259,6 +247,13 @@ def ensure_process_id(
     return process_id
 
 
+def count_questions(cur: MySQLCursorDict, q_cols: Dict[str, str], referential_id: int) -> int:
+    sql = f"SELECT COUNT(*) AS c FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
+    cur.execute(sql, (referential_id,))
+    row = cur.fetchone()
+    return int(row["c"]) if row and "c" in row else 0
+
+
 def main() -> None:
     excel_path, referential_id, dry_run, db_config = get_required_env()
     sheet = build_sheet(excel_path)
@@ -267,6 +262,12 @@ def main() -> None:
     cur: Optional[MySQLCursorDict] = None
 
     try:
+        print("=== ISO IMPORT START ===")
+        print(f"Excel: {excel_path}")
+        print(f"Referential: {referential_id} (2=ISO9001, 3=ISO13485)")
+        print(f"Dry-run: {dry_run}")
+        print(f"DB: {db_config['host']}:{db_config['port']} / {db_config['database']} (user={db_config['user']})")
+
         conn = mysql.connector.connect(**db_config)
         cur = conn.cursor(dictionary=True)
 
@@ -274,12 +275,19 @@ def main() -> None:
         q_cols = resolve_questions_columns(cur, db_config["database"])
         process_map = load_process_map(cur, process_table)
 
+        before = count_questions(cur, q_cols, referential_id)
+        print(f"Questions already in DB for referential {referential_id}: {before}")
+        print(f"Process table detected: {process_table}")
+        print(f"Questions columns mapping: {q_cols}")
+
         if not dry_run:
             purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
             cur.execute(purge_sql, (referential_id,))
+            print(f"Purged existing questions for referential {referential_id}")
 
         orders: defaultdict[Tuple[int, str], int] = defaultdict(int)
         inserted = 0
+        skipped = 0
 
         for _, row in sheet.iterrows():
             process_name = resolve_sheet_value(row, ["Processus concerné", "Processus concerne"])
@@ -291,6 +299,7 @@ def main() -> None:
             ) or ""
 
             if not process_name or not question_text:
+                skipped += 1
                 continue
 
             process_id = ensure_process_id(
@@ -307,12 +316,14 @@ def main() -> None:
             criticality = norm_criticality(resolve_sheet_value(row, ["Criticité", "Criticite"]) or "")
             risk = resolve_sheet_value(row, ["Risque"])
             question_type = (resolve_sheet_value(row, ["Type"]) or "check").strip().lower()
+
             iso14971 = resolve_sheet_value(row, ["ISO14971"])
             mdr = resolve_sheet_value(row, ["MDR"])
             annexe = " | ".join([x for x in [iso14971, mdr] if x]) or None
 
             key_raw = f"{referential_id}|{article}|{process_id}|{question_text}"
-            question_key = f"q_{hashlib.md5(key_raw.encode('utf-8')).hexdigest()}"
+            question_key = "q_" + hashlib.md5(key_raw.encode("utf-8")).hexdigest()
+
             orders[(process_id, article)] += 1
             display_order = orders[(process_id, article)]
 
@@ -340,7 +351,7 @@ def main() -> None:
             if "annexe" in q_cols:
                 values[q_cols["annexe"]] = annexe
             if "economic_role" in q_cols:
-                values[q_cols["economic_role"]] = None
+                values[q_cols["economic_role"]] = None  # ISO -> no economic roles
             if "applicable" in q_cols:
                 values[q_cols["applicable"]] = json.dumps([process_name], ensure_ascii=False)
 
@@ -354,10 +365,13 @@ def main() -> None:
         if not dry_run:
             conn.commit()
 
-        print(
-            f"Imported questions: {inserted} "
-            f"(dry_run={dry_run}, referential={referential_id}, process_table={process_table})"
-        )
+        after = count_questions(cur, q_cols, referential_id)
+        print("=== ISO IMPORT RESULT ===")
+        print(f"Rows parsed: {len(sheet)}")
+        print(f"Inserted (or would insert): {inserted}")
+        print(f"Skipped (missing process/question): {skipped}")
+        print(f"Questions in DB for referential {referential_id}: before={before}, after={after}")
+        print("=== ISO IMPORT END ===")
 
     except Exception:
         if conn is not None and conn.is_connected():
