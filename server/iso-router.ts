@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { audits, auditResponses, processus, questions, referentiels, sites } from "../db/schema";
-import { protectedProcedure, publicProcedure, router } from "../trpc";
+import { audits, auditResponses, processus, questions, referentiels, sites } from "./db/schema";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const ISO_STANDARD_MAP = {
   ISO9001: { label: "ISO 9001", referentialId: 2 },
