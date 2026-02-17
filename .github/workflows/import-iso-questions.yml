@@ -8,7 +8,7 @@ on:
         required: true
         default: "2"
       excel_path:
-        description: "Path in repo (e.g. data/Questionnaires audits iso 9001.xlsx)"
+        description: "Repo path to Excel file"
         required: true
         default: "data/Questionnaires audits iso 9001.xlsx"
       dry_run:
@@ -19,6 +19,8 @@ on:
 jobs:
   import-iso:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +35,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas openpyxl mysql-connector-python
 
+      - name: Validate inputs
+        run: |
+          echo "referential_id=${{ github.event.inputs.referential_id }}"
+          echo "excel_path=${{ github.event.inputs.excel_path }}"
+          echo "dry_run=${{ github.event.inputs.dry_run }}"
+
+          if [ "${{ github.event.inputs.referential_id }}" != "2" ] && [ "${{ github.event.inputs.referential_id }}" != "3" ]; then
+            echo "ERROR: referential_id must be 2 or 3"
+            exit 1
+          fi
+
+          if [ ! -f "${{ github.event.inputs.excel_path }}" ]; then
+            echo "ERROR: excel file not found: ${{ github.event.inputs.excel_path }}"
+            echo "Repository tree (data):"
+            ls -la data || true
+            exit 1
+          fi
+
       - name: Run ISO import script
         env:
           EXCEL_PATH: ${{ github.event.inputs.excel_path }}
@@ -44,4 +64,12 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
         run: |
-          python backend/scripts/import_iso_questions_from_excel.py
+          # Safe path resolution: does NOT break existing structure
+          if [ -f "scripts/import_iso_questions_from_excel.py" ]; then
+            python scripts/import_iso_questions_from_excel.py
+          elif [ -f "backend/scripts/import_iso_questions_from_excel.py" ]; then
+            python backend/scripts/import_iso_questions_from_excel.py
+          else
+            echo "ERROR: import_iso_questions_from_excel.py not found"
+            exit 1
+          fi
