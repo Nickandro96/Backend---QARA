@@ -86,11 +86,11 @@ jobs:
               raise SystemExit("ERROR: DATABASE_URL invalid (need host/user/dbname)")
 
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"DB_HOST={host}\\n")
-              f.write(f"DB_PORT={port}\\n")
-              f.write(f"DB_USER={user}\\n")
-              f.write(f"DB_PASSWORD={password}\\n")
-              f.write(f"DB_NAME={db}\\n")
+              f.write(f"DB_HOST={host}\n")
+              f.write(f"DB_PORT={port}\n")
+              f.write(f"DB_USER={user}\n")
+              f.write(f"DB_PASSWORD={password}\n")
+              f.write(f"DB_NAME={db}\n")
           PY
           else
             DB_HOST_VAL="${DB_HOST_RAW:-${MYSQLHOST_RAW:-}}"
