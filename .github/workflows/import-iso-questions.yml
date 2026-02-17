@@ -1,0 +1,47 @@
+name: Import Questions from Excel (ISO)
+
+on:
+  workflow_dispatch:
+    inputs:
+      referential_id:
+        description: "2 = ISO9001, 3 = ISO13485"
+        required: true
+        default: "2"
+      excel_path:
+        description: "Path in repo (e.g. data/Questionnaires audits iso 9001.xlsx)"
+        required: true
+        default: "data/Questionnaires audits iso 9001.xlsx"
+      dry_run:
+        description: "1 = dry-run, 0 = real import"
+        required: true
+        default: "1"
+
+jobs:
+  import-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl mysql-connector-python
+
+      - name: Run ISO import script
+        env:
+          EXCEL_PATH: ${{ github.event.inputs.excel_path }}
+          DEFAULT_REFERENTIAL_ID: ${{ github.event.inputs.referential_id }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: |
+          python backend/scripts/import_iso_questions_from_excel.py
