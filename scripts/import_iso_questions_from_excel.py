@@ -9,6 +9,7 @@ Key goals:
 - Stable questionKey = "q_" + md5(referentialId|article|processId|questionText)
 - Compatible with snake_case and camelCase DB schemas
 - Force economicRole = NULL for ISO
+- Compatible with process table WITH or WITHOUT "slug" column
 
 Env variables:
 - EXCEL_PATH (required)
@@ -137,7 +138,6 @@ def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
 
 
 def build_sheet(path: str) -> pd.DataFrame:
-    # Header starts at 3rd Excel row (index 2)
     return pd.read_excel(path, header=2)
 
 
@@ -151,7 +151,6 @@ def resolve_sheet_value(row: pd.Series, aliases: List[str]) -> Optional[str]:
 
 
 def _pick_field(row: Optional[Dict[str, Any]], *names: str) -> Optional[Any]:
-    """Pick a field from a dict row, case-insensitive, supporting different driver key casing."""
     if not row:
         return None
     lower = {str(k).lower(): k for k in row.keys()}
@@ -163,7 +162,6 @@ def _pick_field(row: Optional[Dict[str, Any]], *names: str) -> Optional[Any]:
 
 
 def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
-    # Use explicit aliases to avoid driver differences (TABLE_NAME vs table_name)
     cur.execute(
         """
         SELECT table_name AS table_name
@@ -176,15 +174,32 @@ def resolve_process_table(cur: MySQLCursorDict, db_name: str) -> str:
         (db_name,),
     )
     row = cur.fetchone()
-
     table_name = _pick_field(row, "table_name", "TABLE_NAME")
     if not table_name:
         raise SystemExit("Table process manquante (attendu: processus ou processes)")
     return str(table_name)
 
 
+def resolve_process_columns(cur: MySQLCursorDict, db_name: str, process_table: str) -> set[str]:
+    cur.execute(
+        """
+        SELECT COLUMN_NAME AS column_name
+        FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = %s
+        """,
+        (db_name, process_table),
+    )
+    cols: set[str] = set()
+    for r in cur.fetchall():
+        col = _pick_field(r, "column_name", "COLUMN_NAME")
+        if col:
+            cols.add(str(col))
+    if not cols:
+        raise SystemExit(f"Impossible de lire les colonnes de la table {process_table}")
+    return cols
+
+
 def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, str]:
-    # Alias column name to a stable key
     cur.execute(
         """
         SELECT COLUMN_NAME AS column_name
@@ -193,10 +208,8 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Dict[str, s
         """,
         (db_name,),
     )
-    rows = cur.fetchall()
     q_columns: set[str] = set()
-
-    for r in rows:
+    for r in cur.fetchall():
         col = _pick_field(r, "column_name", "COLUMN_NAME")
         if col:
             q_columns.add(str(col))
@@ -246,6 +259,7 @@ def ensure_process_id(
     *,
     cur: MySQLCursorDict,
     process_table: str,
+    process_columns: set[str],
     process_map: Dict[str, int],
     process_name: str,
     dry_run: bool,
@@ -260,11 +274,21 @@ def ensure_process_id(
         process_map[key] = deterministic
         return deterministic
 
-    slug = slugify(process_name)
-    cur.execute(
-        f"INSERT INTO {quote_identifier(process_table)}(name, slug) VALUES (%s, %s)",
-        (process_name, slug),
-    )
+    # Insert compatible with process table schemas:
+    # - (name, slug) if slug exists
+    # - (name) only otherwise
+    if "slug" in process_columns:
+        slug = slugify(process_name)
+        cur.execute(
+            f"INSERT INTO {quote_identifier(process_table)}(name, slug) VALUES (%s, %s)",
+            (process_name, slug),
+        )
+    else:
+        cur.execute(
+            f"INSERT INTO {quote_identifier(process_table)}(name) VALUES (%s)",
+            (process_name,),
+        )
+
     process_id = int(cur.lastrowid)
     process_map[key] = process_id
     return process_id
@@ -295,12 +319,13 @@ def main() -> None:
         cur = conn.cursor(dictionary=True)
 
         process_table = resolve_process_table(cur, db_config["database"])
+        process_columns = resolve_process_columns(cur, db_config["database"], process_table)
         q_cols = resolve_questions_columns(cur, db_config["database"])
         process_map = load_process_map(cur, process_table)
 
         before = count_questions(cur, q_cols, referential_id)
         print(f"Questions already in DB for referential {referential_id}: {before}")
-        print(f"Process table detected: {process_table}")
+        print(f"Process table detected: {process_table} (cols: {sorted(process_columns)})")
 
         if not dry_run:
             purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
@@ -327,6 +352,7 @@ def main() -> None:
             process_id = ensure_process_id(
                 cur=cur,
                 process_table=process_table,
+                process_columns=process_columns,
                 process_map=process_map,
                 process_name=process_name,
                 dry_run=dry_run,
