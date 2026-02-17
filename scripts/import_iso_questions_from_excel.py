@@ -10,6 +10,7 @@ Robust features:
 - supports process table with/without slug
 - supports economicRole NOT NULL (uses 'N/A')
 - ensures referentialId exists in referentials (avoids FK failure)
+  and auto-fills createdAt/version if required.
 """
 
 from __future__ import annotations
@@ -165,7 +166,7 @@ def table_exists(cur: MySQLCursorDict, db_name: str, table: str) -> bool:
         (db_name, table),
     )
     row = cur.fetchone()
-    return bool(row and int(_pick_field(row, "c", "C", "count", "COUNT") or 0) > 0)
+    return bool(row and int(_pick_field(row, "c", "C") or 0) > 0)
 
 
 def resolve_table_columns(cur: MySQLCursorDict, db_name: str, table_name: str) -> List[Dict[str, Any]]:
@@ -284,55 +285,88 @@ def ensure_referential_exists(
     if row:
         return
 
-    # Not found -> try to create it (best effort, adapt to columns)
     ref_name = "ISO 9001" if referential_id == 2 else "ISO 13485"
     ref_code = "ISO9001" if referential_id == 2 else "ISO13485"
+    ref_desc = "Imported by ISO Excel importer"
 
     cols_info = resolve_table_columns(cur, db_name, "referentials")
-    cols = {str(_pick_field(r, "column_name", "COLUMN_NAME")) for r in cols_info if _pick_field(r, "column_name", "COLUMN_NAME")}
+
+    cols_meta: Dict[str, Dict[str, str]] = {}
+    cols: set[str] = set()
+    for r in cols_info:
+        cn = _pick_field(r, "column_name", "COLUMN_NAME")
+        if not cn:
+            continue
+        c = str(cn)
+        cols.add(c)
+        cols_meta[c.lower()] = {
+            "is_nullable": str(_pick_field(r, "is_nullable", "IS_NULLABLE") or "").upper(),
+            "data_type": str(_pick_field(r, "data_type", "DATA_TYPE") or ""),
+            "column_type": str(_pick_field(r, "column_type", "COLUMN_TYPE") or ""),
+        }
+
     cols_lower = {c.lower() for c in cols}
 
     if dry_run:
-        print(f"[DRY_RUN] Would ensure referential exists: id={referential_id}, name={ref_name}, code={ref_code}")
+        print(f"[DRY_RUN] Would create referential id={referential_id} name={ref_name}")
         return
 
-    # Build insert with available columns
     insert_cols: List[str] = []
     insert_vals: List[Any] = []
+    insert_sql_literals: Dict[str, str] = {}  # col -> SQL literal (e.g. NOW())
 
-    # We prefer forcing the id to match FK expectations
-    if "id" in cols_lower:
-        insert_cols.append("id")
-        insert_vals.append(referential_id)
-    else:
-        raise SystemExit("Table 'referentials' has no 'id' column? Cannot satisfy FK.")
+    # id
+    if "id" not in cols_lower:
+        raise SystemExit("Table 'referentials' has no 'id' column. Cannot satisfy FK.")
+    insert_cols.append("id")
+    insert_vals.append(referential_id)
 
+    # name/code/description/version if exist
     if "name" in cols_lower:
         insert_cols.append("name")
         insert_vals.append(ref_name)
-
     if "code" in cols_lower:
         insert_cols.append("code")
         insert_vals.append(ref_code)
+    if "description" in cols_lower:
+        insert_cols.append("description")
+        insert_vals.append(ref_desc)
 
-    # Common timestamp fields
+    # createdAt: if exists and NOT NULL, use NOW()
     if "createdat" in cols_lower:
         insert_cols.append("createdAt")
-        insert_vals.append(None)
-    if "updatedat" in cols_lower:
-        insert_cols.append("updatedAt")
-        insert_vals.append(None)
+        if cols_meta["createdat"]["is_nullable"] == "NO":
+            insert_vals.append(None)
+            insert_sql_literals["createdAt"] = "NOW()"
+        else:
+            insert_vals.append(None)
 
-    if len(insert_cols) < 1:
-        raise SystemExit(f"Cannot build INSERT for referentials; detected cols: {sorted(cols)}")
+    # version: if exists and NOT NULL, set default "1.0"
+    if "version" in cols_lower:
+        insert_cols.append("version")
+        if cols_meta["version"]["is_nullable"] == "NO":
+            insert_vals.append("1.0")
+        else:
+            insert_vals.append(None)
 
+    # Build SQL with NOW() literal support
     cols_sql = ", ".join(quote_identifier(c) for c in insert_cols)
-    placeholders = ", ".join(["%s"] * len(insert_cols))
+    placeholders_parts: List[str] = []
+    final_vals: List[Any] = []
 
+    for c, v in zip(insert_cols, insert_vals):
+        if c in insert_sql_literals:
+            placeholders_parts.append(insert_sql_literals[c])
+        else:
+            placeholders_parts.append("%s")
+            final_vals.append(v)
+
+    placeholders = ", ".join(placeholders_parts)
     sql = f"INSERT INTO referentials ({cols_sql}) VALUES ({placeholders})"
+
     try:
-        cur.execute(sql, tuple(insert_vals))
-        print(f"Created referential: id={referential_id} name='{ref_name}' (cols used={insert_cols})")
+        cur.execute(sql, tuple(final_vals))
+        print(f"Created referential: id={referential_id} name='{ref_name}'")
     except Exception as e:
         raise SystemExit(
             "Failed to create referential automatically. "
@@ -406,7 +440,6 @@ def main() -> None:
         conn = mysql.connector.connect(**db_config)
         cur = conn.cursor(dictionary=True)
 
-        # Ensure FK referential exists
         ensure_referential_exists(cur=cur, db_name=db_config["database"], referential_id=referential_id, dry_run=dry_run)
 
         process_table = resolve_process_table(cur, db_config["database"])
@@ -421,7 +454,7 @@ def main() -> None:
         economic_role_col = q_cols.get("economic_role")
         economic_role_is_nullable = None
         if economic_role_col and economic_role_col in q_meta:
-            economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]  # YES/NO
+            economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]
         print(f"EconomicRole column: {economic_role_col} (nullable={economic_role_is_nullable})")
 
         if not dry_run:
