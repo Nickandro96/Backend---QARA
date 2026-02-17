@@ -14,17 +14,10 @@ jobs:
     timeout-minutes: 20
 
     env:
-      # Excel + referential
       EXCEL_PATH: "data/Questionnaires audits iso 9001.xlsx"
       DEFAULT_REFERENTIAL_ID: "2"
       DRY_RUN: ${{ github.event.inputs.dry_run }}
-
-      # DB secrets (prefer DB_* ; fallback to MYSQL*)
-      DB_HOST: ${{ secrets.DB_HOST != '' && secrets.DB_HOST || secrets.MYSQLHOST }}
-      DB_PORT: ${{ secrets.DB_PORT != '' && secrets.DB_PORT || secrets.MYSQLPORT }}
-      DB_USER: ${{ secrets.DB_USER != '' && secrets.DB_USER || secrets.MYSQLUSER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD != '' && secrets.DB_PASSWORD || secrets.MYSQLPASSWORD }}
-      DB_NAME: ${{ secrets.DB_NAME != '' && secrets.DB_NAME || secrets.MYSQLDATABASE }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout
@@ -40,23 +33,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas openpyxl mysql-connector-python
 
-      - name: Debug (DB vars presence)
-        run: |
-          echo "DRY_RUN=${DRY_RUN}"
-          echo "EXCEL_PATH=${EXCEL_PATH}"
-          echo "DEFAULT_REFERENTIAL_ID=${DEFAULT_REFERENTIAL_ID}"
-          echo "DB_HOST set? -> $([ -n "${DB_HOST:-}" ] && echo yes || echo no)"
-          echo "DB_PORT='${DB_PORT:-<empty>}'"
-          echo "DB_USER set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
-          echo "DB_NAME set? -> $([ -n "${DB_NAME:-}" ] && echo yes || echo no)"
-          if [ -z "${DB_HOST:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_NAME:-}" ]; then
-            echo "ERROR: Missing DB secrets. Set DB_HOST/DB_USER/DB_NAME (or MYSQLHOST/MYSQLUSER/MYSQLDATABASE)."
-            exit 1
-          fi
-
       - name: Validate Excel exists
         run: |
           test -f "${EXCEL_PATH}" || (echo "Missing file: ${EXCEL_PATH}" && ls -la data && exit 1)
+
+      - name: Parse DATABASE_URL -> DB_*
+        run: |
+          python scripts/parse_database_url.py
+
+      - name: Debug DB host/port (safe)
+        run: |
+          echo "DB_HOST='${DB_HOST:-<empty>}'"
+          echo "DB_PORT='${DB_PORT:-<empty>}'"
+          echo "DB_USER set? -> $([ -n "${DB_USER:-}" ] && echo yes || echo no)"
+          echo "DB_NAME='${DB_NAME:-<empty>}'"
+          if [ -z "${DB_HOST:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_NAME:-}" ]; then
+            echo "ERROR: DB_* not resolved from DATABASE_URL"
+            exit 1
+          fi
 
       - name: Run import script (ISO 9001)
         run: |
