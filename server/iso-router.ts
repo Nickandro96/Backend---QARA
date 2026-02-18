@@ -47,16 +47,37 @@ function referentialIdFromStandard(input: "9001" | "13485" | "ISO9001" | "ISO134
   return 3;
 }
 
+/**
+ * Parse robuste d'array:
+ * - array natif
+ * - JSON string
+ * - double JSON string (string qui contient du JSON string)
+ */
 function safeJsonArray<T = any>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
+
   if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
     try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? (parsed as T[]) : [];
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed as T[];
+
+      // cas double-encodé: "\"[1,2,3]\""
+      if (typeof parsed === "string") {
+        try {
+          const parsed2 = JSON.parse(parsed);
+          return Array.isArray(parsed2) ? (parsed2 as T[]) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
     } catch {
       return [];
     }
   }
+
   return [];
 }
 
@@ -64,22 +85,65 @@ function isNumericString(v: string) {
   return /^\d+$/.test(v);
 }
 
-async function buildProcessCandidates(db: any, processIds: number[]) {
-  if (!processIds.length) return [] as string[];
+/**
+ * IMPORTANT:
+ * Dans MDR, audit.processIds peut contenir des "slugs" (ex: "pms_pmcf")
+ * OU des IDs DB.
+ *
+ * Pour maximiser les chances de filtrage ISO:
+ * - On reconstruit des candidats à partir:
+ *   - des IDs DB => name + lowercase + (code/slug si présent)
+ *   - des strings => elles-mêmes
+ */
+async function buildProcessCandidates(db: any, processIds: Array<string | number>) {
+  if (!processIds?.length) return [] as string[];
 
-  const rows = await db
-    .select({ id: processus.id, name: processus.name })
-    .from(processus)
-    .where(inArray(processus.id, processIds));
+  // 1) on sépare numeric ids vs strings
+  const numericIds = processIds
+    .map((p) => (typeof p === "number" ? p : Number(p)))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const stringIds = processIds
+    .map((p) => (p == null ? "" : String(p).trim()))
+    .filter((s) => s.length > 0);
 
   const out: string[] = [];
-  for (const p of rows) {
-    if (p?.id != null) out.push(String(p.id));
-    if (p?.name) {
-      out.push(String(p.name));
-      out.push(String(p.name).toLowerCase());
+
+  // 2) toujours ajouter les strings brutes (slugs)
+  for (const s of stringIds) out.push(s);
+
+  // 3) si on a des IDs DB => charger processus.name (+ code/slug si existe)
+  if (numericIds.length) {
+    const rows = await db
+      .select({
+        id: processus.id,
+        name: (processus as any).name,
+        // @ts-ignore (si la colonne existe)
+        code: (processus as any).code,
+        // @ts-ignore (si la colonne existe)
+        slug: (processus as any).slug,
+      })
+      .from(processus)
+      .where(inArray(processus.id, numericIds));
+
+    for (const p of rows) {
+      if (p?.id != null) out.push(String(p.id));
+      if (p?.name) {
+        out.push(String(p.name));
+        out.push(String(p.name).toLowerCase());
+      }
+      // si tu as code/slug en DB, ça aide énormément le JSON_CONTAINS
+      if ((p as any)?.code) {
+        out.push(String((p as any).code));
+        out.push(String((p as any).code).toLowerCase());
+      }
+      if ((p as any)?.slug) {
+        out.push(String((p as any).slug));
+        out.push(String((p as any).slug).toLowerCase());
+      }
     }
   }
+
   return Array.from(new Set(out)).filter(Boolean);
 }
 
@@ -91,12 +155,12 @@ export const isoRouter = router({
 
   getProcesses: protectedProcedure.query(async () => {
     const db = await getDb();
-    return db.select().from(processus).orderBy(processus.name);
+    return db.select().from(processus).orderBy((processus as any).name ?? sql`name`);
   }),
 
   getSites: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    return db.select().from(sites).where(eq(sites.userId, ctx.user.id)).orderBy(sites.name);
+    return db.select().from(sites).where(eq((sites as any).userId, ctx.user.id)).orderBy((sites as any).name ?? sql`name`);
   }),
 
   // ---------------------------------------------------------------------------
@@ -107,7 +171,7 @@ export const isoRouter = router({
     const [row] = await db
       .select()
       .from(isoQualifications)
-      .where(eq(isoQualifications.userId, ctx.user.id))
+      .where(eq((isoQualifications as any).userId, ctx.user.id))
       .limit(1);
 
     if (!row) {
@@ -126,16 +190,16 @@ export const isoRouter = router({
     }
 
     return {
-      id: row.id,
-      userId: row.userId,
-      targetStandards: safeJsonArray<string>(row.targetStandards),
-      organizationType: (row.organizationType || "manufacturer") as "manufacturer" | "service_provider" | "both",
-      economicRole: row.economicRole,
-      processes: safeJsonArray<string>(row.processes),
-      certificationScope: row.certificationScope,
-      excludedClauses: safeJsonArray<string>(row.excludedClauses),
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      id: (row as any).id,
+      userId: (row as any).userId,
+      targetStandards: safeJsonArray<string>((row as any).targetStandards),
+      organizationType: (((row as any).organizationType || "manufacturer") as "manufacturer" | "service_provider" | "both"),
+      economicRole: (row as any).economicRole,
+      processes: safeJsonArray<string>((row as any).processes),
+      certificationScope: (row as any).certificationScope,
+      excludedClauses: safeJsonArray<string>((row as any).excludedClauses),
+      createdAt: (row as any).createdAt,
+      updatedAt: (row as any).updatedAt,
     };
   }),
 
@@ -165,13 +229,13 @@ export const isoRouter = router({
       };
 
       const [existing] = await db
-        .select({ id: isoQualifications.id })
+        .select({ id: (isoQualifications as any).id })
         .from(isoQualifications)
-        .where(eq(isoQualifications.userId, ctx.user.id))
+        .where(eq((isoQualifications as any).userId, ctx.user.id))
         .limit(1);
 
       if (existing) {
-        await db.update(isoQualifications).set(values).where(eq(isoQualifications.id, existing.id));
+        await db.update(isoQualifications).set(values).where(eq((isoQualifications as any).id, (existing as any).id));
         return { success: true as const, message: "Qualification mise à jour." };
       }
 
@@ -194,23 +258,28 @@ export const isoRouter = router({
       const db = await getDb();
       const referentialId = referentialIdFromStandard(input.standard);
 
-      const numericProcessIds = (input.processes ?? [])
+      // NOTE: legacy "processes" arrive souvent en string (slug ou id)
+      const rawProcessIds = (input.processes ?? []).map((p) => String(p));
+
+      // candidates inclut slugs + noms + lowercase + code/slug DB si dispo
+      const candidates = await buildProcessCandidates(db, rawProcessIds);
+
+      const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+
+      if (input.economicRole) {
+        whereParts.push(or(isNull((questions as any).economicRole), eq((questions as any).economicRole, input.economicRole)));
+      }
+
+      const numericProcessIds = rawProcessIds
         .map((p) => Number(p))
         .filter((n) => Number.isFinite(n) && n > 0);
 
-      const candidates = await buildProcessCandidates(db, numericProcessIds);
-
-      const whereParts: any[] = [eq(questions.referentialId, referentialId)];
-
-      if (input.economicRole) {
-        // include generic questions (null role) OR role-specific questions
-        whereParts.push(or(isNull(questions.economicRole), eq(questions.economicRole, input.economicRole)));
-      }
-
       const hasAnyProcessFilter = numericProcessIds.length > 0 || candidates.length > 0;
+
       if (hasAnyProcessFilter) {
         const orParts: any[] = [];
 
+        // ✅ FIX: parenthèse fermante du IN (...)
         if (numericProcessIds.length > 0) {
           orParts.push(
             sql`${(questions as any).processId} in (${sql.join(
@@ -219,7 +288,6 @@ export const isoRouter = router({
             )})`
           );
         }
-
 
         if (candidates.length > 0) {
           const conds = candidates.map((cand) => {
@@ -240,9 +308,9 @@ export const isoRouter = router({
         .select()
         .from(questions)
         .where(and(...whereParts))
-        .orderBy(sql`${questions.displayOrder} IS NULL, ${questions.displayOrder} ASC, ${questions.id} ASC`);
+        .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
 
-      return { count: rows.length, questions: rows };
+      return { count: (rows as any[]).length, questions: rows };
     }),
 
   // ---------------------------------------------------------------------------
@@ -255,21 +323,22 @@ export const isoRouter = router({
       const [a] = await db
         .select()
         .from(audits)
-        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+        .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
+
       if (!a) throw new Error("Audit introuvable");
 
       return {
-        auditId: a.id,
-        auditName: a.name,
-        userId: a.userId,
-        siteId: a.siteId,
-        status: a.status,
-        economicRole: a.economicRole,
-        processIds: safeJsonArray<any>(a.processIds).map(String),
-        referentialIds: safeJsonArray<any>(a.referentialIds),
-        startDate: a.startDate,
-        endDate: a.endDate,
+        auditId: (a as any).id,
+        auditName: (a as any).name,
+        userId: (a as any).userId,
+        siteId: (a as any).siteId,
+        status: (a as any).status,
+        economicRole: (a as any).economicRole,
+        processIds: safeJsonArray<any>((a as any).processIds).map(String),
+        referentialIds: safeJsonArray<any>((a as any).referentialIds),
+        startDate: (a as any).startDate,
+        endDate: (a as any).endDate,
       };
     }),
 
@@ -280,8 +349,9 @@ export const isoRouter = router({
       const rows = await db
         .select()
         .from(auditResponses)
-        .where(and(eq(auditResponses.auditId, input.auditId), eq(auditResponses.userId, ctx.user.id)))
-        .orderBy(sql`${auditResponses.id} ASC`);
+        .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)))
+        .orderBy(sql`${(auditResponses as any).id} ASC`);
+
       return rows;
     }),
 
@@ -292,7 +362,8 @@ export const isoRouter = router({
       await db
         .update(audits)
         .set({ status: "completed", updatedAt: new Date() } as any)
-        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
+        .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
+
       return { success: true as const };
     }),
 
@@ -317,6 +388,7 @@ export const isoRouter = router({
           answeredBy: z.any().optional().nullable(),
           answeredAt: z.string().optional().nullable(),
         }),
+
         // legacy payload (kept for backward compatibility)
         z.object({
           auditId: z.number().int().positive(),
@@ -330,21 +402,26 @@ export const isoRouter = router({
       const db = await getDb();
 
       const [a] = await db
-        .select({ id: audits.id })
+        .select({ id: (audits as any).id })
         .from(audits)
-        .where(and(eq(audits.id, (input as any).auditId), eq(audits.userId, ctx.user.id)))
+        .where(and(eq((audits as any).id, (input as any).auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
       if (!a) throw new Error("Audit introuvable");
 
       let q: any = null;
+
       if ((input as any).questionId) {
-        const [row] = await db.select().from(questions).where(eq(questions.id, (input as any).questionId)).limit(1);
+        const [row] = await db
+          .select()
+          .from(questions)
+          .where(eq((questions as any).id, (input as any).questionId))
+          .limit(1);
         q = row;
       } else {
         const [row] = await db
           .select()
           .from(questions)
-          .where(eq(questions.questionKey, (input as any).questionKey))
+          .where(eq((questions as any).questionKey, (input as any).questionKey))
           .limit(1);
         q = row;
       }
@@ -355,18 +432,18 @@ export const isoRouter = router({
 
       const v = (input as any).processId;
       const n = typeof v === "string" ? Number(v) : v;
-      const resolvedProcessId = Number.isFinite(n) && n > 0 ? Number(n) : q.processId ?? null;
+      const resolvedProcessId = Number.isFinite(n) && n > 0 ? Number(n) : (q as any).processId ?? null;
 
       const payload: any = {
         userId: ctx.user.id,
         auditId: (input as any).auditId,
-        questionId: q.id,
+        questionId: (q as any).id,
         questionKey,
         responseValue: (input as any).responseValue ?? "in_progress",
         responseComment: (input as any).responseComment ?? "",
         note: (input as any).note ?? "",
         evidenceFiles: (input as any).evidenceFiles ?? [],
-        role: (input as any).role ?? (q.economicRole ?? null),
+        role: (input as any).role ?? ((q as any).economicRole ?? null),
         processId: resolvedProcessId,
         answeredBy: ctx.user.id,
         answeredAt: new Date(),
@@ -405,12 +482,18 @@ export const isoRouter = router({
         siteId: z.number().int().positive(),
         name: z.string().min(1),
         processMode: z.enum(["all", "select"]).default("all"),
-        processIds: z.array(z.number()).default([]),
+
+        // ✅ IMPORTANT: accepte maintenant string OU number (slug MDR OU id DB)
+        processIds: z.array(z.union([z.number(), z.string()])).default([]),
+
         startDate: z.string().optional(),
         endDate: z.string().optional().nullable(),
+
+        // ✅ IMPORTANT: toujours string (pas null) pour éviter les BAD_REQUEST
         auditorName: z.string().optional().default(""),
         auditeeName: z.string().optional().default(""),
         auditeeEmail: z.string().optional().default(""),
+
         status: z.enum(["draft", "in_progress", "completed"]).optional(),
 
         // extra wizard fields (ignored but accepted)
@@ -430,7 +513,9 @@ export const isoRouter = router({
       const db = await getDb();
 
       const referentialId = referentialIdFromStandard(input.standardCode);
-      const processIds = input.processMode === "select" ? input.processIds : [];
+
+      // ✅ On stocke tel quel (slug MDR ou ID DB), comme MDR.
+      const storedProcessIds = input.processMode === "select" ? input.processIds : [];
 
       const values: any = {
         name: input.name,
@@ -439,9 +524,12 @@ export const isoRouter = router({
         siteId: input.siteId,
         status: input.status ?? "draft",
         economicRole: null,
-        processIds,
+        processIds: storedProcessIds,
         referentialIds: [referentialId],
-        auditorName: input.auditorName || null,
+
+        // auditorName en string (pas null)
+        auditorName: (input.auditorName ?? "").trim(),
+
         startDate: input.startDate ? new Date(input.startDate) : null,
         endDate: input.endDate ? new Date(input.endDate) : null,
         updatedAt: new Date(),
@@ -451,7 +539,7 @@ export const isoRouter = router({
         await db
           .update(audits)
           .set(values)
-          .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
+          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
         return { auditId: input.auditId };
       }
 
@@ -460,12 +548,12 @@ export const isoRouter = router({
 
       if (!insertedId) {
         const [row] = await db
-          .select({ id: audits.id })
+          .select({ id: (audits as any).id })
           .from(audits)
-          .where(and(eq(audits.userId, ctx.user.id), eq(audits.name, input.name)))
-          .orderBy(sql`${audits.id} DESC`)
+          .where(and(eq((audits as any).userId, ctx.user.id), eq((audits as any).name, input.name)))
+          .orderBy(sql`${(audits as any).id} DESC`)
           .limit(1);
-        return { auditId: row?.id ?? 0 };
+        return { auditId: (row as any)?.id ?? 0 };
       }
 
       return { auditId: insertedId };
@@ -479,31 +567,42 @@ export const isoRouter = router({
       const [audit] = await db
         .select()
         .from(audits)
-        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+        .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
       if (!audit) throw new Error("Audit introuvable");
 
-      const referentialIds = safeJsonArray<number>(audit.referentialIds);
-      const selectedProcesses = safeJsonArray<number>(audit.processIds);
-      const referentialId = referentialIds?.[0];
+      const referentialIds = safeJsonArray<any>((audit as any).referentialIds);
+      const selectedProcessesRaw = safeJsonArray<any>((audit as any).processIds);
+
+      const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
 
       const whereParts: any[] = [];
-      if (referentialId) whereParts.push(eq(questions.referentialId, Number(referentialId)));
+      if (referentialId) {
+        whereParts.push(eq((questions as any).referentialId, referentialId));
+      }
 
-      const selectedDbIds = selectedProcesses.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
-      const candidates = await buildProcessCandidates(db, selectedDbIds);
+      // ✅ candidates: slugs + noms + lowercase + code/slug db si dispo
+      const candidates = await buildProcessCandidates(db, selectedProcessesRaw);
 
-      const hasAnyProcessFilter = selectedDbIds.length > 0 || candidates.length > 0;
+      // IDs DB si le processIds contient des numerics (ou si JSON contient des ids)
+      const selectedDbIds = selectedProcessesRaw
+        .map((p: any) => (typeof p === "number" ? p : Number(p)))
+        .filter((n: number) => Number.isFinite(n) && n > 0);
+
+      const hasAnyProcessFilter = selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
 
       if (hasAnyProcessFilter) {
         const orParts: any[] = [];
 
+        // ✅ FIX: parenthèse fermante IN (...)
         if (selectedDbIds.length > 0) {
           orParts.push(
-            sql`${(questions as any).processId} in (${sql.join(selectedDbIds.map((n: number) => sql`${n}`), sql`, `)})`
+            sql`${(questions as any).processId} in (${sql.join(
+              selectedDbIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )})`
           );
         }
-
 
         if (candidates.length > 0) {
           const conds = candidates.map((cand) => {
@@ -517,15 +616,18 @@ export const isoRouter = router({
           orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
         }
 
-        whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        // si orParts vide (cas edge) => pas de filtre
+        if (orParts.length) {
+          whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        }
       }
 
       const rows = await db
         .select()
         .from(questions)
         .where(whereParts.length ? and(...whereParts) : undefined)
-        .orderBy(sql`${questions.displayOrder} IS NULL, ${questions.displayOrder} ASC, ${questions.id} ASC`);
+        .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
 
-      return { count: rows.length, questions: rows };
+      return { count: (rows as any[]).length, questions: rows };
     }),
 });
