@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { audits, auditResponses, processus, questions, referentiels, sites } from "./_core/db/schema";
+// ⚠️ IMPORTANT: si le fichier est vraiment "Schema.ts", garder "Schema" (casse Linux)
+import { audits, auditResponses, processus, questions, sites } from "./_core/db/Schema";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const ISO_STANDARD_MAP = {
@@ -29,7 +30,7 @@ export const isoRouter = router({
       code,
       label: cfg.label,
       referentialId: cfg.referentialId,
-    })),
+    }))
   ),
 
   getProcesses: protectedProcedure.query(async ({ ctx }) => {
@@ -46,7 +47,7 @@ export const isoRouter = router({
         auditId: z.number().optional(),
         standardCode: z.enum(["ISO9001", "ISO13485"]),
         siteId: z.number(),
-        organisationId: z.number().nullable().optional(),
+        organisationId: z.number().nullable().optional(), // conservé pour compat front
         name: z.string().min(1),
         scope: z.string().min(1),
         method: z.string().min(1),
@@ -65,40 +66,39 @@ export const isoRouter = router({
         auditTeam: z.string().optional().nullable(),
         standardsVersion: z.string().optional().nullable(),
         status: z.enum(["draft", "in_progress", "completed"]).optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       if (input.processMode === "select" && input.processIds.length === 0) {
         throw new Error("processIds is required when processMode=select");
       }
+
       const referentialId = ISO_STANDARD_MAP[input.standardCode].referentialId;
+
+      // Aligné avec les colonnes présentes dans schema.ts/audits
       const payload = {
         userId: ctx.session.user.id,
         siteId: input.siteId,
-        organisationId: input.organisationId ?? null,
         name: input.name,
-        scope: input.scope,
-        method: input.method,
-        referentialIds: JSON.stringify([referentialId]),
-        processIds: JSON.stringify(input.processMode === "all" ? [] : input.processIds),
+        type: "ISO",
+        referentialIds: [referentialId], // JSON -> array directe
+        processIds: input.processMode === "all" ? [] : input.processIds, // JSON -> array directe
         economicRole: null,
         status: input.status ?? "draft",
-        startDate: input.startDate,
-        endDate: input.endDate ?? null,
+        startDate: input.startDate ? new Date(input.startDate) : null,
+        endDate: input.endDate ? new Date(input.endDate) : null,
         auditorName: input.auditorName,
-        auditeeName: input.auditeeName,
-        auditeeEmail: input.auditeeEmail,
-        entityName: input.entityName ?? null,
-        address: input.address ?? null,
-        exclusions: input.exclusions ?? null,
-        productFamilies: input.productFamilies ?? null,
-        markets: input.markets ?? null,
-        auditTeam: input.auditTeam ?? null,
-        standardsVersion: input.standardsVersion ?? null,
+        auditorEmail: input.auditeeEmail,
+        clientOrganization: input.entityName ?? null,
+        siteLocation: input.address ?? null,
       };
 
       if (input.auditId) {
-        await ctx.db.update(audits).set(payload).where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.session.user.id)));
+        await ctx.db
+          .update(audits)
+          .set(payload)
+          .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.session.user.id)));
+
         return { auditId: input.auditId };
       }
 
@@ -106,33 +106,35 @@ export const isoRouter = router({
       return { auditId: inserted[0].id };
     }),
 
-  getQuestionsForAudit: protectedProcedure.input(z.object({ auditId: z.number() })).query(async ({ ctx, input }) => {
-    const [audit] = await ctx.db
-      .select()
-      .from(audits)
-      .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.session.user.id)));
+  getQuestionsForAudit: protectedProcedure
+    .input(z.object({ auditId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const [audit] = await ctx.db
+        .select()
+        .from(audits)
+        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.session.user.id)));
 
-    if (!audit) throw new Error("Audit introuvable");
+      if (!audit) throw new Error("Audit introuvable");
 
-    const referentialIds = safeParseArray(audit.referentialIds);
-    const selectedProcesses = safeParseArray(audit.processIds);
-    const referentialId = referentialIds[0];
+      const referentialIds = safeParseArray(audit.referentialIds);
+      const selectedProcesses = safeParseArray(audit.processIds);
+      const referentialId = referentialIds[0];
 
-    if (!referentialId) return { count: 0, questions: [] };
+      if (!referentialId) return { count: 0, questions: [] };
 
-    const whereClause =
-      selectedProcesses.length === 0
-        ? eq(questions.referentialId, referentialId)
-        : and(eq(questions.referentialId, referentialId), inArray(questions.processId, selectedProcesses));
+      const whereClause =
+        selectedProcesses.length === 0
+          ? eq(questions.referentialId, referentialId)
+          : and(eq(questions.referentialId, referentialId), inArray(questions.processId, selectedProcesses));
 
-    const rows = await ctx.db
-      .select()
-      .from(questions)
-      .where(whereClause)
-      .orderBy(questions.processId, questions.article, questions.displayOrder);
+      const rows = await ctx.db
+        .select()
+        .from(questions)
+        .where(whereClause)
+        .orderBy(questions.processId, questions.article, questions.displayOrder);
 
-    return { count: rows.length, questions: rows };
-  }),
+      return { count: rows.length, questions: rows };
+    }),
 
   saveResponse: protectedProcedure
     .input(
@@ -142,7 +144,7 @@ export const isoRouter = router({
         status: z.enum(["OK", "PARTIAL", "NOK", "NA"]),
         comment: z.string().optional(),
         evidence: z.string().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.db
@@ -151,23 +153,25 @@ export const isoRouter = router({
           userId: ctx.session.user.id,
           auditId: input.auditId,
           questionKey: input.questionKey,
-          status: input.status,
-          comment: input.comment ?? null,
-          evidence: input.evidence ?? null,
+          responseValue: input.status, // aligné schema.ts
+          responseComment: input.comment ?? null, // aligné schema.ts
+          evidenceFiles: input.evidence ? [input.evidence] : [], // JSON aligné schema.ts
         })
         .onDuplicateKeyUpdate({
           set: {
-            status: input.status,
-            comment: input.comment ?? null,
-            evidence: input.evidence ?? null,
+            responseValue: input.status,
+            responseComment: input.comment ?? null,
+            evidenceFiles: input.evidence ? [input.evidence] : [],
             updatedAt: sql`CURRENT_TIMESTAMP`,
           },
         });
+
       return { ok: true };
     }),
 
   listMyIsoAudits: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(audits).where(eq(audits.userId, ctx.session.user.id));
+
     return rows.filter((a) => {
       const ids = safeParseArray(a.referentialIds);
       return ids.includes(2) || ids.includes(3);
