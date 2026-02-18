@@ -127,19 +127,11 @@ export const referentiels = mysqlTable("referentiels", {
 /* =========================
    PROCESSUS
 ========================= */
-/**
- * ⚠️ IMPORTANT:
- * La DB actuelle n'a PAS la colonne `updatedAt` sur la table `processus`.
- * Si on la laisse dans le schema Drizzle => "Unknown column 'updatedAt'".
- * On la retire donc ici pour que toutes les requêtes passent.
- *
- * (Option propre plus tard : ajouter la colonne via migration SQL.)
- */
 export const processus = mysqlTable("processus", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  // updatedAt supprimé volontairement (absent en DB)
+  // updatedAt volontairement absent si non présent en DB
 });
 
 /* =========================
@@ -159,7 +151,7 @@ export const audits = mysqlTable("audits", {
   status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
-  // ✅ JSON columns (store arrays directly in router; no stringify)
+  // JSON
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
@@ -236,7 +228,6 @@ export const audit_responses = mysqlTable(
     role: varchar("role", { length: 50 }),
     processId: int("processId"),
 
-    // ✅ JSON column (store arrays directly in router; no stringify)
     evidenceFiles: json("evidenceFiles"),
 
     answeredBy: int("answeredBy").references(() => users.id),
