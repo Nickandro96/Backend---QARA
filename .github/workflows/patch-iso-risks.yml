@@ -55,4 +55,4 @@ jobs:
 
       - name: Run patch script (UPDATE only)
         run: |
-          python scripts/patch_iso_risks_from_excel.py
+          python scripts/patch_iso_risks_from_excel_v2.py
