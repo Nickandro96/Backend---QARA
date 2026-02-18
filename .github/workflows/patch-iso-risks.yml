@@ -1,0 +1,58 @@
+name: Patch ISO Risks (Excel -> UPDATE by questionKey)
+
+on:
+  workflow_dispatch:
+    inputs:
+      standard:
+        description: "9001 or 13485"
+        required: true
+        default: "9001"
+      dry_run:
+        description: "1 = dry-run (NO UPDATE), 0 = real UPDATE"
+        required: true
+        default: "1"
+
+jobs:
+  patch_iso_risks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl mysql-connector-python
+
+      - name: Set EXCEL_PATH + DEFAULT_REFERENTIAL_ID
+        run: |
+          if [ "${{ github.event.inputs.standard }}" = "13485" ]; then
+            echo "EXCEL_PATH=data/Questionnaires audits iso 13485.xlsx" >> $GITHUB_ENV
+            echo "DEFAULT_REFERENTIAL_ID=3" >> $GITHUB_ENV
+          else
+            echo "EXCEL_PATH=data/Questionnaires audits iso 9001.xlsx" >> $GITHUB_ENV
+            echo "DEFAULT_REFERENTIAL_ID=2" >> $GITHUB_ENV
+          fi
+
+      - name: Validate Excel exists
+        run: |
+          test -f "${EXCEL_PATH}" || (echo "Missing file: ${EXCEL_PATH}" && ls -la data && exit 1)
+
+      - name: Parse DATABASE_URL -> DB_*
+        run: |
+          python scripts/parse_database_url.py
+
+      - name: Run patch script (UPDATE only)
+        run: |
+          python scripts/patch_iso_risks_from_excel.py
