@@ -35,16 +35,63 @@ jobs:
           echo "DATABASE_URL is set (length=${#DATABASE_URL})"
           echo "$DATABASE_URL" | sed -E 's#(mysqls?://[^:]+:)[^@]+@#\1****@#'
 
-      - name: Rename legacy table processes -> processus (idempotent)
+      - name: Rename legacy table processes -> processus (idempotent, SSL + retry)
         run: |
           node - <<'NODE'
           const mysql = require("mysql2/promise");
+
+          function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+          function parseDbUrl(dbUrl) {
+            const u = new URL(dbUrl);
+            const dbName = u.pathname.replace(/^\//, "") || "railway";
+            return {
+              host: u.hostname,
+              port: Number(u.port || 3306),
+              user: decodeURIComponent(u.username),
+              password: decodeURIComponent(u.password),
+              database: dbName,
+              ssl: { rejectUnauthorized: false },
+              connectTimeout: 15000,
+              multipleStatements: true,
+            };
+          }
+
+          async function connectWithRetry(dbUrl, retries = 6) {
+            const cfg = parseDbUrl(dbUrl);
+            let lastErr;
+            for (let i = 1; i <= retries; i++) {
+              try {
+                const conn = await mysql.createConnection(cfg);
+                await conn.query("SELECT 1");
+                return conn;
+              } catch (e) {
+                lastErr = e;
+                console.error(`[DB] connect attempt ${i}/${retries} failed:`, e?.code || e?.message || e);
+                await sleep(2000 * i);
+              }
+            }
+            throw lastErr;
+          }
+
           (async () => {
-            const conn = await mysql.createConnection(process.env.DATABASE_URL);
+            if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL missing");
+            const conn = await connectWithRetry(process.env.DATABASE_URL);
+
             const [a] = await conn.query(`SHOW TABLES LIKE 'processes'`);
             const [b] = await conn.query(`SHOW TABLES LIKE 'processus'`);
-            if (a.length === 0) { console.log("No rename needed for processes ✅"); await conn.end(); return; }
-            if (b.length > 0) { console.log("Table 'processus' already exists, skipping rename ✅"); await conn.end(); return; }
+
+            if (a.length === 0) {
+              console.log("No rename needed for processes ✅");
+              await conn.end();
+              return;
+            }
+            if (b.length > 0) {
+              console.log("Table 'processus' already exists, skipping rename ✅");
+              await conn.end();
+              return;
+            }
+
             console.log("Renaming table processes -> processus ...");
             await conn.query(`RENAME TABLE \`processes\` TO \`processus\``);
             console.log("Rename done ✅");
@@ -52,11 +99,11 @@ jobs:
           })().catch((e) => { console.error(e); process.exit(1); });
           NODE
 
-      # ✅ NEW: Apply raw SQL migrations in drizzle/migrations/*.sql (idempotent tracking)
+      # ✅ Apply raw SQL migrations in drizzle/migrations/*.sql
       - name: Apply SQL migrations from drizzle/migrations
         run: pnpm exec tsx scripts/apply-sql-migrations.ts
 
-      # ✅ Create Drizzle journal in ALL common locations (covers any `out:` path)
+      # ✅ Ensure Drizzle journal exists then migrate (single-step, safe)
       - name: Ensure Drizzle journal exists then migrate (single-step, safe)
         run: |
           set -euxo pipefail
@@ -66,7 +113,6 @@ jobs:
 
           JOURNAL='{"version":"5","dialect":"mysql","entries":[]}'
 
-          # Candidate roots where drizzle may look depending on drizzle.config.ts `out:`
           for d in \
             "meta" \
             "drizzle/meta" \
@@ -79,7 +125,6 @@ jobs:
             fi
           done
 
-          # Ensure migrations folders exist too (even if empty)
           mkdir -p drizzle/migrations
           mkdir -p migrations
 
@@ -92,5 +137,4 @@ jobs:
           echo "== migrations/meta =="
           ls -la migrations/meta || true
 
-          # IMPORTANT: do NOT run generate in CI
           pnpm exec drizzle-kit migrate --config=drizzle.config.ts
