@@ -61,6 +61,33 @@ export const userProfiles = mysqlTable("user_profiles", {
 });
 
 /* =========================
+   ISO QUALIFICATIONS
+========================= */
+export const isoQualifications = mysqlTable(
+  "iso_qualifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+
+    // store as JSON arrays (no stringify in routers)
+    targetStandards: json("targetStandards"),
+    organizationType: varchar("organizationType", { length: 50 }),
+    economicRole: varchar("economicRole", { length: 50 }),
+    processes: json("processes"),
+    certificationScope: text("certificationScope"),
+    excludedClauses: json("excludedClauses"),
+
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    userUq: uniqueIndex("iso_qualifications_user_uq").on(t.userId),
+  }),
+);
+
+/* =========================
    ORGANISATIONS
 ========================= */
 export const organisations = mysqlTable("organisations", {
@@ -127,11 +154,19 @@ export const referentiels = mysqlTable("referentiels", {
 /* =========================
    PROCESSUS
 ========================= */
+/**
+ * ⚠️ IMPORTANT:
+ * La DB actuelle n'a PAS la colonne `updatedAt` sur la table `processus`.
+ * Si on la laisse dans le schema Drizzle => "Unknown column 'updatedAt'".
+ * On la retire donc ici pour que toutes les requêtes passent.
+ *
+ * (Option propre plus tard : ajouter la colonne via migration SQL.)
+ */
 export const processus = mysqlTable("processus", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  // updatedAt volontairement absent si non présent en DB
+  // updatedAt supprimé volontairement (absent en DB)
 });
 
 /* =========================
@@ -151,7 +186,7 @@ export const audits = mysqlTable("audits", {
   status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
-  // JSON
+  // ✅ JSON columns (store arrays directly in router; no stringify)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
@@ -228,6 +263,7 @@ export const audit_responses = mysqlTable(
     role: varchar("role", { length: 50 }),
     processId: int("processId"),
 
+    // ✅ JSON column (store arrays directly in router; no stringify)
     evidenceFiles: json("evidenceFiles"),
 
     answeredBy: int("answeredBy").references(() => users.id),
