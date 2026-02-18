@@ -16,11 +16,10 @@ import {
 /**
  * ISO Router
  *
- * This router is used by BOTH:
- * - the "ISO Qualification" and "ISO Audit" pages (wouter app)
- * - the "ISOAuditWizard" page (react-router-dom wizard)
- *
- * We expose a superset of fields to keep both front UIs compatible.
+ * Objectifs:
+ * - Alimenter le Wizard ISO (création audit draft)
+ * - Alimenter un drilldown ISO identique au MDR (UI premium)
+ * - Maintenir la page "ISO Qualification" existante
  */
 
 const ISO_STANDARDS = [
@@ -59,6 +58,29 @@ function safeJsonArray<T = any>(value: unknown): T[] {
     }
   }
   return [];
+}
+
+function isNumericString(v: string) {
+  return /^\d+$/.test(v);
+}
+
+async function buildProcessCandidates(db: any, processIds: number[]) {
+  if (!processIds.length) return [] as string[];
+
+  const rows = await db
+    .select({ id: processus.id, name: processus.name })
+    .from(processus)
+    .where(inArray(processus.id, processIds));
+
+  const out: string[] = [];
+  for (const p of rows) {
+    if (p?.id != null) out.push(String(p.id));
+    if (p?.name) {
+      out.push(String(p.name));
+      out.push(String(p.name).toLowerCase());
+    }
+  }
+  return Array.from(new Set(out)).filter(Boolean);
 }
 
 export const isoRouter = router({
@@ -107,10 +129,7 @@ export const isoRouter = router({
       id: row.id,
       userId: row.userId,
       targetStandards: safeJsonArray<string>(row.targetStandards),
-      organizationType: (row.organizationType || "manufacturer") as
-        | "manufacturer"
-        | "service_provider"
-        | "both",
+      organizationType: (row.organizationType || "manufacturer") as "manufacturer" | "service_provider" | "both",
       economicRole: row.economicRole,
       processes: safeJsonArray<string>(row.processes),
       certificationScope: row.certificationScope,
@@ -125,14 +144,11 @@ export const isoRouter = router({
       z.object({
         targetStandards: z.array(z.enum(["9001", "13485"])).min(1),
         organizationType: z.enum(["manufacturer", "service_provider", "both"]),
-        economicRole: z
-          .enum(["fabricant", "importateur", "distributeur", "mandataire"])
-          .optional()
-          .nullable(),
+        economicRole: z.enum(["fabricant", "importateur", "distributeur", "mandataire"]).optional().nullable(),
         processes: z.array(z.string()).optional().default([]),
         certificationScope: z.string().optional().nullable(),
         excludedClauses: z.array(z.string()).optional().default([]),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -164,28 +180,25 @@ export const isoRouter = router({
     }),
 
   // ---------------------------------------------------------------------------
-  // Questions (simple ISO audit page)
+  // Questions (legacy simple page)
   // ---------------------------------------------------------------------------
   getQuestions: protectedProcedure
     .input(
       z.object({
         standard: z.enum(["9001", "13485"]),
-        economicRole: z
-          .enum(["fabricant", "importateur", "distributeur"])
-          .optional()
-          .nullable(),
-        // UI sends string process identifiers; we accept anything and best-effort map.
+        economicRole: z.enum(["fabricant", "importateur", "distributeur"]).optional().nullable(),
         processes: z.array(z.string()).optional(),
-      }),
+      })
     )
     .query(async ({ input }) => {
       const db = await getDb();
       const referentialId = referentialIdFromStandard(input.standard);
 
-      // Best-effort: if processes contain numeric strings, filter by processId
       const numericProcessIds = (input.processes ?? [])
         .map((p) => Number(p))
         .filter((n) => Number.isFinite(n) && n > 0);
+
+      const candidates = await buildProcessCandidates(db, numericProcessIds);
 
       const whereParts: any[] = [eq(questions.referentialId, referentialId)];
 
@@ -194,8 +207,33 @@ export const isoRouter = router({
         whereParts.push(or(isNull(questions.economicRole), eq(questions.economicRole, input.economicRole)));
       }
 
-      if (numericProcessIds.length > 0) {
-        whereParts.push(or(isNull(questions.processId), inArray(questions.processId, numericProcessIds)));
+      const hasAnyProcessFilter = numericProcessIds.length > 0 || candidates.length > 0;
+      if (hasAnyProcessFilter) {
+        const orParts: any[] = [];
+
+        if (numericProcessIds.length > 0) {
+          orParts.push(
+            sql`${(questions as any).processId} in (${sql.join(
+              numericProcessIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )})`
+          );
+        }
+
+
+        if (candidates.length > 0) {
+          const conds = candidates.map((cand) => {
+            const s = String(cand);
+            if (isNumericString(s)) {
+              const n = Number(s);
+              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
+            }
+            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, JSON_QUOTE(${s}))`;
+          });
+          orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+        }
+
+        whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
       const rows = await db
@@ -207,49 +245,146 @@ export const isoRouter = router({
       return { count: rows.length, questions: rows };
     }),
 
-  saveResponse: protectedProcedure
-    .input(
-      z.object({
-        auditId: z.number().int().positive(),
-        questionId: z.number().int().positive(),
-        responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable"]),
-        responseComment: z.string().optional().nullable(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
+  // ---------------------------------------------------------------------------
+  // Audit context / responses (for premium drilldown UI)
+  // ---------------------------------------------------------------------------
+  getAuditContext: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
-
-      const [q] = await db.select().from(questions).where(eq(questions.id, input.questionId)).limit(1);
-      if (!q) throw new Error("Question introuvable");
-
       const [a] = await db
-        .select({ id: audits.id })
+        .select()
         .from(audits)
         .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
         .limit(1);
       if (!a) throw new Error("Audit introuvable");
 
+      return {
+        auditId: a.id,
+        auditName: a.name,
+        userId: a.userId,
+        siteId: a.siteId,
+        status: a.status,
+        economicRole: a.economicRole,
+        processIds: safeJsonArray<any>(a.processIds).map(String),
+        referentialIds: safeJsonArray<any>(a.referentialIds),
+        startDate: a.startDate,
+        endDate: a.endDate,
+      };
+    }),
+
+  getResponses: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      const rows = await db
+        .select()
+        .from(auditResponses)
+        .where(and(eq(auditResponses.auditId, input.auditId), eq(auditResponses.userId, ctx.user.id)))
+        .orderBy(sql`${auditResponses.id} ASC`);
+      return rows;
+    }),
+
+  completeAudit: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      await db
+        .update(audits)
+        .set({ status: "completed", updatedAt: new Date() } as any)
+        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
+      return { success: true as const };
+    }),
+
+  // ---------------------------------------------------------------------------
+  // Responses save (accepts MDR-style payload too)
+  // ---------------------------------------------------------------------------
+  saveResponse: protectedProcedure
+    .input(
+      z.union([
+        // ✅ MDR-style payload
+        z.object({
+          auditId: z.number().int().positive(),
+          questionKey: z.string().min(1),
+          responseValue: z
+            .enum(["compliant", "non_compliant", "partial", "not_applicable", "in_progress"])
+            .default("in_progress"),
+          responseComment: z.string().optional().default(""),
+          note: z.string().optional().default(""),
+          evidenceFiles: z.array(z.string()).optional().default([]),
+          role: z.string().optional().nullable(),
+          processId: z.any().optional().nullable(),
+          answeredBy: z.any().optional().nullable(),
+          answeredAt: z.string().optional().nullable(),
+        }),
+        // legacy payload (kept for backward compatibility)
+        z.object({
+          auditId: z.number().int().positive(),
+          questionId: z.number().int().positive(),
+          responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable"]),
+          responseComment: z.string().optional().nullable(),
+        }),
+      ])
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+
+      const [a] = await db
+        .select({ id: audits.id })
+        .from(audits)
+        .where(and(eq(audits.id, (input as any).auditId), eq(audits.userId, ctx.user.id)))
+        .limit(1);
+      if (!a) throw new Error("Audit introuvable");
+
+      let q: any = null;
+      if ((input as any).questionId) {
+        const [row] = await db.select().from(questions).where(eq(questions.id, (input as any).questionId)).limit(1);
+        q = row;
+      } else {
+        const [row] = await db
+          .select()
+          .from(questions)
+          .where(eq(questions.questionKey, (input as any).questionKey))
+          .limit(1);
+        q = row;
+      }
+
+      if (!q) throw new Error("Question introuvable");
+
+      const questionKey = (q.questionKey || (input as any).questionKey || `q_${q.id}`) as string;
+
+      const v = (input as any).processId;
+      const n = typeof v === "string" ? Number(v) : v;
+      const resolvedProcessId = Number.isFinite(n) && n > 0 ? Number(n) : q.processId ?? null;
+
+      const payload: any = {
+        userId: ctx.user.id,
+        auditId: (input as any).auditId,
+        questionId: q.id,
+        questionKey,
+        responseValue: (input as any).responseValue ?? "in_progress",
+        responseComment: (input as any).responseComment ?? "",
+        note: (input as any).note ?? "",
+        evidenceFiles: (input as any).evidenceFiles ?? [],
+        role: (input as any).role ?? (q.economicRole ?? null),
+        processId: resolvedProcessId,
+        answeredBy: ctx.user.id,
+        answeredAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
       await db
         .insert(auditResponses)
-        .values({
-          userId: ctx.user.id,
-          auditId: input.auditId,
-          questionId: q.id,
-          questionKey: q.questionKey || `q_${q.id}`,
-          responseValue: input.responseValue,
-          responseComment: input.responseComment ?? null,
-          role: q.economicRole ?? null,
-          processId: q.processId ?? null,
-          evidenceFiles: null,
-          answeredBy: ctx.user.id,
-          answeredAt: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as any)
+        .values(payload)
         .onDuplicateKeyUpdate({
           set: {
-            responseValue: input.responseValue,
-            responseComment: input.responseComment ?? null,
+            responseValue: payload.responseValue,
+            responseComment: payload.responseComment,
+            note: payload.note,
+            evidenceFiles: payload.evidenceFiles,
+            role: payload.role,
+            processId: payload.processId,
             answeredBy: ctx.user.id,
             answeredAt: new Date(),
             updatedAt: new Date(),
@@ -289,7 +424,7 @@ export const isoRouter = router({
         markets: z.any().optional(),
         auditTeam: z.any().optional(),
         standardsVersion: z.any().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -354,8 +489,35 @@ export const isoRouter = router({
 
       const whereParts: any[] = [];
       if (referentialId) whereParts.push(eq(questions.referentialId, Number(referentialId)));
-      if (selectedProcesses.length > 0) {
-        whereParts.push(or(isNull(questions.processId), inArray(questions.processId, selectedProcesses)));
+
+      const selectedDbIds = selectedProcesses.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
+      const candidates = await buildProcessCandidates(db, selectedDbIds);
+
+      const hasAnyProcessFilter = selectedDbIds.length > 0 || candidates.length > 0;
+
+      if (hasAnyProcessFilter) {
+        const orParts: any[] = [];
+
+        if (selectedDbIds.length > 0) {
+          orParts.push(
+            sql`${(questions as any).processId} in (${sql.join(selectedDbIds.map((n: number) => sql`${n}`), sql`, `)})`
+          );
+        }
+
+
+        if (candidates.length > 0) {
+          const conds = candidates.map((cand) => {
+            const s = String(cand);
+            if (isNumericString(s)) {
+              const n = Number(s);
+              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
+            }
+            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, JSON_QUOTE(${s}))`;
+          });
+          orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+        }
+
+        whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
       const rows = await db
