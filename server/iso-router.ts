@@ -50,8 +50,9 @@ function referentialIdFromStandard(input: "9001" | "13485" | "ISO9001" | "ISO134
 /**
  * Parse robuste d'array:
  * - array natif
- * - JSON string
+ * - JSON string array
  * - double JSON string (string qui contient du JSON string)
+ * - ✅ string simple => [string]
  */
 function safeJsonArray<T = any>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[];
@@ -59,22 +60,36 @@ function safeJsonArray<T = any>(value: unknown): T[] {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return [];
+
+    // ✅ si ce n'est pas du JSON, on considère que c'est une valeur unique
+    const looksLikeJson = (trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith('"') && trimmed.endsWith('"'));
+    if (!looksLikeJson) return [trimmed as any as T];
+
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) return parsed as T[];
 
-      // cas double-encodé: "\"[1,2,3]\""
       if (typeof parsed === "string") {
+        // cas double-encodé
+        const inner = parsed.trim();
+        const looksLikeInnerJson = (inner.startsWith("[") && inner.endsWith("]")) || (inner.startsWith("{") && inner.endsWith("}")) || (inner.startsWith('"') && inner.endsWith('"'));
+        if (!looksLikeInnerJson) return [inner as any as T];
+
         try {
-          const parsed2 = JSON.parse(parsed);
-          return Array.isArray(parsed2) ? (parsed2 as T[]) : [];
+          const parsed2 = JSON.parse(inner);
+          if (Array.isArray(parsed2)) return parsed2 as T[];
+          if (typeof parsed2 === "string") return [parsed2 as any as T];
+          return [];
         } catch {
           return [];
         }
       }
+
+      // si c'est un objet non-array => rien
       return [];
     } catch {
-      return [];
+      // fallback: string simple
+      return [trimmed as any as T];
     }
   }
 
@@ -86,53 +101,80 @@ function isNumericString(v: string) {
 }
 
 /**
- * IMPORTANT:
- * Dans MDR, audit.processIds peut contenir des "slugs" (ex: "pms_pmcf")
- * OU des IDs DB.
- *
- * Pour maximiser les chances de filtrage ISO:
- * - On reconstruit des candidats à partir:
- *   - des IDs DB => name + lowercase + (code/slug si présent)
- *   - des strings => elles-mêmes
+ * Mapping slugs UI (MDR-like) -> libellés utilisés dans applicableProcesses ISO
+ * (d'après tes captures: applicableProcesses contient "Gouvernance")
+ */
+const PROCESS_SLUG_TO_ISO_LABELS: Record<string, string[]> = {
+  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
+  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
+  qms: ["QMS", "SMQ", "Système de management qualité", "Système de management qualité (QMS)", "Qualité"],
+  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
+  design_dev: ["Conception", "Conception & développement", "Développement"],
+  purchasing_suppliers: ["Achats", "Fournisseurs", "Achats & fournisseurs"],
+  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
+  traceability_udi: ["Traçabilité", "UDI", "Traçabilité / UDI"],
+  pms_pmcf: ["PMS", "PMCF", "PMS / PMCF"],
+  vigilance_incidents: ["Vigilance", "Incidents", "Vigilance & incidents"],
+  distribution_logistics: ["Distribution", "Logistique", "Distribution & logistique"],
+  importation: ["Importation"],
+  tech_doc: ["Documentation", "Documentation technique"],
+  audits_conformity: ["Audits", "Conformité", "Audits & conformité"],
+  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "IT / données / cybersécurité"],
+};
+
+/**
+ * Construit une liste de candidats de matching pour les filtres JSON_CONTAINS.
+ * - inclut toujours la valeur brute (slug / id / nom)
+ * - ajoute les labels ISO équivalents quand on détecte un slug connu
+ * - si ID DB => ajoute name + lowercase (+ code/slug si dispo)
  */
 async function buildProcessCandidates(db: any, processIds: Array<string | number>) {
   if (!processIds?.length) return [] as string[];
 
-  // 1) on sépare numeric ids vs strings
-  const numericIds = processIds
-    .map((p) => (typeof p === "number" ? p : Number(p)))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  const stringIds = processIds
-    .map((p) => (p == null ? "" : String(p).trim()))
-    .filter((s) => s.length > 0);
-
   const out: string[] = [];
 
-  // 2) toujours ajouter les strings brutes (slugs)
-  for (const s of stringIds) out.push(s);
+  const rawStrings = processIds
+    .map((p) => (p == null ? "" : String(p).trim()))
+    .filter(Boolean);
 
-  // 3) si on a des IDs DB => charger processus.name (+ code/slug si existe)
+  for (const s of rawStrings) {
+    out.push(s);
+    out.push(s.toLowerCase());
+
+    const mapped = PROCESS_SLUG_TO_ISO_LABELS[s];
+    if (mapped?.length) {
+      for (const m of mapped) {
+        out.push(m);
+        out.push(m.toLowerCase());
+      }
+    }
+  }
+
+  const numericIds = rawStrings
+    .map((p) => Number(p))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
   if (numericIds.length) {
     const rows = await db
       .select({
         id: processus.id,
         name: (processus as any).name,
-        // @ts-ignore (si la colonne existe)
+        // @ts-ignore optional cols
         code: (processus as any).code,
-        // @ts-ignore (si la colonne existe)
+        // @ts-ignore optional cols
         slug: (processus as any).slug,
       })
       .from(processus)
       .where(inArray(processus.id, numericIds));
 
     for (const p of rows) {
-      if (p?.id != null) out.push(String(p.id));
-      if (p?.name) {
-        out.push(String(p.name));
-        out.push(String(p.name).toLowerCase());
+      if (p?.id != null) {
+        out.push(String(p.id));
       }
-      // si tu as code/slug en DB, ça aide énormément le JSON_CONTAINS
+      if ((p as any)?.name) {
+        out.push(String((p as any).name));
+        out.push(String((p as any).name).toLowerCase());
+      }
       if ((p as any)?.code) {
         out.push(String((p as any).code));
         out.push(String((p as any).code).toLowerCase());
@@ -160,7 +202,11 @@ export const isoRouter = router({
 
   getSites: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    return db.select().from(sites).where(eq((sites as any).userId, ctx.user.id)).orderBy((sites as any).name ?? sql`name`);
+    return db
+      .select()
+      .from(sites)
+      .where(eq((sites as any).userId, ctx.user.id))
+      .orderBy((sites as any).name ?? sql`name`);
   }),
 
   // ---------------------------------------------------------------------------
@@ -193,7 +239,10 @@ export const isoRouter = router({
       id: (row as any).id,
       userId: (row as any).userId,
       targetStandards: safeJsonArray<string>((row as any).targetStandards),
-      organizationType: (((row as any).organizationType || "manufacturer") as "manufacturer" | "service_provider" | "both"),
+      organizationType: (((row as any).organizationType || "manufacturer") as
+        | "manufacturer"
+        | "service_provider"
+        | "both"),
       economicRole: (row as any).economicRole,
       processes: safeJsonArray<string>((row as any).processes),
       certificationScope: (row as any).certificationScope,
@@ -258,10 +307,7 @@ export const isoRouter = router({
       const db = await getDb();
       const referentialId = referentialIdFromStandard(input.standard);
 
-      // NOTE: legacy "processes" arrive souvent en string (slug ou id)
-      const rawProcessIds = (input.processes ?? []).map((p) => String(p));
-
-      // candidates inclut slugs + noms + lowercase + code/slug DB si dispo
+      const rawProcessIds = (input.processes ?? []).map((p) => String(p).trim()).filter(Boolean);
       const candidates = await buildProcessCandidates(db, rawProcessIds);
 
       const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
@@ -279,7 +325,6 @@ export const isoRouter = router({
       if (hasAnyProcessFilter) {
         const orParts: any[] = [];
 
-        // ✅ FIX: parenthèse fermante du IN (...)
         if (numericProcessIds.length > 0) {
           orParts.push(
             sql`${(questions as any).processId} in (${sql.join(
@@ -325,7 +370,6 @@ export const isoRouter = router({
         .from(audits)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
-
       if (!a) throw new Error("Audit introuvable");
 
       return {
@@ -351,7 +395,6 @@ export const isoRouter = router({
         .from(auditResponses)
         .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)))
         .orderBy(sql`${(auditResponses as any).id} ASC`);
-
       return rows;
     }),
 
@@ -363,7 +406,6 @@ export const isoRouter = router({
         .update(audits)
         .set({ status: "completed", updatedAt: new Date() } as any)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
-
       return { success: true as const };
     }),
 
@@ -373,7 +415,6 @@ export const isoRouter = router({
   saveResponse: protectedProcedure
     .input(
       z.union([
-        // ✅ MDR-style payload
         z.object({
           auditId: z.number().int().positive(),
           questionKey: z.string().min(1),
@@ -388,8 +429,6 @@ export const isoRouter = router({
           answeredBy: z.any().optional().nullable(),
           answeredAt: z.string().optional().nullable(),
         }),
-
-        // legacy payload (kept for backward compatibility)
         z.object({
           auditId: z.number().int().positive(),
           questionId: z.number().int().positive(),
@@ -409,23 +448,13 @@ export const isoRouter = router({
       if (!a) throw new Error("Audit introuvable");
 
       let q: any = null;
-
       if ((input as any).questionId) {
-        const [row] = await db
-          .select()
-          .from(questions)
-          .where(eq((questions as any).id, (input as any).questionId))
-          .limit(1);
+        const [row] = await db.select().from(questions).where(eq((questions as any).id, (input as any).questionId)).limit(1);
         q = row;
       } else {
-        const [row] = await db
-          .select()
-          .from(questions)
-          .where(eq((questions as any).questionKey, (input as any).questionKey))
-          .limit(1);
+        const [row] = await db.select().from(questions).where(eq((questions as any).questionKey, (input as any).questionKey)).limit(1);
         q = row;
       }
-
       if (!q) throw new Error("Question introuvable");
 
       const questionKey = (q.questionKey || (input as any).questionKey || `q_${q.id}`) as string;
@@ -482,21 +511,13 @@ export const isoRouter = router({
         siteId: z.number().int().positive(),
         name: z.string().min(1),
         processMode: z.enum(["all", "select"]).default("all"),
-
-        // ✅ IMPORTANT: accepte maintenant string OU number (slug MDR OU id DB)
         processIds: z.array(z.union([z.number(), z.string()])).default([]),
-
         startDate: z.string().optional(),
         endDate: z.string().optional().nullable(),
-
-        // ✅ IMPORTANT: toujours string (pas null) pour éviter les BAD_REQUEST
         auditorName: z.string().optional().default(""),
         auditeeName: z.string().optional().default(""),
         auditeeEmail: z.string().optional().default(""),
-
         status: z.enum(["draft", "in_progress", "completed"]).optional(),
-
-        // extra wizard fields (ignored but accepted)
         organisationId: z.any().optional(),
         scope: z.any().optional(),
         method: z.any().optional(),
@@ -513,8 +534,6 @@ export const isoRouter = router({
       const db = await getDb();
 
       const referentialId = referentialIdFromStandard(input.standardCode);
-
-      // ✅ On stocke tel quel (slug MDR ou ID DB), comme MDR.
       const storedProcessIds = input.processMode === "select" ? input.processIds : [];
 
       const values: any = {
@@ -526,20 +545,14 @@ export const isoRouter = router({
         economicRole: null,
         processIds: storedProcessIds,
         referentialIds: [referentialId],
-
-        // auditorName en string (pas null)
         auditorName: (input.auditorName ?? "").trim(),
-
         startDate: input.startDate ? new Date(input.startDate) : null,
         endDate: input.endDate ? new Date(input.endDate) : null,
         updatedAt: new Date(),
       };
 
       if (input.auditId) {
-        await db
-          .update(audits)
-          .set(values)
-          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
+        await db.update(audits).set(values).where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
         return { auditId: input.auditId };
       }
 
@@ -577,24 +590,18 @@ export const isoRouter = router({
       const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
 
       const whereParts: any[] = [];
-      if (referentialId) {
-        whereParts.push(eq((questions as any).referentialId, referentialId));
-      }
+      if (referentialId) whereParts.push(eq((questions as any).referentialId, referentialId));
 
-      // ✅ candidates: slugs + noms + lowercase + code/slug db si dispo
       const candidates = await buildProcessCandidates(db, selectedProcessesRaw);
-
-      // IDs DB si le processIds contient des numerics (ou si JSON contient des ids)
       const selectedDbIds = selectedProcessesRaw
         .map((p: any) => (typeof p === "number" ? p : Number(p)))
         .filter((n: number) => Number.isFinite(n) && n > 0);
 
-      const hasAnyProcessFilter = selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
+      const hasProcessSelection = selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
 
-      if (hasAnyProcessFilter) {
+      if (hasProcessSelection) {
         const orParts: any[] = [];
 
-        // ✅ FIX: parenthèse fermante IN (...)
         if (selectedDbIds.length > 0) {
           orParts.push(
             sql`${(questions as any).processId} in (${sql.join(
@@ -616,10 +623,7 @@ export const isoRouter = router({
           orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
         }
 
-        // si orParts vide (cas edge) => pas de filtre
-        if (orParts.length) {
-          whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
-        }
+        if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
       const rows = await db
@@ -627,6 +631,16 @@ export const isoRouter = router({
         .from(questions)
         .where(whereParts.length ? and(...whereParts) : undefined)
         .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
+
+      // logs utiles (comme MDR)
+      console.log(
+        `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
+          selectedProcessesRaw
+        )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
+          candidates
+        )} referentials=${JSON.stringify(referentialIds)}`
+      );
+      console.log(`[ISO] DB filtered questions count: ${(rows as any[]).length}`);
 
       return { count: (rows as any[]).length, questions: rows };
     }),
