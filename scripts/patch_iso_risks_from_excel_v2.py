@@ -5,20 +5,18 @@ Patch ISO risk fields WITHOUT inserting rows.
 V2 strategy:
 1) Prefer UPDATE by (referentialId + code) if Excel provides "code"
 2) Fallback UPDATE by (referentialId + processId + article + normalized questionText)
-   to cover lines where code is missing / not aligned
 
-Env:
-  EXCEL_PATH
-  DEFAULT_REFERENTIAL_ID (2 or 3)
-  DRY_RUN ("1" to dry-run)
-  DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+Fixes in this version:
+- Railway/MySQL proxy often requires SSL: enable SSL (rejectUnauthorized=False equivalent)
+- Add connect retry/backoff + timeouts to avoid transient handshake failures
 """
 
 from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, Optional, List, Tuple
+import time
+from typing import Any, Dict, Optional, List
 
 import pandas as pd
 import mysql.connector
@@ -81,13 +79,11 @@ def get_cell(row: pd.Series, aliases: List[str]) -> Optional[str]:
 def normalize_question_text(s: str) -> str:
     s = (s or "").strip()
     s = re.sub(r"\s+", " ", s)
-    # normalize common apostrophes
     s = s.replace("’", "'").replace("`", "'")
     return s
 
 
 def build_sheet(path: str) -> pd.DataFrame:
-    # keep same as importer
     return pd.read_excel(path, header=2)
 
 
@@ -139,6 +135,50 @@ def detect_cols(cur, db_name: str) -> Dict[str, str]:
     return {k: v for k, v in mapping.items() if v}
 
 
+def json_dump_or_none(risk: Optional[str]) -> Optional[str]:
+    if not risk:
+        return None
+    import json
+    return json.dumps([risk], ensure_ascii=False)
+
+
+def connect_with_retry(db_config: Dict[str, Any], retries: int = 6) -> mysql.connector.MySQLConnection:
+    """
+    Railway proxy often requires SSL. We emulate mysql2 { ssl: { rejectUnauthorized:false } }.
+
+    mysql-connector-python SSL knobs:
+      - ssl_disabled: False to allow SSL
+      - ssl_verify_cert/identity: False to mimic rejectUnauthorized:false
+    """
+    # Start with SSL enabled + no verification (like rejectUnauthorized:false)
+    base_cfg = dict(db_config)
+    base_cfg.update(
+        {
+            "connection_timeout": 15,
+            "use_pure": True,
+            "ssl_disabled": False,
+            "ssl_verify_cert": False,
+            "ssl_verify_identity": False,
+        }
+    )
+
+    last_err: Exception | None = None
+    for i in range(1, retries + 1):
+        try:
+            conn = mysql.connector.connect(**base_cfg)
+            # ping to validate handshake
+            conn.ping(reconnect=False, attempts=1, delay=0)
+            return conn
+        except Exception as e:
+            last_err = e
+            wait = 2 * i
+            print(f"[DB] connect attempt {i}/{retries} failed: {type(e).__name__}: {e}")
+            print(f"[DB] retrying in {wait}s ...")
+            time.sleep(wait)
+
+    raise SystemExit(f"DB connection failed after {retries} attempts: {last_err}")
+
+
 def main() -> None:
     excel_path = getenv_str("EXCEL_PATH", "")
     referential_id = getenv_int("DEFAULT_REFERENTIAL_ID", 2)
@@ -165,7 +205,7 @@ def main() -> None:
 
     sheet = build_sheet(excel_path)
 
-    conn = mysql.connector.connect(**db_config)
+    conn = connect_with_retry(db_config)
     cur = conn.cursor(dictionary=True)
 
     q_cols = detect_cols(cur, db_config["database"])
@@ -179,7 +219,6 @@ def main() -> None:
     if q_cols.get("expectedEvidence"):
         set_parts.append(f"`{q_cols['expectedEvidence']}` = %s")
 
-    # 1) update by code
     update_by_code_sql = None
     if q_cols.get("code"):
         update_by_code_sql = f"""
@@ -188,9 +227,8 @@ def main() -> None:
           WHERE `{q_cols['referentialId']}` = %s AND `{q_cols['code']}` = %s
         """
 
-    # 2) fallback update by processId+article+questionText (normalized compare)
-    #    We can't normalize SQL easily without functions, so we do a SELECT id first.
     select_fallback_sql = None
+    update_by_id_sql = None
     if q_cols.get("processId") and q_cols.get("article") and q_cols.get("questionText"):
         select_fallback_sql = f"""
           SELECT id
@@ -206,8 +244,6 @@ def main() -> None:
           SET {", ".join(set_parts)}
           WHERE id = %s
         """
-    else:
-        update_by_id_sql = None
 
     updated = 0
     updated_by_code = 0
@@ -231,10 +267,10 @@ def main() -> None:
             missing_process += 1
             continue
 
+        # ✅ accept both headers
         risk = get_cell(row, ["Risque", "Risques"])
         expected = get_cell(row, ["Preuves attendues"])
 
-        # build SET params
         params_set: List[Any] = []
         if q_cols.get("risk"):
             params_set.append(risk)
@@ -247,7 +283,6 @@ def main() -> None:
             updated += 1
             continue
 
-        # Try by code first if possible and if excel code looks filled
         did_update = False
         if update_by_code_sql and code:
             cur.execute(update_by_code_sql, tuple(params_set + [referential_id, code]))
@@ -259,7 +294,6 @@ def main() -> None:
         if did_update:
             continue
 
-        # fallback match on exact text fields
         if select_fallback_sql and update_by_id_sql:
             qt = normalize_question_text(question_text)
             cur.execute(select_fallback_sql, (referential_id, pid, article, qt))
@@ -287,14 +321,6 @@ def main() -> None:
 
     cur.close()
     conn.close()
-
-
-def json_dump_or_none(risk: Optional[str]) -> Optional[str]:
-    if not risk:
-        return None
-    # store JSON array ["risk text"]
-    import json
-    return json.dumps([risk], ensure_ascii=False)
 
 
 if __name__ == "__main__":
