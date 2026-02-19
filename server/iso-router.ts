@@ -62,7 +62,10 @@ function safeJsonArray<T = any>(value: unknown): T[] {
     if (!trimmed) return [];
 
     // ✅ si ce n'est pas du JSON, on considère que c'est une valeur unique
-    const looksLikeJson = (trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith('"') && trimmed.endsWith('"'));
+    const looksLikeJson =
+      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith('"') && trimmed.endsWith('"'));
     if (!looksLikeJson) return [trimmed as any as T];
 
     try {
@@ -72,7 +75,10 @@ function safeJsonArray<T = any>(value: unknown): T[] {
       if (typeof parsed === "string") {
         // cas double-encodé
         const inner = parsed.trim();
-        const looksLikeInnerJson = (inner.startsWith("[") && inner.endsWith("]")) || (inner.startsWith("{") && inner.endsWith("}")) || (inner.startsWith('"') && inner.endsWith('"'));
+        const looksLikeInnerJson =
+          (inner.startsWith("[") && inner.endsWith("]")) ||
+          (inner.startsWith("{") && inner.endsWith("}")) ||
+          (inner.startsWith('"') && inner.endsWith('"'));
         if (!looksLikeInnerJson) return [inner as any as T];
 
         try {
@@ -168,9 +174,7 @@ async function buildProcessCandidates(db: any, processIds: Array<string | number
       .where(inArray(processus.id, numericIds));
 
     for (const p of rows) {
-      if (p?.id != null) {
-        out.push(String(p.id));
-      }
+      if (p?.id != null) out.push(String(p.id));
       if ((p as any)?.name) {
         out.push(String((p as any).name));
         out.push(String((p as any).name).toLowerCase());
@@ -534,7 +538,10 @@ export const isoRouter = router({
       const db = await getDb();
 
       const referentialId = referentialIdFromStandard(input.standardCode);
-      const storedProcessIds = input.processMode === "select" ? input.processIds : [];
+
+      // ✅ FIX: if client sends processIds, keep them even if processMode is defaulted to "all"
+      const hasExplicitSelection = Array.isArray(input.processIds) && input.processIds.length > 0;
+      const storedProcessIds = (input.processMode === "select" || hasExplicitSelection) ? input.processIds : [];
 
       const values: any = {
         name: input.name,
