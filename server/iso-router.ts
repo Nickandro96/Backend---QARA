@@ -190,10 +190,28 @@ async function buildProcessCandidates(db: any, processIds: Array<string | number
     }
   }
 
-  return Array.from(new Set(out)).filter(Boolean);
+  \1/**
+ * Normalize a question row for safe JSON serialization (tRPC / superjson) and UI consistency.
+ * - Forces JSON-ish columns to be plain arrays/objects (never undefined)
+ * - Leaves primitives as-is
+ */
+function normalizeQuestionRow(row: any) {
+  const r = { ...(row || {}) };
+
+  // common JSON columns in this project
+  if ("applicableProcesses" in r) r.applicableProcesses = safeJsonArray<any>(r.applicableProcesses);
+  if ("interviewFunctions" in r) r.interviewFunctions = safeJsonArray<any>(r.interviewFunctions);
+  if ("evidenceTypes" in r) r.evidenceTypes = safeJsonArray<any>(r.evidenceTypes);
+  if ("tags" in r) r.tags = safeJsonArray<any>(r.tags);
+
+  // ensure strings (avoid undefined)
+  if (r.questionText == null && r.question != null) r.questionText = r.question;
+  if (r.risk == null && r.risks != null) r.risk = r.risks;
+
+  return r;
 }
 
-export const isoRouter = router({
+\2 = router({
   // ---------------------------------------------------------------------------
   // Standards & lookup
   // ---------------------------------------------------------------------------
@@ -659,22 +677,32 @@ export const isoRouter = router({
         if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
-      const rows = await db
-        .select()
-        .from(questions)
-        .where(whereParts.length ? and(...whereParts) : undefined)
-        .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
+      try {
+        const rows = await db
+          .select()
+          .from(questions)
+          // ✅ Drizzle can throw if passed undefined; only apply where when needed
+          .where(whereParts.length ? and(...whereParts) : sql`1=1`)
+          .orderBy(
+            sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
+          );
 
-      // logs utiles (comme MDR)
-      console.log(
-        `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
-          selectedProcessesRaw
-        )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
-          candidates
-        )} referentials=${JSON.stringify(referentialIds)}`
-      );
-      console.log(`[ISO] DB filtered questions count: ${(rows as any[]).length}`);
+        // logs utiles (comme MDR)
+        console.log(
+          `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
+            selectedProcessesRaw
+          )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
+            candidates
+          )} referentials=${JSON.stringify(referentialIds)}`
+        );
+        console.log(`[ISO] DB filtered questions count: ${(rows as any[]).length}`);
 
-      return { count: (rows as any[]).length, questions: rows };
+        const normalized = (rows as any[]).map(normalizeQuestionRow);
+        return { count: normalized.length, questions: normalized };
+      } catch (err: any) {
+        console.error("[ISO] getQuestionsForAudit error:", err?.message || err);
+        console.error(err?.stack || "");
+        throw err;
+      }
     }),
 });
