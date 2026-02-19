@@ -539,9 +539,35 @@ export const isoRouter = router({
 
       const referentialId = referentialIdFromStandard(input.standardCode);
 
-      // ✅ FIX: if client sends processIds, keep them even if processMode is defaulted to "all"
+      // ✅ Robust processIds persistence:
+      // - If client sends any processIds => store them (even if processMode="all")
+      // - If updating an existing audit and client sends none => keep existing stored processIds
+      // - If creating a new audit and client sends none while processMode="all" => default to ALL known processes
       const hasExplicitSelection = Array.isArray(input.processIds) && input.processIds.length > 0;
-      const storedProcessIds = (input.processMode === "select" || hasExplicitSelection) ? input.processIds : [];
+
+      // helper to normalize ids
+      const normalizeIds = (arr: any[]) =>
+        (arr || [])
+          .map((x: any) => (typeof x === "number" ? x : Number(x)))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+
+      let storedProcessIds: any[] = [];
+
+      if (hasExplicitSelection) {
+        storedProcessIds = normalizeIds(input.processIds as any[]);
+      } else if (input.auditId) {
+        // keep existing selection if any
+        const [existing] = await db
+          .select({ processIds: (audits as any).processIds })
+          .from(audits)
+          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
+          .limit(1);
+        storedProcessIds = normalizeIds(safeJsonArray<any>((existing as any)?.processIds));
+      } else if (input.processMode === "all") {
+        // default to ALL processes when creating a new audit
+        const procRows: any[] = await db.select({ id: (processus as any).id }).from(processus);
+        storedProcessIds = normalizeIds(procRows.map((r: any) => r.id));
+      }
 
       const values: any = {
         name: input.name,
