@@ -83,7 +83,12 @@ function parseMysqlUrl(urlString: string, source: string): MysqlCfg | null {
 
     const looksManagedOrPublic =
       /railway\.app/i.test(host) ||
+      /rlwy\.net$/i.test(host) ||
+      /proxy\.rlwy\.net$/i.test(host) ||
+      /metro\.proxy\.rlwy\.net$/i.test(host) ||
+      /railway/i.test(host) ||
       /public/i.test(source) ||
+      url.protocol === "mysqls:" ||
       (sslHint && ["1", "true", "yes", "require", "required"].includes(sslHint.toLowerCase()));
 
     const ssl = looksManagedOrPublic ? { rejectUnauthorized: false } : undefined;
@@ -195,8 +200,15 @@ export async function getDb() {
         password: cfg.password,
         database: cfg.database,
         ...(cfg.ssl ? { ssl: cfg.ssl } : {}),
+
+        // ✅ Railway/proxy stability
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+        connectTimeout: 10_000,
+
         waitForConnections: true,
-        connectionLimit: 10,
+        // ✅ Railway likes smaller pools (avoid "too many connections")
+        connectionLimit: 5,
         queueLimit: 0,
       });
 
