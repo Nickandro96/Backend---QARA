@@ -190,7 +190,7 @@ async function buildProcessCandidates(db: any, processIds: Array<string | number
     }
   }
 
-  \1/**
+  /**
  * Normalize a question row for safe JSON serialization (tRPC / superjson) and UI consistency.
  * - Forces JSON-ish columns to be plain arrays/objects (never undefined)
  * - Leaves primitives as-is
