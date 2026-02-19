@@ -524,10 +524,10 @@ def main() -> None:
                 values[q_cols["criticality"]] = criticality
             if "risk" in q_cols:
     # si la colonne DB ciblée est `risks` (plural), on stocke un JSON string ["..."]
-    if q_cols["risk"] == "risks":
-        values[q_cols["risk"]] = json.dumps([risk], ensure_ascii=False) if risk else None
-    else:
-        values[q_cols["risk"]] = risk
+            if q_cols["risk"] == "risks":
+              values[q_cols["risk"]] = json.dumps([risk], ensure_ascii=False) if risk else None
+            else:
+              values[q_cols["risk"]] = risk
             if "question_type" in q_cols:
                 values[q_cols["question_type"]] = question_type
             if "annexe" in q_cols:
