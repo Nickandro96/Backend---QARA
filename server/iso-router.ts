@@ -102,6 +102,31 @@ function safeJsonArray<T = any>(value: unknown): T[] {
   return [];
 }
 
+function normalizeIsoQuestion(row: any) {
+  if (!row || typeof row !== "object") return row;
+
+  // Normalize commonly-JSON fields used by the ISO UI (avoid null/undefined in frontend)
+  const out: any = { ...row };
+
+  const jsonArrayFields = [
+    "applicableProcesses",
+    "interviewFunctions",
+    "evidences",
+    "evidenceDocs",
+    "evidenceDocuments",
+    "relatedDocuments",
+    "risks",
+    "riskLevels",
+    "tags",
+  ];
+
+  for (const f of jsonArrayFields) {
+    if (f in out) out[f] = safeJsonArray<any>(out[f]);
+  }
+
+  return out;
+}
+
 function isNumericString(v: string) {
   return /^\d+$/.test(v);
 }
@@ -190,28 +215,10 @@ async function buildProcessCandidates(db: any, processIds: Array<string | number
     }
   }
 
-  /**
- * Normalize a question row for safe JSON serialization (tRPC / superjson) and UI consistency.
- * - Forces JSON-ish columns to be plain arrays/objects (never undefined)
- * - Leaves primitives as-is
- */
-function normalizeQuestionRow(row: any) {
-  const r = { ...(row || {}) };
-
-  // common JSON columns in this project
-  if ("applicableProcesses" in r) r.applicableProcesses = safeJsonArray<any>(r.applicableProcesses);
-  if ("interviewFunctions" in r) r.interviewFunctions = safeJsonArray<any>(r.interviewFunctions);
-  if ("evidenceTypes" in r) r.evidenceTypes = safeJsonArray<any>(r.evidenceTypes);
-  if ("tags" in r) r.tags = safeJsonArray<any>(r.tags);
-
-  // ensure strings (avoid undefined)
-  if (r.questionText == null && r.question != null) r.questionText = r.question;
-  if (r.risk == null && r.risks != null) r.risk = r.risks;
-
-  return r;
+  return Array.from(new Set(out)).filter(Boolean);
 }
 
-\2 = router({
+export const isoRouter = router({
   // ---------------------------------------------------------------------------
   // Standards & lookup
   // ---------------------------------------------------------------------------
@@ -523,111 +530,106 @@ function normalizeQuestionRow(row: any) {
     }),
 
   // ---------------------------------------------------------------------------
-  // Wizard: draft audit + drilldown
-  // ---------------------------------------------------------------------------
-  createOrUpdateAuditDraft: protectedProcedure
-    .input(
-      z.object({
-        auditId: z.number().optional(),
-        standardCode: z.enum(["ISO9001", "ISO13485"]),
-        siteId: z.number().int().positive(),
-        name: z.string().min(1),
-        processMode: z.enum(["all", "select"]).default("all"),
-        processIds: z.array(z.union([z.number(), z.string()])).default([]),
-        startDate: z.string().optional(),
-        endDate: z.string().optional().nullable(),
-        auditorName: z.string().optional().default(""),
-        auditeeName: z.string().optional().default(""),
-        auditeeEmail: z.string().optional().default(""),
-        status: z.enum(["draft", "in_progress", "completed"]).optional(),
-        organisationId: z.any().optional(),
-        scope: z.any().optional(),
-        method: z.any().optional(),
-        entityName: z.any().optional(),
-        address: z.any().optional(),
-        exclusions: z.any().optional(),
-        productFamilies: z.any().optional(),
-        markets: z.any().optional(),
-        auditTeam: z.any().optional(),
-        standardsVersion: z.any().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
+// Wizard: draft audit + drilldown
+// ---------------------------------------------------------------------------
+createOrUpdateAuditDraft: protectedProcedure
+  .input(
+    z.object({
+      auditId: z.number().optional(),
+      standardCode: z.enum(["ISO9001", "ISO13485"]),
+      siteId: z.number().int().positive(),
+      name: z.string().min(1),
+      processMode: z.enum(["all", "select"]).default("all"),
+      processIds: z.array(z.union([z.number(), z.string()])).default([]),
+      startDate: z.string().optional(),
+      endDate: z.string().optional().nullable(),
+      auditorName: z.string().optional().default(""),
+      auditeeName: z.string().optional().default(""),
+      auditeeEmail: z.string().optional().default(""),
+      status: z.enum(["draft", "in_progress", "completed"]).optional().default("draft"),
+    })
+  )
+  .mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    const referentialId = referentialIdFromStandard(input.standardCode);
 
-      const referentialId = referentialIdFromStandard(input.standardCode);
+    const inputProcessIdsRaw = Array.isArray(input.processIds) ? input.processIds : [];
+    const inputHasSelection = inputProcessIdsRaw.length > 0;
 
-      // ✅ Robust processIds persistence:
-      // - If client sends any processIds => store them (even if processMode="all")
-      // - If updating an existing audit and client sends none => keep existing stored processIds
-      // - If creating a new audit and client sends none while processMode="all" => default to ALL known processes
-      const hasExplicitSelection = Array.isArray(input.processIds) && input.processIds.length > 0;
+    // ✅ If audit exists and client sends empty processIds, do NOT overwrite stored selection
+    let existing: any = null;
+    if (input.auditId) {
+      const [row] = await db
+        .select({ id: (audits as any).id, processIds: (audits as any).processIds })
+        .from(audits)
+        .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
+        .limit(1);
+      existing = row ?? null;
+      if (!existing) throw new Error("Audit introuvable");
+    }
 
-      // helper to normalize ids
-      const normalizeIds = (arr: any[]) =>
-        (arr || [])
-          .map((x: any) => (typeof x === "number" ? x : Number(x)))
-          .filter((n: number) => Number.isFinite(n) && n > 0);
+    // ✅ Determine stored processIds
+    // - If client selected processes OR mode=select -> store that selection
+    // - Else if mode=all -> store ALL process ids (never empty)
+    // - Else (update with empty) -> keep existing
+    let storedProcessIds: any[] | undefined;
 
-      let storedProcessIds: any[] = [];
+    if (inputHasSelection || input.processMode === "select") {
+      storedProcessIds = inputProcessIdsRaw;
+    } else if (!input.auditId) {
+      const all = await db.select({ id: (processus as any).id }).from(processus);
+      storedProcessIds = all.map((p: any) => p.id);
+    } else {
+      storedProcessIds = safeJsonArray<any>(existing?.processIds);
+    }
 
-      if (hasExplicitSelection) {
-        storedProcessIds = normalizeIds(input.processIds as any[]);
-      } else if (input.auditId) {
-        // keep existing selection if any
-        const [existing] = await db
-          .select({ processIds: (audits as any).processIds })
-          .from(audits)
-          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
-          .limit(1);
-        storedProcessIds = normalizeIds(safeJsonArray<any>((existing as any)?.processIds));
-      } else if (input.processMode === "all") {
-        // default to ALL processes when creating a new audit
-        const procRows: any[] = await db.select({ id: (processus as any).id }).from(processus);
-        storedProcessIds = normalizeIds(procRows.map((r: any) => r.id));
-      }
+    const values: any = {
+      name: input.name,
+      type: "internal",
+      userId: ctx.user.id,
+      siteId: input.siteId,
+      status: input.status ?? "draft",
+      economicRole: null,
+      processIds: storedProcessIds,
+      referentialIds: [referentialId],
+      auditorName: (input.auditorName ?? "").trim(),
+      auditeeName: (input.auditeeName ?? "").trim(),
+      auditeeEmail: (input.auditeeEmail ?? "").trim(),
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      endDate: input.endDate ? new Date(input.endDate) : null,
+      updatedAt: new Date(),
+    };
 
-      const values: any = {
-        name: input.name,
-        type: "internal",
-        userId: ctx.user.id,
-        siteId: input.siteId,
-        status: input.status ?? "draft",
-        economicRole: null,
-        processIds: storedProcessIds,
-        referentialIds: [referentialId],
-        auditorName: (input.auditorName ?? "").trim(),
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        endDate: input.endDate ? new Date(input.endDate) : null,
-        updatedAt: new Date(),
-      };
+    if (input.auditId) {
+      await db
+        .update(audits)
+        .set(values)
+        .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
+      return { auditId: input.auditId };
+    }
 
-      if (input.auditId) {
-        await db.update(audits).set(values).where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
-        return { auditId: input.auditId };
-      }
+    const res: any = await db.insert(audits).values({ ...values, createdAt: new Date() });
+    const insertedId = res?.[0]?.insertId ?? res?.insertId ?? null;
 
-      const res: any = await db.insert(audits).values({ ...values, createdAt: new Date() });
-      const insertedId = res?.[0]?.insertId ?? res?.insertId ?? null;
+    if (!insertedId) {
+      const [row] = await db
+        .select({ id: (audits as any).id })
+        .from(audits)
+        .where(and(eq((audits as any).userId, ctx.user.id), eq((audits as any).name, input.name)))
+        .orderBy(sql`${(audits as any).id} DESC`)
+        .limit(1);
+      return { auditId: (row as any)?.id ?? 0 };
+    }
 
-      if (!insertedId) {
-        const [row] = await db
-          .select({ id: (audits as any).id })
-          .from(audits)
-          .where(and(eq((audits as any).userId, ctx.user.id), eq((audits as any).name, input.name)))
-          .orderBy(sql`${(audits as any).id} DESC`)
-          .limit(1);
-        return { auditId: (row as any)?.id ?? 0 };
-      }
-
-      return { auditId: insertedId };
-    }),
+    return { auditId: insertedId };
+  }),
 
   getQuestionsForAudit: protectedProcedure
-    .input(z.object({ auditId: z.number().int().positive() }))
-    .query(async ({ ctx, input }) => {
-      const db = await getDb();
+  .input(z.object({ auditId: z.number().int().positive() }))
+  .query(async ({ ctx, input }) => {
+    const db = await getDb();
 
+    try {
       const [audit] = await db
         .select()
         .from(audits)
@@ -639,16 +641,18 @@ function normalizeQuestionRow(row: any) {
       const selectedProcessesRaw = safeJsonArray<any>((audit as any).processIds);
 
       const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
-
-      const whereParts: any[] = [];
-      if (referentialId) whereParts.push(eq((questions as any).referentialId, referentialId));
+      if (!referentialId) throw new Error("Référentiel ISO manquant sur l'audit");
 
       const candidates = await buildProcessCandidates(db, selectedProcessesRaw);
+
       const selectedDbIds = selectedProcessesRaw
         .map((p: any) => (typeof p === "number" ? p : Number(p)))
         .filter((n: number) => Number.isFinite(n) && n > 0);
 
-      const hasProcessSelection = selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
+      const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+
+      const hasProcessSelection =
+        selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
 
       if (hasProcessSelection) {
         const orParts: any[] = [];
@@ -665,11 +669,13 @@ function normalizeQuestionRow(row: any) {
         if (candidates.length > 0) {
           const conds = candidates.map((cand) => {
             const s = String(cand);
+            // ✅ JSON_CONTAINS(NULL, ...) => NULL. COALESCE to [] to avoid edge cases.
+            const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
             if (isNumericString(s)) {
               const n = Number(s);
-              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
+              return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
             }
-            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, JSON_QUOTE(${s}))`;
+            return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
           });
           orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
         }
@@ -677,32 +683,34 @@ function normalizeQuestionRow(row: any) {
         if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
-      try {
-        const rows = await db
-          .select()
-          .from(questions)
-          // ✅ Drizzle can throw if passed undefined; only apply where when needed
-          .where(whereParts.length ? and(...whereParts) : sql`1=1`)
-          .orderBy(
-            sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
-          );
-
-        // logs utiles (comme MDR)
-        console.log(
-          `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
-            selectedProcessesRaw
-          )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
-            candidates
-          )} referentials=${JSON.stringify(referentialIds)}`
+      let q = db
+        .select()
+        .from(questions)
+        .orderBy(
+          sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
         );
-        console.log(`[ISO] DB filtered questions count: ${(rows as any[]).length}`);
 
-        const normalized = (rows as any[]).map(normalizeQuestionRow);
-        return { count: normalized.length, questions: normalized };
-      } catch (err: any) {
-        console.error("[ISO] getQuestionsForAudit error:", err?.message || err);
-        console.error(err?.stack || "");
-        throw err;
+      if (whereParts.length) {
+        q = (q as any).where(and(...whereParts));
       }
-    }),
+
+      const rows: any[] = (await q) as any[];
+
+      console.log(
+        `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
+          selectedProcessesRaw
+        )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
+          candidates
+        )} referentials=${JSON.stringify(referentialIds)}`
+      );
+      console.log(`[ISO] DB filtered questions count: ${rows.length}`);
+
+      const normalized = rows.map((r) => normalizeIsoQuestion(r));
+
+      return { count: normalized.length, questions: normalized };
+    } catch (err: any) {
+      console.error("[ISO] getQuestionsForAudit error:", err?.stack ?? err);
+      throw err;
+    }
+  }),
 });
