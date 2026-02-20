@@ -164,10 +164,20 @@ export const referentiels = mysqlTable("referentiels", {
  */
 export const processus = mysqlTable("processus", {
   id: int("id").autoincrement().primaryKey(),
+
+  // Functional identifier used by MDR/ISO drilldowns (string slug, e.g. "production_sub")
+  slug: varchar("slug", { length: 255 }),
+
   name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+
+  displayOrder: int("displayOrder"),
+  icon: varchar("icon", { length: 255 }),
+
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-  // updatedAt supprimé volontairement (absent en DB)
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
 });
+
 
 /* =========================
    AUDITS
