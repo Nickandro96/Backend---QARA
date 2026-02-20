@@ -14,25 +14,7 @@ import { eq, and, sql } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-
-// Define MDR_PROCESSES locally to avoid import issues during build
-const MDR_PROCESSES = [
-  { id: "gov_strat", name: "Gouvernance & stratégie réglementaire", displayOrder: 1 },
-  { id: "ra", name: "Affaires réglementaires (RA)", displayOrder: 2 },
-  { id: "qms", name: "Système de management qualité (QMS)", displayOrder: 3 },
-  { id: "risk_mgmt", name: "Gestion des risques (ISO 14971)", displayOrder: 4 },
-  { id: "design_dev", name: "Conception & développement", displayOrder: 5 },
-  { id: "purchasing_suppliers", name: "Achats & fournisseurs", displayOrder: 6 },
-  { id: "production_sub", name: "Production & sous-traitance", displayOrder: 7 },
-  { id: "traceability_udi", name: "Traçabilité / UDI", displayOrder: 8 },
-  { id: "pms_pmcf", name: "PMS / PMCF", displayOrder: 9 },
-  { id: "vigilance_incidents", name: "Vigilance & incidents", displayOrder: 10 },
-  { id: "distribution_logistics", name: "Distribution & logistique", displayOrder: 11 },
-  { id: "importation", name: "Importation", displayOrder: 12 },
-  { id: "tech_doc", name: "Documentation technique", displayOrder: 13 },
-  { id: "audits_conformity", name: "Audits & conformité", displayOrder: 14 },
-  { id: "it_data_cybersecurity", name: "IT / données / cybersécurité", displayOrder: 15 },
-];
+import { CANONICAL_PROCESSES } from "./processes-catalog";
 
 // Helper to generate a stable questionKey for JSON questions (fallback)
 const generateQuestionKey = (question: any): string => {
@@ -176,10 +158,10 @@ async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[
   // 1) IDs numériques directement fournis
   const numericIds = sel.filter((x) => isNumericString(x)).map((x) => Number(x));
 
-  // 2) slugs -> names (via MDR_PROCESSES)
+  // 2) slugs -> names (via CANONICAL_PROCESSES)
   const slugs = sel.filter((x) => !isNumericString(x) && x !== "all");
   const names = slugs
-    .map((slug) => MDR_PROCESSES.find((p) => p.id === slug)?.name)
+    .map((slug) => CANONICAL_PROCESSES.find((p) => p.id === slug)?.name)
     .filter(Boolean) as string[];
 
   let dbIds: number[] = [...numericIds];
@@ -233,7 +215,7 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
   // 1) tokens + names
   for (const t of tokens) {
     candidates.push(t);
-    const p = MDR_PROCESSES.find((x) => x.id === t);
+    const p = CANONICAL_PROCESSES.find((x) => x.id === t);
     if (p?.name) candidates.push(p.name);
   }
 
@@ -351,9 +333,38 @@ export const mdrRouter = router({
   /**
    * Get canonical list of MDR processes
    */
-  getProcesses: protectedProcedure.query(() => {
-    console.log("[MDR] processes returned:", MDR_PROCESSES.length);
-    return { processes: MDR_PROCESSES };
+  getProcesses: protectedProcedure.query(async () => {
+    const db = await getDb();
+    try {
+      // Prefer DB-backed processes (unified ISO/MDR) when slug is available.
+      const rows: any[] = await db
+        .select({
+          slug: (processus as any).slug,
+          name: (processus as any).name,
+          displayOrder: (processus as any).displayOrder,
+        })
+        .from(processus)
+        .orderBy(
+          sql`${(processus as any).displayOrder} IS NULL, ${(processus as any).displayOrder} ASC, ${(processus as any).id} ASC`
+        );
+
+      const dbBacked = (rows || [])
+        .filter((r) => r?.slug)
+        .map((r) => ({
+          id: String(r.slug),
+          name: String(r.name ?? r.slug),
+          displayOrder: Number(r.displayOrder ?? 0),
+        }))
+        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+      const processes = dbBacked.length ? dbBacked : CANONICAL_PROCESSES;
+
+      console.log("[MDR] processes returned:", processes.length, "dbBacked:", dbBacked.length);
+      return { processes };
+    } catch (e) {
+      console.error("[MDR] getProcesses fallback to canonical list:", e);
+      return { processes: CANONICAL_PROCESSES };
+    }
   }),
 
   /**
