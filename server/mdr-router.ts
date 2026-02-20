@@ -17,22 +17,41 @@ import crypto from "crypto";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
-  { id: "governance_strategy", name: "Gouvernance & stratégie réglementaire", displayOrder: 1 },
-  { id: "regulatory_affairs", name: "Affaires réglementaires (RA)", displayOrder: 2 },
+  { id: "gov_strat", name: "Gouvernance & stratégie réglementaire", displayOrder: 1 },
+  { id: "ra", name: "Affaires réglementaires (RA)", displayOrder: 2 },
   { id: "qms", name: "Système de management qualité (QMS)", displayOrder: 3 },
-  { id: "risk_management", name: "Gestion des risques (ISO 14971)", displayOrder: 4 },
-  { id: "design_development", name: "Conception & développement", displayOrder: 5 },
+  { id: "risk_mgmt", name: "Gestion des risques (ISO 14971)", displayOrder: 4 },
+  { id: "design_dev", name: "Conception & développement", displayOrder: 5 },
   { id: "purchasing_suppliers", name: "Achats & fournisseurs", displayOrder: 6 },
-  { id: "production_subcontract", name: "Production & sous-traitance", displayOrder: 7 },
+  { id: "production_sub", name: "Production & sous-traitance", displayOrder: 7 },
   { id: "traceability_udi", name: "Traçabilité / UDI", displayOrder: 8 },
   { id: "pms_pmcf", name: "PMS / PMCF", displayOrder: 9 },
   { id: "vigilance_incidents", name: "Vigilance & incidents", displayOrder: 10 },
   { id: "distribution_logistics", name: "Distribution & logistique", displayOrder: 11 },
   { id: "importation", name: "Importation", displayOrder: 12 },
-  { id: "technical_documentation", name: "Documentation technique", displayOrder: 13 },
-  { id: "audits_compliance", name: "Audits & conformité", displayOrder: 14 },
+  { id: "tech_doc", name: "Documentation technique", displayOrder: 13 },
+  { id: "audits_conformity", name: "Audits & conformité", displayOrder: 14 },
   { id: "it_data_cybersecurity", name: "IT / données / cybersécurité", displayOrder: 15 },
 ];
+
+// ✅ Canonical slugs in DB (processus.slug) vs legacy ids used historically in MDR_PROCESSES/UI
+const PROCESS_ID_ALIASES: Record<string, string> = {
+  gov_strat: "governance_strategy",
+  ra: "regulatory_affairs",
+  risk_mgmt: "risk_management",
+  design_dev: "design_development",
+  production_sub: "production_subcontract",
+  tech_doc: "technical_documentation",
+  audits_conformity: "audits_compliance",
+};
+
+// Normalize process token (accept legacy ids and return canonical DB slug)
+function canonicalizeProcessToken(v: any): string {
+  const t = String(v ?? "").trim();
+  if (!t) return "";
+  return PROCESS_ID_ALIASES[t] ?? t;
+}
+
 
 // Helper to generate a stable questionKey for JSON questions (fallback)
 const generateQuestionKey = (question: any): string => {
@@ -147,7 +166,7 @@ function normalizeAuditForFrontend(audit: any) {
     .map((n: any) => Number(n))
     .filter((n: any) => !Number.isNaN(n));
 
-  const processIds = safeParseArray(audit?.processIds).map((x: any) => String(x));
+  const processIds = safeParseArray(audit?.processIds).map((x: any) => canonicalizeProcessToken(x)).filter(Boolean);
 
   return {
     ...audit,
@@ -169,41 +188,44 @@ function normalizeAuditForFrontend(audit: any) {
  * - entrée: slugs (distribution_logistics) et/ou IDs numériques (string)
  * - sortie: array number[] (IDs DB)
  */
+
+/**
+ * ✅ RÉSOUDRE les process sélectionnés en IDs DB (processus.id)
+ * - entrée: slugs DB (processus.slug) et/ou legacy ids (gov_strat, tech_doc...) et/ou IDs numériques (string)
+ * - sortie: array number[] (IDs DB)
+ */
 async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[]> {
-  const sel = (selected || []).map((x) => String(x)).filter(Boolean);
-  if (sel.length === 0) return [];
+  const selRaw = (selected || []).map((x) => String(x)).filter(Boolean);
+  if (selRaw.length === 0) return [];
 
   // 1) IDs numériques directement fournis
-  const numericIds = sel.filter((x) => isNumericString(x)).map((x) => Number(x));
+  const numericIds = selRaw.filter((x) => isNumericString(x)).map((x) => Number(x));
 
-  // 2) slugs -> names (via MDR_PROCESSES)
-  const slugs = sel.filter((x) => !isNumericString(x) && x !== "all");
-  const names = slugs
-    .map((slug) => MDR_PROCESSES.find((p) => p.id === slug)?.name)
-    .filter(Boolean) as string[];
+  // 2) tokens (slug/legacy) -> canonical slug
+  const tokens = selRaw.filter((x) => !isNumericString(x) && x !== "all");
+  const canonicalSlugs = Array.from(new Set(tokens.map((t) => canonicalizeProcessToken(t)).filter(Boolean)));
 
   let dbIds: number[] = [...numericIds];
 
-  // 3) names -> ids via DB (processus)
-  if (names.length > 0) {
+  // 3) slug -> id via DB (preferred, now that `processus.slug` exists)
+  if (canonicalSlugs.length > 0) {
     try {
-      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
       const rows = await db
         .select({
           id: (processus as any).id,
-          name: (processus as any).name,
+          slug: (processus as any).slug,
         })
         .from(processus)
         .where(
-          sql`${(processus as any).name} in (${sql.join(
-            names.map((n) => sql`${n}`),
+          sql`${(processus as any).slug} in (${sql.join(
+            canonicalSlugs.map((s) => sql`${s}`),
             sql`, `
           )})`
         );
 
       dbIds.push(...(rows || []).map((r: any) => Number(r.id)));
     } catch (e) {
-      console.warn("[MDR] resolveProcessDbIds failed (names->ids):", e);
+      console.warn("[MDR] resolveProcessDbIds failed (slug->id):", e);
     }
   }
 
@@ -217,12 +239,27 @@ async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[
  * - tokens + canonical names
  * - numeric ids -> DB processus.name
  */
+
+/**
+ * ✅ Build process candidates matching questions.applicableProcesses
+ * We must match both:
+ * - canonical DB slugs (processus.slug)
+ * - legacy ids (gov_strat, tech_doc...)
+ * - human labels stored in questions.applicableProcesses (ex: "Gouvernance & stratégie réglementaire")
+ *
+ * Strategy:
+ * - always include the raw token + canonical slug
+ * - add the display name from DB (`processus.name`) for canonical slugs
+ * - add the legacy hardcoded display name if token matches MDR_PROCESSES legacy ids
+ * - also include numeric ids and their DB names (if any)
+ */
 async function buildApplicableProcessCandidates(db: any, selected: string[]) {
   if (!selected || selected.length === 0) return [];
 
-  const tokens = selected
+  const tokensRaw = selected
     .filter((x) => x && x !== "all" && !isNumericString(String(x)))
-    .map(String);
+    .map((x) => String(x).trim())
+    .filter(Boolean);
 
   const numeric = selected
     .filter((x) => x && x !== "all" && isNumericString(String(x)))
@@ -230,14 +267,44 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
 
   const candidates: string[] = [];
 
-  // 1) tokens + names
-  for (const t of tokens) {
-    candidates.push(t);
-    const p = MDR_PROCESSES.find((x) => x.id === t);
-    if (p?.name) candidates.push(p.name);
+  // 1) tokens + canonical slugs + legacy names
+  const canonicalSlugs = Array.from(new Set(tokensRaw.map((t) => canonicalizeProcessToken(t)).filter(Boolean)));
+
+  for (const t of tokensRaw) {
+    candidates.push(t); // raw token
+    const canonical = canonicalizeProcessToken(t);
+    if (canonical && canonical !== t) candidates.push(canonical);
+
+    // legacy id -> legacy name (still useful if applicableProcesses stores names)
+    const legacy = MDR_PROCESSES.find((p) => p.id === t);
+    if (legacy?.name) candidates.push(legacy.name);
   }
 
-  // 2) numeric -> processus.name (safe select id/name only)
+  // 2) slug -> DB name (preferred)
+  if (canonicalSlugs.length > 0) {
+    try {
+      const rows = await db
+        .select({
+          slug: (processus as any).slug,
+          name: (processus as any).name,
+        })
+        .from(processus)
+        .where(
+          sql`${(processus as any).slug} in (${sql.join(
+            canonicalSlugs.map((s) => sql`${s}`),
+            sql`, `
+          )})`
+        );
+
+      for (const r of rows || []) {
+        if ((r as any)?.name) candidates.push(String((r as any).name));
+      }
+    } catch (e) {
+      console.warn("[MDR] buildApplicableProcessCandidates failed (slug->name):", e);
+    }
+  }
+
+  // 3) numeric -> processus.name (safe select id/name only)
   if (numeric.length > 0) {
     try {
       const rows = await db
@@ -261,13 +328,13 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
     }
   }
 
-  // 3) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "11" en string)
+  // 4) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "11" en string)
   for (const n of numeric) candidates.push(String(n));
 
   return [...new Set(candidates.map((s) => String(s).trim()).filter(Boolean))];
 }
 
-// Internal helper: get audit context WITHOUT calling tRPC endpoints
+: get audit context WITHOUT calling tRPC endpoints
 async function getAuditContextInternal(db: any, userId: number, auditId: number) {
   const [audit] = await db
     .select()
@@ -295,7 +362,7 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
     economicRole = normalizeEconomicRole(qualification?.economicRole);
   }
 
-  const processIds = safeParseArray((audit as any).processIds).map(String);
+  const processIds = safeParseArray((audit as any).processIds).map((x: any) => canonicalizeProcessToken(x)).filter(Boolean);
 
   const referentialIds = safeParseArray((audit as any).referentialIds)
     .map((n: any) => Number(n))
