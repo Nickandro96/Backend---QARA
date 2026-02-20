@@ -115,8 +115,7 @@ function normalizeIsoQuestion(row: any) {
     "evidenceDocs",
     "evidenceDocuments",
     "relatedDocuments",
-    "risks",
-    "riskLevels",
+        "riskLevels",
     "tags",
   ];
 
@@ -136,31 +135,21 @@ function isNumericString(v: string) {
  * (d'après tes captures: applicableProcesses contient "Gouvernance")
  */
 const PROCESS_SLUG_TO_ISO_LABELS: Record<string, string[]> = {
-  // ✅ NEW canonical slugs (DB) — keep these going forward
-  governance_strategy: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
-  regulatory_affairs: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
+  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
+  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
   qms: ["QMS", "SMQ", "Système de management qualité", "Système de management qualité (QMS)", "Qualité"],
-  risk_management: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
-  design_development: ["Conception", "Conception & développement", "Développement"],
+  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
+  design_dev: ["Conception", "Conception & développement", "Développement"],
   purchasing_suppliers: ["Achats", "Fournisseurs", "Achats & fournisseurs"],
-  production_subcontract: ["Production", "Sous-traitance", "Production & sous-traitance"],
+  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
   traceability_udi: ["Traçabilité", "UDI", "Traçabilité / UDI"],
   pms_pmcf: ["PMS", "PMCF", "PMS / PMCF"],
   vigilance_incidents: ["Vigilance", "Incidents", "Vigilance & incidents"],
   distribution_logistics: ["Distribution", "Logistique", "Distribution & logistique"],
-  importation: ["Importation", "Importer", "Importateur"],
-  technical_documentation: ["Documentation technique", "Dossier technique", "Tech doc"],
-  audits_compliance: ["Audit", "Audits", "Conformité", "Audits & conformité"],
-  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "Données / IT / cybersécurité", "IT / données / cybersécurité"],
-
-  // ♻️ Legacy slugs (old hardcoded MDR list) — backward compatible
-  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
-  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
-  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
-  design_dev: ["Conception", "Conception & développement", "Développement"],
-  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
-  tech_doc: ["Documentation technique", "Dossier technique", "Tech doc"],
-  audits_conformity: ["Audit", "Audits", "Conformité", "Audits & conformité"],
+  importation: ["Importation"],
+  tech_doc: ["Documentation", "Documentation technique"],
+  audits_conformity: ["Audits", "Conformité", "Audits & conformité"],
+  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "IT / données / cybersécurité"],
 };
 
 /**
