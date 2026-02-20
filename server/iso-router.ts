@@ -132,6 +132,38 @@ function isNumericString(v: string) {
 }
 
 /**
+ * Normalise une sélection de processus provenant de l'UI / DB.
+ * - accepte: number | string
+ * - accepte aussi: { id }, { value }, { processId } (certains composants UI)
+ * - ignore les valeurs vides
+ */
+function normalizeProcessTokens(input: unknown): Array<string | number> {
+  const arr = safeJsonArray<any>(input);
+  const out: Array<string | number> = [];
+
+  for (const p of arr) {
+    if (p == null) continue;
+    if (typeof p === "number" || typeof p === "string") {
+      const s = String(p).trim();
+      if (!s) continue;
+      // preserve numeric strings as string here; conversion is handled later
+      out.push(typeof p === "number" ? p : s);
+      continue;
+    }
+
+    if (typeof p === "object") {
+      const maybe = (p as any).id ?? (p as any).value ?? (p as any).processId;
+      if (maybe == null) continue;
+      const s = String(maybe).trim();
+      if (!s) continue;
+      out.push(isNumericString(s) ? Number(s) : s);
+    }
+  }
+
+  return out;
+}
+
+/**
  * Mapping slugs UI (MDR-like) -> libellés utilisés dans applicableProcesses ISO
  * (d'après tes captures: applicableProcesses contient "Gouvernance")
  */
@@ -638,7 +670,9 @@ createOrUpdateAuditDraft: protectedProcedure
       if (!audit) throw new Error("Audit introuvable");
 
       const referentialIds = safeJsonArray<any>((audit as any).referentialIds);
-      const selectedProcessesRaw = safeJsonArray<any>((audit as any).processIds);
+      // ✅ processIds peut parfois contenir des objets (ex: {id,name}) selon l'UI.
+      // On normalise pour garantir un filtrage robuste.
+      const selectedProcessesRaw = normalizeProcessTokens((audit as any).processIds);
 
       const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
       if (!referentialId) throw new Error("Référentiel ISO manquant sur l'audit");
