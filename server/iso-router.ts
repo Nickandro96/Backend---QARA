@@ -378,10 +378,43 @@ export const isoRouter = router({
       }
 
       const rows = await db
-        .select()
+        .select({
+          id: (questions as any).id,
+          referentialId: (questions as any).referentialId,
+          processId: (questions as any).processId,
+
+          questionKey: (questions as any).questionKey,
+          article: (questions as any).article,
+          annexe: (questions as any).annexe,
+          title: (questions as any).title,
+
+          economicRole: (questions as any).economicRole,
+          applicableProcesses: (questions as any).applicableProcesses,
+
+          questionType: (questions as any).questionType,
+          questionText: (questions as any).questionText,
+          expectedEvidence: (questions as any).expectedEvidence,
+
+          criticality: (questions as any).criticality,
+
+          // ✅ single source of truth in DB is `risk`
+          risk: (questions as any).risk,
+
+          // ✅ backward-compatible alias for older front code
+          risks: (questions as any).risk,
+
+          interviewFunctions: (questions as any).interviewFunctions,
+          actionPlan: (questions as any).actionPlan,
+          aiPrompt: (questions as any).aiPrompt,
+
+          displayOrder: (questions as any).displayOrder,
+          createdAt: (questions as any).createdAt,
+        })
         .from(questions)
         .where(and(...whereParts))
-        .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
+        .orderBy(
+          sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
+        );
 
       return { count: (rows as any[]).length, questions: rows };
     }),
