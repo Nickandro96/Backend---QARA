@@ -15,24 +15,35 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-// Define MDR_PROCESSES locally to avoid import issues during build
+// Canonical MDR/ISO process catalog (must match DB `processus.slug`)
 const MDR_PROCESSES = [
-  { id: "gov_strat", name: "Gouvernance & stratégie réglementaire", displayOrder: 1 },
-  { id: "ra", name: "Affaires réglementaires (RA)", displayOrder: 2 },
+  { id: "governance_strategy", name: "Gouvernance & stratégie réglementaire", displayOrder: 1 },
+  { id: "regulatory_affairs", name: "Affaires réglementaires (RA)", displayOrder: 2 },
   { id: "qms", name: "Système de management qualité (QMS)", displayOrder: 3 },
-  { id: "risk_mgmt", name: "Gestion des risques (ISO 14971)", displayOrder: 4 },
-  { id: "design_dev", name: "Conception & développement", displayOrder: 5 },
+  { id: "risk_management", name: "Gestion des risques (ISO 14971)", displayOrder: 4 },
+  { id: "design_development", name: "Conception & développement", displayOrder: 5 },
   { id: "purchasing_suppliers", name: "Achats & fournisseurs", displayOrder: 6 },
-  { id: "production_sub", name: "Production & sous-traitance", displayOrder: 7 },
+  { id: "production_subcontract", name: "Production & sous-traitance", displayOrder: 7 },
   { id: "traceability_udi", name: "Traçabilité / UDI", displayOrder: 8 },
   { id: "pms_pmcf", name: "PMS / PMCF", displayOrder: 9 },
   { id: "vigilance_incidents", name: "Vigilance & incidents", displayOrder: 10 },
   { id: "distribution_logistics", name: "Distribution & logistique", displayOrder: 11 },
   { id: "importation", name: "Importation", displayOrder: 12 },
-  { id: "tech_doc", name: "Documentation technique", displayOrder: 13 },
-  { id: "audits_conformity", name: "Audits & conformité", displayOrder: 14 },
+  { id: "technical_documentation", name: "Documentation technique", displayOrder: 13 },
+  { id: "audits_compliance", name: "Audits & conformité", displayOrder: 14 },
   { id: "it_data_cybersecurity", name: "IT / données / cybersécurité", displayOrder: 15 },
-];
+] as const;
+
+// Legacy ids seen in historical audits / old frontend catalogs -> canonical slug
+const LEGACY_PROCESS_ID_MAP: Record<string, string> = {
+  gov_strat: "governance_strategy",
+  ra: "regulatory_affairs",
+  risk_mgmt: "risk_management",
+  design_dev: "design_development",
+  production_sub: "production_subcontract",
+  tech_doc: "technical_documentation",
+  audits_conformity: "audits_compliance",
+};
 
 // Helper to generate a stable questionKey for JSON questions (fallback)
 const generateQuestionKey = (question: any): string => {
@@ -188,46 +199,42 @@ function normalizeAuditForFrontend(audit: any) {
  * - sortie: array number[] (IDs DB)
  */
 async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[]> {
-  const sel = (selected || []).map((x) => String(x)).filter(Boolean);
+  const sel = (selected || [])
+    .map((x) => String(x).trim())
+    .filter((x) => x && x !== "all")
+    .map((x) => LEGACY_PROCESS_ID_MAP[x] ?? x);
+
   if (sel.length === 0) return [];
 
-  // 1) IDs numériques directement fournis
   const numericIds = sel.filter((x) => isNumericString(x)).map((x) => Number(x));
+  const tokens = sel.filter((x) => !isNumericString(x));
 
-  // 2) slugs -> names (via MDR_PROCESSES)
-  const slugs = sel.filter((x) => !isNumericString(x) && x !== "all");
-  const names = slugs
-    .map((slug) => MDR_PROCESSES.find((p) => p.id === slug)?.name)
-    .filter(Boolean) as string[];
+  const dbIds: number[] = [...numericIds];
 
-  let dbIds: number[] = [...numericIds];
-
-  // 3) names -> ids via DB (processus)
-  if (names.length > 0) {
+  if (tokens.length > 0) {
     try {
-      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
       const rows = await db
         .select({
           id: (processus as any).id,
+          slug: (processus as any).slug,
           name: (processus as any).name,
         })
         .from(processus)
         .where(
-          sql`${(processus as any).name} in (${sql.join(
-            names.map((n) => sql`${n}`),
-            sql`, `
-          )})`
+          sql`(${(processus as any).slug} in (${sql.join(tokens.map((t) => sql`${t}`), sql`, `)})
+                OR ${(processus as any).name} in (${sql.join(tokens.map((t) => sql`${t}`), sql`, `)}))`
         );
 
-      dbIds.push(...(rows || []).map((r: any) => Number(r.id)));
+      for (const r of rows || []) {
+        const id = Number((r as any).id);
+        if (Number.isFinite(id)) dbIds.push(id);
+      }
     } catch (e) {
-      console.warn("[MDR] resolveProcessDbIds failed (names->ids):", e);
+      console.warn("[MDR] resolveProcessDbIds failed (slug/name->ids):", e);
     }
   }
 
-  // dedupe + keep finite
-  dbIds = Array.from(new Set(dbIds)).filter((n) => Number.isFinite(n));
-  return dbIds;
+  return Array.from(new Set(dbIds)).filter((n) => Number.isFinite(n));
 }
 
 /**
@@ -236,50 +243,91 @@ async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[
  * - numeric ids -> DB processus.name
  */
 async function buildApplicableProcessCandidates(db: any, selected: string[]) {
-  if (!selected || selected.length === 0) return [];
+  const sel = (selected || [])
+    .map((x) => String(x).trim())
+    .filter((x) => x && x !== "all");
 
-  const tokens = selected
-    .filter((x) => x && x !== "all" && !isNumericString(String(x)))
-    .map(String);
+  if (sel.length === 0) return [];
 
-  const numeric = selected
-    .filter((x) => x && x !== "all" && isNumericString(String(x)))
-    .map((x) => Number(x));
+  // Normalize legacy -> canonical
+  const normalized = sel.map((x) => LEGACY_PROCESS_ID_MAP[x] ?? x);
+
+  const numeric = normalized.filter((x) => isNumericString(x)).map((x) => Number(x));
+  const tokens = normalized.filter((x) => !isNumericString(x));
 
   const candidates: string[] = [];
 
-  // 1) tokens + names
+  // 1) always include raw tokens (slug / name)
   for (const t of tokens) {
     candidates.push(t);
+    candidates.push(t.toLowerCase());
     const p = MDR_PROCESSES.find((x) => x.id === t);
-    if (p?.name) candidates.push(p.name);
+    if (p?.name) {
+      candidates.push(p.name);
+      candidates.push(p.name.toLowerCase());
+    }
   }
 
-  // 2) numeric -> processus.name (safe select id/name only)
+  // 2) Map tokens (slug or name) to DB names
+  if (tokens.length > 0) {
+    try {
+      const rows = await db
+        .select({
+          id: (processus as any).id,
+          slug: (processus as any).slug,
+          name: (processus as any).name,
+        })
+        .from(processus)
+        .where(
+          sql`(${(processus as any).slug} in (${sql.join(tokens.map((t) => sql`${t}`), sql`, `)})
+                OR ${(processus as any).name} in (${sql.join(tokens.map((t) => sql`${t}`), sql`, `)}))`
+        );
+
+      for (const r of rows || []) {
+        if ((r as any)?.slug) {
+          candidates.push(String((r as any).slug));
+          candidates.push(String((r as any).slug).toLowerCase());
+        }
+        if ((r as any)?.name) {
+          candidates.push(String((r as any).name));
+          candidates.push(String((r as any).name).toLowerCase());
+        }
+        if ((r as any)?.id != null) candidates.push(String((r as any).id));
+      }
+    } catch (e) {
+      console.warn("[MDR] buildApplicableProcessCandidates failed (slug/name->db labels):", e);
+    }
+  }
+
+  // 3) numeric -> DB name + numeric string
   if (numeric.length > 0) {
     try {
       const rows = await db
         .select({
           id: (processus as any).id,
           name: (processus as any).name,
+          slug: (processus as any).slug,
         })
         .from(processus)
         .where(
-          sql`${(processus as any).id} in (${sql.join(
-            numeric.map((n) => sql`${n}`),
-            sql`, `
-          )})`
+          sql`${(processus as any).id} in (${sql.join(numeric.map((n) => sql`${n}`), sql`, `)})`
         );
 
       for (const r of rows || []) {
-        if ((r as any)?.name) candidates.push(String((r as any).name));
+        if ((r as any)?.name) {
+          candidates.push(String((r as any).name));
+          candidates.push(String((r as any).name).toLowerCase());
+        }
+        if ((r as any)?.slug) {
+          candidates.push(String((r as any).slug));
+          candidates.push(String((r as any).slug).toLowerCase());
+        }
       }
     } catch (e) {
       console.warn("[MDR] Unable to map numeric process IDs to names via `processus`:", e);
     }
   }
 
-  // 3) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "11" en string)
   for (const n of numeric) candidates.push(String(n));
 
   return [...new Set(candidates.map((s) => String(s).trim()).filter(Boolean))];
@@ -313,7 +361,14 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
     economicRole = normalizeEconomicRole(qualification?.economicRole);
   }
 
-  const processIds = safeParseArray((audit as any).processIds).map(String);
+  const processIds = safeParseArray((audit as any).processIds)
+    .map(extractProcessToken)
+    .filter(Boolean)
+    .map((pid: any) => {
+      const s = String(pid).trim();
+      return LEGACY_PROCESS_ID_MAP[s] ?? s;
+    });
+
 
   const referentialIds = safeParseArray((audit as any).referentialIds)
     .map((n: any) => Number(n))
