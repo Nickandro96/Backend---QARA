@@ -237,7 +237,6 @@ export const questions = mysqlTable("questions", {
   criticality: varchar("criticality", { length: 50 }),
 
   risk: text("risk"),
-  risks: text("risks"),
 
   interviewFunctions: json("interviewFunctions"),
   actionPlan: text("actionPlan"),
