@@ -135,21 +135,31 @@ function isNumericString(v: string) {
  * (d'après tes captures: applicableProcesses contient "Gouvernance")
  */
 const PROCESS_SLUG_TO_ISO_LABELS: Record<string, string[]> = {
-  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
-  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
+  // Canonical slugs (DB)
+  governance_strategy: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
+  regulatory_affairs: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
   qms: ["QMS", "SMQ", "Système de management qualité", "Système de management qualité (QMS)", "Qualité"],
-  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
-  design_dev: ["Conception", "Conception & développement", "Développement"],
+  risk_management: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
+  design_development: ["Conception", "Conception & développement", "Développement"],
   purchasing_suppliers: ["Achats", "Fournisseurs", "Achats & fournisseurs"],
-  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
+  production_subcontract: ["Production", "Sous-traitance", "Production & sous-traitance"],
   traceability_udi: ["Traçabilité", "UDI", "Traçabilité / UDI"],
   pms_pmcf: ["PMS", "PMCF", "PMS / PMCF"],
   vigilance_incidents: ["Vigilance", "Incidents", "Vigilance & incidents"],
   distribution_logistics: ["Distribution", "Logistique", "Distribution & logistique"],
   importation: ["Importation"],
+  technical_documentation: ["Documentation", "Documentation technique"],
+  audits_compliance: ["Audits", "Conformité", "Audits & conformité"],
+  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "IT / données / cybersécurité"],
+
+  // Legacy slugs (old hardcoded catalog / historical audits)
+  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
+  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
+  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
+  design_dev: ["Conception", "Conception & développement", "Développement"],
+  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
   tech_doc: ["Documentation", "Documentation technique"],
   audits_conformity: ["Audits", "Conformité", "Audits & conformité"],
-  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "IT / données / cybersécurité"],
 };
 
 /**
