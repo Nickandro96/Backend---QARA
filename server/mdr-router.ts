@@ -329,42 +329,9 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
   };
 }
 
-
-const QUESTION_SELECT = {
-  id: (questions as any).id,
-  referentialId: (questions as any).referentialId,
-  processId: (questions as any).processId,
-
-  questionKey: (questions as any).questionKey,
-  article: (questions as any).article,
-  annexe: (questions as any).annexe,
-  title: (questions as any).title,
-
-  economicRole: (questions as any).economicRole,
-  applicableProcesses: (questions as any).applicableProcesses,
-
-  questionType: (questions as any).questionType,
-  questionText: (questions as any).questionText,
-  expectedEvidence: (questions as any).expectedEvidence,
-
-  criticality: (questions as any).criticality,
-
-  // ✅ single source of truth in DB is `risk`
-  risk: (questions as any).risk,
-  // ✅ backward-compatible alias for older front code
-  risks: (questions as any).risk,
-
-  interviewFunctions: (questions as any).interviewFunctions,
-  actionPlan: (questions as any).actionPlan,
-  aiPrompt: (questions as any).aiPrompt,
-
-  displayOrder: (questions as any).displayOrder,
-  createdAt: (questions as any).createdAt,
-} as const;
-
 async function loadQuestionsFromDb(db: any) {
   try {
-    const rows = await db.select(QUESTION_SELECT).from(questions);
+    const rows = await db.select().from(questions);
     console.log("[MDR] total questions loaded from DB:", rows.length);
     return rows;
   } catch (e) {
@@ -1210,7 +1177,8 @@ export const mdrRouter = router({
           expectedEvidence: q.expectedEvidence ?? null,
           criticality: q.criticality ?? null,
 
-          risks: normalizeRisksValue((q as any).risk ?? null),
+          risk: (q as any).risk ?? null,
+          risks: normalizeRisksValue(q.risks ?? q.risk ?? null),
 
           interviewFunctions: safeParseArray(q.interviewFunctions),
           economicRole: q.economicRole ?? null,
@@ -1306,7 +1274,8 @@ export const mdrRouter = router({
         title: q.title,
         expectedEvidence: q.expectedEvidence ?? null,
         criticality: q.criticality ?? null,
-        risks: normalizeRisksValue((q as any).risk ?? null),
+        risk: (q as any).risk ?? null,
+        risks: normalizeRisksValue((q as any).risks ?? (q as any).risk ?? null),
         interviewFunctions: safeParseArray(q.interviewFunctions),
         economicRole: q.economicRole ?? null,
         applicableProcesses: safeParseArray(q.applicableProcesses),
