@@ -41,6 +41,8 @@ import {
 
 let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
+// ✅ Used to throttle keepalive pings and avoid spamming the DB
+let _lastPingAt = 0;
 
 function pickFirstEnv(...keys: string[]): string | undefined {
   for (const k of keys) {
