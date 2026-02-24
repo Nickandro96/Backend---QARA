@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 
@@ -179,6 +179,7 @@ function getMysqlConfigFromEnv(): MysqlCfg | null {
 }
 
 export async function getDb() {
+  // Fast-path
   if (_db) return _db;
 
   const cfg = getMysqlConfigFromEnv();
@@ -212,10 +213,20 @@ export async function getDb() {
         queueLimit: 0,
       });
 
-      // ✅ Fail-fast
+      // Mark ping needed
+      _lastPingAt = 0;
+    }
+
+    // ✅ Periodic ping (prevents "stale pool" after PROTOCOL_CONNECTION_LOST)
+    const now = Date.now();
+    if (now - _lastPingAt > 30_000) {
       const conn = await _pool.getConnection();
-      await conn.ping();
-      conn.release();
+      try {
+        await conn.ping();
+      } finally {
+        conn.release();
+      }
+      _lastPingAt = now;
       console.log("[Database] MySQL ping OK");
     }
 
@@ -223,10 +234,21 @@ export async function getDb() {
     return _db;
   } catch (error) {
     console.error("[Database] Failed to connect:", error);
+
+    // ✅ Ensure we can recover on next request
+    try {
+      if (_pool) await _pool.end();
+    } catch {
+      // ignore
+    }
+    _pool = null;
     _db = null;
+    _lastPingAt = 0;
+
     return null;
   }
 }
+
 
 /**
  * ---------------------------------------------------------
