@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "./_core/trpc";
-import { getDb } from "./db";
+import { getDb, hasColumn } from "./db";
 import {
   audits,
   questions,
@@ -407,6 +407,8 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+
       const now = new Date();
 
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
@@ -501,6 +503,8 @@ export const mdrRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
 
       const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -614,6 +618,8 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       try {
@@ -709,6 +715,8 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       try {
@@ -740,6 +748,8 @@ export const mdrRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -939,6 +949,8 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       const now = new Date();
@@ -1021,6 +1033,8 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
+      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+
       const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
         db,
         ctx.user.id,
@@ -1042,6 +1056,32 @@ export const mdrRouter = router({
           processCandidates
         )} referentials=${JSON.stringify(referentialIds)}`
       );
+
+      // ✅ Unify risk column (some DBs still have `risks` legacy column)
+      const riskUnifiedExpr = hasRisksColumn
+        ? sql`COALESCE(NULLIF(${(questions as any).risk}, ''), ${(questions as any).risks})`
+        : (questions as any).risk;
+
+      const questionSelect = {
+        id: (questions as any).id,
+        referentialId: (questions as any).referentialId,
+        processId: (questions as any).processId,
+        questionKey: (questions as any).questionKey,
+        article: (questions as any).article,
+        annexe: (questions as any).annexe,
+        title: (questions as any).title,
+        economicRole: (questions as any).economicRole,
+        applicableProcesses: (questions as any).applicableProcesses,
+        questionType: (questions as any).questionType,
+        questionText: (questions as any).questionText,
+        expectedEvidence: (questions as any).expectedEvidence,
+        criticality: (questions as any).criticality,
+        interviewFunctions: (questions as any).interviewFunctions,
+        actionPlan: (questions as any).actionPlan,
+        aiPrompt: (questions as any).aiPrompt,
+        displayOrder: (questions as any).displayOrder,
+        riskUnified: riskUnifiedExpr.as("riskUnified"),
+      };
 
       // ---- DB-first ----
       try {
@@ -1135,12 +1175,12 @@ export const mdrRouter = router({
 
         let rows = finalWhere
           ? await db
-              .select()
+              .select(questionSelect)
               .from(questions)
               .where(finalWhere)
               .orderBy((questions as any).displayOrder, (questions as any).id)
           : await db
-              .select()
+              .select(questionSelect)
               .from(questions)
               .orderBy((questions as any).displayOrder, (questions as any).id);
 
@@ -1177,8 +1217,8 @@ export const mdrRouter = router({
           expectedEvidence: q.expectedEvidence ?? null,
           criticality: q.criticality ?? null,
 
-          risk: (q as any).risk ?? null,
-          risks: normalizeRisksValue(q.risks ?? q.risk ?? null),
+          risk: (q as any).riskUnified ?? (q as any).risk ?? null,
+          risks: normalizeRisksValue((q as any).riskUnified ?? (q as any).risks ?? (q as any).risk ?? null),
 
           interviewFunctions: safeParseArray(q.interviewFunctions),
           economicRole: q.economicRole ?? null,
