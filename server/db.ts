@@ -44,6 +44,9 @@ let _db: ReturnType<typeof drizzle> | null = null;
 // ✅ Used to throttle keepalive pings and avoid spamming the DB
 let _lastPingAt = 0;
 
+// Cache for schema checks to avoid hitting INFORMATION_SCHEMA on every request
+const _hasColumnCache = new Map<string, boolean>();
+
 function pickFirstEnv(...keys: string[]): string | undefined {
   for (const k of keys) {
     const v = process.env[k];
@@ -273,6 +276,45 @@ export function safeJsonParse<T>(value: unknown, fallback: T): T {
 
 /**
  * ---------------------------------------------------------
+ * ✅ Schema helpers (Railway-safe)
+ * ---------------------------------------------------------
+ * Some deployments still have legacy columns (e.g. questions.risks vs questions.risk).
+ * Drizzle schemas only expose declared columns, so we sometimes need to know if a
+ * legacy column exists to build a safe SQL expression.
+ */
+export async function hasColumn(tableName: string, columnName: string): Promise<boolean> {
+  const key = `${tableName}.${columnName}`;
+  if (_hasColumnCache.has(key)) return _hasColumnCache.get(key)!;
+
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    // Works across MySQL 5.7/8.x and managed providers.
+    const q = sql`
+      SELECT COUNT(*) AS cnt
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ${tableName}
+        AND COLUMN_NAME = ${columnName}
+    `;
+
+    const res: any = await (db as any).execute(q);
+    const rows = res?.[0] ?? res?.rows ?? res;
+    const first = Array.isArray(rows) ? rows[0] : undefined;
+    const cnt = first ? Number((first as any).cnt ?? (first as any)["COUNT(*)"] ?? 0) : 0;
+    const ok = cnt > 0;
+    _hasColumnCache.set(key, ok);
+    return ok;
+  } catch {
+    // If INFORMATION_SCHEMA is restricted, assume false.
+    _hasColumnCache.set(key, false);
+    return false;
+  }
+}
+
+/**
+ * ---------------------------------------------------------
  * User Profile queries
  * ---------------------------------------------------------
  */
@@ -438,6 +480,32 @@ export async function getOrganisationByIdAndUserId(orgId: number, userId: number
   return result.length > 0 ? result[0] : undefined;
 }
 
+// ------------------------------------------------------------------
+// Backward-compatible API (some routers still call createOrganisation)
+// ------------------------------------------------------------------
+export async function createOrganisation(input: {
+  userId: number;
+  name: string;
+  legalEntityType?: string | null;
+  siret?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+}) {
+  return await upsertOrganisation({
+    userId: input.userId,
+    name: input.name,
+    siret: input.siret ?? null,
+    addressLine1: input.addressLine1 ?? null,
+    addressLine2: input.addressLine2 ?? null,
+    city: input.city ?? null,
+    postalCode: input.postalCode ?? null,
+    country: input.country ?? null,
+  });
+}
+
 /**
  * ---------------------------------------------------------
  * Audits
@@ -472,6 +540,46 @@ export async function getAuditByIdAndUserId(auditId: number, userId: number) {
     .where(and(eq(audits.id, auditId), eq(audits.userId, userId)))
     .limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+// ------------------------------------------------------------------
+// Backward-compatible API (routers.ts expects these helpers)
+// ------------------------------------------------------------------
+export async function getAudits(input: {
+  userId: number;
+  status?: string;
+  siteId?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: any[] = [eq(audits.userId, input.userId)];
+  if (input.status) conditions.push(eq((audits as any).status, input.status));
+  if (input.siteId) conditions.push(eq(audits.siteId, input.siteId));
+
+  return await db
+    .select()
+    .from(audits)
+    .where(and(...conditions))
+    .orderBy(desc(audits.createdAt));
+}
+
+export async function getAuditById(auditId: number, userId: number) {
+  return await getAuditByIdAndUserId(auditId, userId);
+}
+
+export async function updateAudit(auditId: number, patch: Record<string, any>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(audits).set({ ...patch, updatedAt: new Date() } as any).where(eq(audits.id, auditId));
+  return { success: true };
+}
+
+export async function deleteAudit(auditId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(audits).where(eq(audits.id, auditId));
+  return { success: true };
 }
 
 /**
