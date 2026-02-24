@@ -123,6 +123,12 @@ function normalizeIsoQuestion(row: any) {
     if (f in out) out[f] = safeJsonArray<any>(out[f]);
   }
 
+  // ✅ Risk field normalization (DB may still have legacy `risks` column)
+  if ("riskUnified" in out) {
+    out.risk = out.riskUnified ?? out.risk;
+    if (out.risks == null) out.risks = out.risk;
+  }
+
   return out;
 }
 
@@ -378,7 +384,7 @@ export const isoRouter = router({
       }
 
       const rows = await db
-        .select()
+        .select(questionSelect)
         .from(questions)
         .where(and(...whereParts))
         .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
@@ -636,6 +642,8 @@ createOrUpdateAuditDraft: protectedProcedure
   .input(z.object({ auditId: z.number().int().positive() }))
   .query(async ({ ctx, input }) => {
     const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const hasRisksColumn = await hasColumn(db, "questions", "risks");
 
     try {
       const [audit] = await db
@@ -691,8 +699,35 @@ createOrUpdateAuditDraft: protectedProcedure
         if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
+
+      // ✅ Unify risk column (some DBs still have `risks` legacy column)
+      const riskUnifiedExpr = hasRisksColumn
+        ? sql`COALESCE(NULLIF(${(questions as any).risk}, ''), ${(questions as any).risks})`
+        : (questions as any).risk;
+
+      const questionSelect = {
+        id: (questions as any).id,
+        referentialId: (questions as any).referentialId,
+        processId: (questions as any).processId,
+        questionKey: (questions as any).questionKey,
+        article: (questions as any).article,
+        annexe: (questions as any).annexe,
+        title: (questions as any).title,
+        economicRole: (questions as any).economicRole,
+        applicableProcesses: (questions as any).applicableProcesses,
+        questionType: (questions as any).questionType,
+        questionText: (questions as any).questionText,
+        expectedEvidence: (questions as any).expectedEvidence,
+        criticality: (questions as any).criticality,
+        interviewFunctions: (questions as any).interviewFunctions,
+        actionPlan: (questions as any).actionPlan,
+        aiPrompt: (questions as any).aiPrompt,
+        displayOrder: (questions as any).displayOrder,
+        createdAt: (questions as any).createdAt,
+        riskUnified: riskUnifiedExpr.as("riskUnified"),
+      };
       let q = db
-        .select()
+        .select(questionSelect)
         .from(questions)
         .orderBy(
           sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
