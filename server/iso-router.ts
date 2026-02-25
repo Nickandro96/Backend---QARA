@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
-import { getDb } from "./db";
+import { getDb, hasColumn } from "./db";
 
 import {
   audits,
@@ -643,7 +643,7 @@ createOrUpdateAuditDraft: protectedProcedure
   .query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const hasRisksColumn = await hasColumn(db, "questions", "risks");
+    const hasRisksColumn = await hasColumn("questions", "risks");
 
     try {
       const [audit] = await db
@@ -724,7 +724,7 @@ createOrUpdateAuditDraft: protectedProcedure
         aiPrompt: (questions as any).aiPrompt,
         displayOrder: (questions as any).displayOrder,
         createdAt: (questions as any).createdAt,
-        riskUnified: riskUnifiedExpr.as("riskUnified"),
+        riskUnified: riskUnifiedExpr,
       };
       let q = db
         .select(questionSelect)
