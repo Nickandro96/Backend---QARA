@@ -407,7 +407,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       const now = new Date();
 
@@ -504,7 +504,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -618,7 +618,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -715,7 +715,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -749,7 +749,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -949,7 +949,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -1033,7 +1033,7 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn(db, "questions", "risks");
+      const hasRisksColumn = await hasColumn("questions", "risks");
 
       const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
         db,
@@ -1080,7 +1080,7 @@ export const mdrRouter = router({
         actionPlan: (questions as any).actionPlan,
         aiPrompt: (questions as any).aiPrompt,
         displayOrder: (questions as any).displayOrder,
-        riskUnified: riskUnifiedExpr.as("riskUnified"),
+        riskUnified: riskUnifiedExpr,
       };
 
       // ---- DB-first ----
