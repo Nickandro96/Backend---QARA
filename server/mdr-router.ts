@@ -1057,11 +1057,6 @@ export const mdrRouter = router({
         )} referentials=${JSON.stringify(referentialIds)}`
       );
 
-      // ✅ Unify risk column (some DBs still have `risks` legacy column)
-      const riskUnifiedExpr = hasRisksColumn
-        ? sql`COALESCE(NULLIF(${(questions as any).risk}, ''), ${(questions as any).risks})`
-        : (questions as any).risk;
-
       const questionSelect = {
         id: (questions as any).id,
         referentialId: (questions as any).referentialId,
@@ -1080,7 +1075,10 @@ export const mdrRouter = router({
         actionPlan: (questions as any).actionPlan,
         aiPrompt: (questions as any).aiPrompt,
         displayOrder: (questions as any).displayOrder,
-        riskUnified: riskUnifiedExpr,
+        // ✅ Always select per-question risk text.
+        // If legacy column `risks` exists, select it too.
+        risk: (questions as any).risk,
+        risksRaw: hasRisksColumn ? (questions as any).risks : sql`NULL`,
       };
 
       // ---- DB-first ----
@@ -1217,8 +1215,8 @@ export const mdrRouter = router({
           expectedEvidence: q.expectedEvidence ?? null,
           criticality: q.criticality ?? null,
 
-          risk: (q as any).riskUnified ?? (q as any).risk ?? null,
-          risks: normalizeRisksValue((q as any).riskUnified ?? (q as any).risks ?? (q as any).risk ?? null),
+          risk: (q as any).risk ?? null,
+          risks: normalizeRisksValue((q as any).risksRaw ?? (q as any).risks ?? (q as any).risk ?? null),
 
           interviewFunctions: safeParseArray(q.interviewFunctions),
           economicRole: q.economicRole ?? null,
@@ -1229,6 +1227,15 @@ export const mdrRouter = router({
 
           displayOrder: q.displayOrder ?? null,
         }));
+
+        // 🔎 Debug: show a small sample of risks to verify per-question payload
+        try {
+          const sample = out.slice(0, 5).map((x: any) => ({
+            questionKey: x.questionKey,
+            risk: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
+          }));
+          console.log(`[MDR] sample risks: ${JSON.stringify(sample)}`);
+        } catch {}
 
         // ✅ Standard return shape for frontend (wizard expects { questions })
         return {
