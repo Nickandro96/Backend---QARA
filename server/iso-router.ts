@@ -123,13 +123,36 @@ function normalizeIsoQuestion(row: any) {
     if (f in out) out[f] = safeJsonArray<any>(out[f]);
   }
 
-  // ✅ Risk field normalization (DB may still have legacy `risks` column)
-  if ("riskUnified" in out) {
-    out.risk = out.riskUnified ?? out.risk;
-    if (out.risks == null) out.risks = out.risk;
+  // ✅ Risk field normalization
+  // - Some environments only have `risk` (TEXT)
+  // - Some legacy DBs also have `risks` (JSON/TEXT)
+  // We select both when available and normalize for the frontend.
+  if ("risksRaw" in out || "risk" in out) {
+    const raw = (out as any).risksRaw ?? (out as any).risks ?? (out as any).risk ?? null;
+    out.risk = (out as any).risk ?? null;
+    out.risks = normalizeRisksValue(raw);
+    delete (out as any).risksRaw;
   }
 
   return out;
+}
+
+function normalizeRisksValue(v: any): any {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+    if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+      try {
+        return JSON.parse(s);
+      } catch {
+        return s;
+      }
+    }
+    return s;
+  }
+  return v;
 }
 
 function isNumericString(v: string) {
@@ -699,12 +722,6 @@ createOrUpdateAuditDraft: protectedProcedure
         if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
       }
 
-
-      // ✅ Unify risk column (some DBs still have `risks` legacy column)
-      const riskUnifiedExpr = hasRisksColumn
-        ? sql`COALESCE(NULLIF(${(questions as any).risk}, ''), ${(questions as any).risks})`
-        : (questions as any).risk;
-
       const questionSelect = {
         id: (questions as any).id,
         referentialId: (questions as any).referentialId,
@@ -724,7 +741,10 @@ createOrUpdateAuditDraft: protectedProcedure
         aiPrompt: (questions as any).aiPrompt,
         displayOrder: (questions as any).displayOrder,
         createdAt: (questions as any).createdAt,
-        riskUnified: riskUnifiedExpr,
+        // ✅ Always select the per-question risk text.
+        // If legacy column `risks` exists, select it too for richer payloads.
+        risk: (questions as any).risk,
+        risksRaw: hasRisksColumn ? (questions as any).risks : sql`NULL`,
       };
       let q = db
         .select(questionSelect)
@@ -749,6 +769,15 @@ createOrUpdateAuditDraft: protectedProcedure
       console.log(`[ISO] DB filtered questions count: ${rows.length}`);
 
       const normalized = rows.map((r) => normalizeIsoQuestion(r));
+
+      // 🔎 Debug: show a small sample of risks to verify per-question payload
+      try {
+        const sample = normalized.slice(0, 5).map((x: any) => ({
+          questionKey: x.questionKey,
+          risk: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
+        }));
+        console.log(`[ISO] sample risks: ${JSON.stringify(sample)}`);
+      } catch {}
 
       return { count: normalized.length, questions: normalized };
     } catch (err: any) {
