@@ -340,6 +340,151 @@ async function loadQuestionsFromDb(db: any) {
   }
 }
 
+/**
+ * ✅ Internal helper: fetch questions in the EXACT scope of an audit (drilldown).
+ * Reuses the same filtering strategy as getQuestionsForAudit:
+ * - referentialIds filter
+ * - economicRole filter with safe fallback
+ * - process filter (processId OR empty applicableProcesses OR JSON_CONTAINS candidates)
+ */
+async function fetchAuditScopedQuestions(db: any, params: {
+  auditId: number;
+  userId: number;
+  economicRole: string | null;
+  processIds: string[];
+  referentialIds: number[];
+  select: any;
+}) {
+  const { economicRole, processIds, referentialIds, select } = params;
+
+  const normalizedProcessIds = (processIds || []).map(String);
+
+  // slug(s) -> IDs DB
+  const processDbIds = await resolveProcessDbIds(db, normalizedProcessIds);
+
+  // candidates for applicableProcesses JSON matching (names + tokens)
+  const processCandidates = await buildApplicableProcessCandidates(db, normalizedProcessIds);
+
+  const whereParts: any[] = [];
+
+  // economicRole VARCHAR (or nullable) – accept generic questions too
+  // NOTE: if this filter yields 0 results, we will fallback to "no role filter" (safe mode)
+  let economicRoleClause: any | null = null;
+  if (economicRole && economicRole !== "all") {
+    economicRoleClause = sql`(
+        ${(questions as any).economicRole} IS NULL
+        OR ${(questions as any).economicRole} = ''
+        OR LOWER(${(questions as any).economicRole}) = LOWER(${economicRole})
+        OR (
+          LOWER(${(questions as any).economicRole}) = 'distributor' AND LOWER(${economicRole}) = 'distributeur'
+        )
+        OR (
+          LOWER(${(questions as any).economicRole}) = 'importer' AND LOWER(${economicRole}) = 'importateur'
+        )
+        OR (
+          LOWER(${(questions as any).economicRole}) = 'manufacturer' AND LOWER(${economicRole}) = 'fabricant'
+        )
+        OR (
+          (LOWER(${(questions as any).economicRole}) = 'authorized representative'
+           OR LOWER(${(questions as any).economicRole}) = 'authorised representative'
+           OR LOWER(${(questions as any).economicRole}) = 'ar')
+          AND LOWER(${economicRole}) = 'mandataire'
+        )
+      )`;
+    whereParts.push(economicRoleClause);
+  }
+
+  // referentials filter
+  if (referentialIds && referentialIds.length > 0) {
+    whereParts.push(
+      sql`${(questions as any).referentialId} in (${sql.join(
+        referentialIds.map((n: number) => sql`${n}`),
+        sql`, `
+      )})`
+    );
+  }
+
+  /**
+   * ✅ FIX IMPORTANT:
+   * On ne fait PAS:
+   *   processId IN (...)  AND  JSON_CONTAINS(...)
+   * car ça tue tout si la DB n’a pas les deux tags.
+   *
+   * On fait un SEUL bloc OR:
+   * - match via questions.processId
+   * - OU questions.applicableProcesses vide/null
+   * - OU JSON_CONTAINS(applicableProcesses, candidate)
+   */
+  const hasAnyProcessFilter = processDbIds.length > 0 || processCandidates.length > 0;
+
+  if (hasAnyProcessFilter) {
+    const orParts: any[] = [];
+
+    if (processDbIds.length > 0) {
+      orParts.push(
+        sql`${(questions as any).processId} in (${sql.join(
+          processDbIds.map((n: number) => sql`${n}`),
+          sql`, `
+        )})`
+      );
+    }
+
+    // allow generic (no applicableProcesses) questions
+    orParts.push(
+      sql`${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0`
+    );
+
+    if (processCandidates.length > 0) {
+      const conds = processCandidates.map((cand) => {
+        const s = String(cand);
+        if (isNumericString(s)) {
+          const n = Number(s);
+          return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
+        }
+        const candJson = JSON.stringify(s); // => '"Distribution & logistique"'
+        return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
+      });
+
+      orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+    }
+
+    whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+  }
+
+  const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
+
+  let rows = finalWhere
+    ? await db
+        .select(select)
+        .from(questions)
+        .where(finalWhere)
+        .orderBy((questions as any).displayOrder, (questions as any).id)
+    : await db
+        .select(select)
+        .from(questions)
+        .orderBy((questions as any).displayOrder, (questions as any).id);
+
+  // Fallback: if role-specific filter yields nothing, retry without role filter.
+  if (rows.length === 0 && economicRoleClause) {
+    const wherePartsNoRole = whereParts.filter((p) => p !== economicRoleClause);
+    const finalWhereNoRole = wherePartsNoRole.length > 0 ? and(...wherePartsNoRole) : undefined;
+
+    rows = finalWhereNoRole
+      ? await db
+          .select(select)
+          .from(questions)
+          .where(finalWhereNoRole)
+          .orderBy((questions as any).displayOrder, (questions as any).id)
+      : await db
+          .select(select)
+          .from(questions)
+          .orderBy((questions as any).displayOrder, (questions as any).id);
+  }
+
+  return rows || [];
+}
+
+
 // shared zod enum used by frontend buttons
 const ResponseValueEnum = z.enum(["compliant", "non_compliant", "not_applicable", "partial", "in_progress"]);
 
@@ -743,13 +888,15 @@ export const mdrRouter = router({
   /**
    * Dashboard aggregates for a single audit
    */
+  
+  /**
+   * Dashboard aggregates for a single audit
+   */
   getAuditDashboard: protectedProcedure
     .input(z.object({ auditId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-
-      const hasRisksColumn = await hasColumn("questions", "risks");
 
       await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
@@ -764,6 +911,7 @@ export const mdrRouter = router({
             siteId: (audits as any).siteId,
             economicRole: (audits as any).economicRole,
             referentialIds: (audits as any).referentialIds,
+            processIds: (audits as any).processIds,
           })
           .from(audits)
           .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
@@ -777,17 +925,28 @@ export const mdrRouter = router({
               .limit(1)
           : [null];
 
-        const questionRows = await db
-          .select({
+        // ✅ IMPORTANT: use the same "audit scope" (drilldown) as the questionnaire itself
+        const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+        const questionRows = await fetchAuditScopedQuestions(db, {
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          economicRole: auditContext.economicRole,
+          processIds: auditContext.processIds,
+          referentialIds: auditContext.referentialIds,
+          select: {
             questionKey: (questions as any).questionKey,
             questionText: (questions as any).questionText,
             article: (questions as any).article,
             criticality: (questions as any).criticality,
             processId: (questions as any).processId,
-          })
-          .from(questions);
+          },
+        });
 
-        const responseRows = await db
+        const scopedQuestionKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey || generateQuestionKey(q))));
+
+        // Only responses for questions in the audit scope
+        const responseRowsAll = await db
           .select({
             questionKey: (auditResponses as any).questionKey,
             responseValue: (auditResponses as any).responseValue,
@@ -803,7 +962,9 @@ export const mdrRouter = router({
             )
           );
 
-        const qMap = new Map((questionRows || []).map((q: any) => [q.questionKey || generateQuestionKey(q), q]));
+        const responseRows = (responseRowsAll || []).filter((r: any) => scopedQuestionKeys.has(String(r.questionKey)));
+
+        const qMap = new Map((questionRows || []).map((q: any) => [String(q.questionKey || generateQuestionKey(q)), q]));
         const totalQuestions = (questionRows || []).length;
 
         const stats = {
@@ -818,7 +979,10 @@ export const mdrRouter = router({
         } as any;
 
         const byCriticality: Record<string, { non_compliant: number; partial: number }> = {};
-        const byProcess: Record<string, { compliant: number; partial: number; non_compliant: number; not_applicable: number; in_progress: number }> = {};
+        const byProcess: Record<
+          string,
+          { compliant: number; partial: number; non_compliant: number; not_applicable: number; in_progress: number }
+        > = {};
 
         const scoreMap: Record<string, number> = {
           compliant: 100,
@@ -829,16 +993,19 @@ export const mdrRouter = router({
         };
 
         let scoreTotal = 0;
+        let scoreCount = 0;
 
         for (const r of responseRows || []) {
           const status = String(r.responseValue || "in_progress");
           if (!(status in stats)) continue;
 
           stats[status] += 1;
-          stats.answered += status === "in_progress" ? 0 : 1;
-          scoreTotal += scoreMap[status] ?? 50;
+          if (status !== "in_progress") stats.answered += 1;
 
-          const q = qMap.get(r.questionKey);
+          scoreTotal += scoreMap[status] ?? 50;
+          scoreCount += 1;
+
+          const q = qMap.get(String(r.questionKey));
           const crit = String((q as any)?.criticality || "unknown").toLowerCase();
           if (!byCriticality[crit]) byCriticality[crit] = { non_compliant: 0, partial: 0 };
           if (status === "non_compliant") byCriticality[crit].non_compliant += 1;
@@ -851,14 +1018,16 @@ export const mdrRouter = router({
           (byProcess[pid] as any)[status] += 1;
         }
 
-        const denominator = (responseRows || []).length || 1;
-        stats.score = Math.round(scoreTotal / denominator);
-        stats.in_progress = Math.max(totalQuestions - (responseRows || []).length, 0);
+        stats.score = Math.round((scoreTotal / (scoreCount || 1)) || 0);
+
+        // in_progress = questions in scope - responses saved (whatever the status)
+        const respondedCount = responseRows.length;
+        stats.in_progress = Math.max(totalQuestions - respondedCount, 0);
 
         const topRisks = (responseRows || [])
           .filter((r: any) => r.responseValue === "non_compliant" || r.responseValue === "partial")
           .map((r: any) => {
-            const q = qMap.get(r.questionKey) || {};
+            const q = qMap.get(String(r.questionKey)) || {};
             return {
               questionKey: r.questionKey,
               questionText: (q as any).questionText ?? "Question",
@@ -895,8 +1064,9 @@ export const mdrRouter = router({
             updatedAt: audit?.updatedAt ?? null,
             siteId: audit?.siteId ?? null,
             siteName: (site as any)?.name ?? null,
-            economicRole: audit?.economicRole ?? null,
-            referentialIds: safeParseArray((audit as any)?.referentialIds),
+            economicRole: auditContext.economicRole ?? null,
+            referentialIds: auditContext.referentialIds,
+            processIds: auditContext.processIds,
           },
           stats,
           breakdown: {
@@ -928,6 +1098,135 @@ export const mdrRouter = router({
     }),
 
   /**
+   * ✅ IRCA-like report data for a single audit (download/export)
+   * Returns ONLY the questions in the audit scope (drilldown) with their responses.
+   */
+  getAuditReport: protectedProcedure
+    .input(z.object({ auditId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+      try {
+        const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+        const [audit] = await db
+          .select({
+            id: (audits as any).id,
+            name: (audits as any).name,
+            status: (audits as any).status,
+            createdAt: (audits as any).createdAt,
+            updatedAt: (audits as any).updatedAt,
+            siteId: (audits as any).siteId,
+          })
+          .from(audits)
+          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
+          .limit(1);
+
+        const [site] = audit?.siteId
+          ? await db
+              .select({ id: (sites as any).id, name: (sites as any).name })
+              .from(sites)
+              .where(eq((sites as any).id, audit.siteId))
+              .limit(1)
+          : [null];
+
+        const hasRisksColumn = await hasColumn("questions", "risks");
+
+        const questionRows = await fetchAuditScopedQuestions(db, {
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          economicRole: auditContext.economicRole,
+          processIds: auditContext.processIds,
+          referentialIds: auditContext.referentialIds,
+          select: {
+            id: (questions as any).id,
+            questionKey: (questions as any).questionKey,
+            referentialId: (questions as any).referentialId,
+            processId: (questions as any).processId,
+            article: (questions as any).article,
+            annexe: (questions as any).annexe,
+            title: (questions as any).title,
+            questionType: (questions as any).questionType,
+            questionText: (questions as any).questionText,
+            expectedEvidence: (questions as any).expectedEvidence,
+            criticality: (questions as any).criticality,
+            interviewFunctions: (questions as any).interviewFunctions,
+            risk: (questions as any).risk,
+            risksRaw: hasRisksColumn ? (questions as any).risks : sql`NULL`,
+            displayOrder: (questions as any).displayOrder,
+          },
+        });
+
+        const scopedQuestionKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey || generateQuestionKey(q))));
+
+        const responseRowsAll = await db
+          .select({
+            questionKey: (auditResponses as any).questionKey,
+            responseValue: (auditResponses as any).responseValue,
+            responseComment: (auditResponses as any).responseComment,
+            note: (auditResponses as any).note,
+            answeredBy: (auditResponses as any).answeredBy,
+            answeredAt: (auditResponses as any).answeredAt,
+            updatedAt: (auditResponses as any).updatedAt,
+          })
+          .from(auditResponses)
+          .where(
+            and(
+              eq((auditResponses as any).auditId, input.auditId),
+              eq((auditResponses as any).userId, ctx.user.id)
+            )
+          );
+
+        const responseRows = (responseRowsAll || []).filter((r: any) => scopedQuestionKeys.has(String(r.questionKey)));
+        const responsesByKey = new Map((responseRows || []).map((r: any) => [String(r.questionKey), r]));
+
+        const rows = (questionRows || []).map((q: any) => {
+          const key = String(q.questionKey || generateQuestionKey(q));
+          const r = responsesByKey.get(key);
+          return {
+            ...q,
+            questionKey: key,
+            responseValue: r?.responseValue ?? "in_progress",
+            responseComment: r?.responseComment ?? "",
+            note: r?.note ?? "",
+            answeredBy: r?.answeredBy ?? null,
+            answeredAt: r?.answeredAt ?? null,
+            updatedAt: r?.updatedAt ?? null,
+          };
+        });
+
+        return {
+          audit: {
+            id: Number(audit?.id),
+            name: audit?.name ?? `Audit #${input.auditId}`,
+            status: audit?.status ?? "draft",
+            createdAt: audit?.createdAt ?? null,
+            updatedAt: audit?.updatedAt ?? null,
+            siteId: audit?.siteId ?? null,
+            siteName: (site as any)?.name ?? null,
+            economicRole: auditContext.economicRole ?? null,
+            referentialIds: auditContext.referentialIds,
+            processIds: auditContext.processIds,
+          },
+          questions: rows,
+        };
+      } catch (e: any) {
+        const mysql = e?.cause ?? e;
+        console.error("[MDR] getAuditReport failed:", {
+          message: e?.message,
+          code: mysql?.code,
+          sqlMessage: mysql?.sqlMessage,
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: mysql?.sqlMessage || e?.message || "Unable to load audit report",
+        });
+      }
+    }),
+/**
    * Save response (upsert) for current user + audit
    */
   saveResponse: protectedProcedure
@@ -1218,13 +1517,6 @@ export const mdrRouter = router({
           risk: (q as any).risk ?? null,
           risks: normalizeRisksValue((q as any).risksRaw ?? (q as any).risks ?? (q as any).risk ?? null),
 
-          // 🔎 Debug-friendly fields (frontend can ignore safely)
-          riskLen: typeof (q as any).risk === "string" ? String((q as any).risk).length : null,
-          riskHash:
-            typeof (q as any).risk === "string"
-              ? crypto.createHash("md5").update(String((q as any).risk)).digest("hex").slice(0, 10)
-              : null,
-
           interviewFunctions: safeParseArray(q.interviewFunctions),
           economicRole: q.economicRole ?? null,
           applicableProcesses: safeParseArray(q.applicableProcesses),
@@ -1239,14 +1531,7 @@ export const mdrRouter = router({
         try {
           const sample = out.slice(0, 5).map((x: any) => ({
             questionKey: x.questionKey,
-            // show head+tail+hash to detect "looks identical" but differs later
-            riskHead: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
-            riskTail: typeof x.risk === "string" ? x.risk.slice(Math.max(0, x.risk.length - 60)) : null,
-            riskLen: typeof x.risk === "string" ? x.risk.length : null,
-            riskHash:
-              typeof x.risk === "string"
-                ? crypto.createHash("md5").update(String(x.risk)).digest("hex").slice(0, 10)
-                : null,
+            risk: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
           }));
           console.log(`[MDR] sample risks: ${JSON.stringify(sample)}`);
         } catch {}
