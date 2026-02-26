@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
-import { getDb, hasColumn } from "./db";
+import { getDb, hasColumn, listAuditsByUserId } from "./db";
 
 import {
   audits,
@@ -785,4 +786,414 @@ createOrUpdateAuditDraft: protectedProcedure
       throw err;
     }
   }),
+
+  /**
+   * List ISO audits for current user (used by review dashboard).
+   * Filters audits whose referentialIds contain ISO 9001 (2) or ISO 13485 (3).
+   */
+  listAudits: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const all = await listAuditsByUserId(ctx.user.id);
+      const auditsIso = (all || []).filter((a: any) => {
+        const refs = safeJsonArray<any>((a as any).referentialIds);
+        return refs.includes(2) || refs.includes(3);
+      });
+      return { audits: auditsIso };
+    } catch (e: any) {
+      console.error("[ISO] listAudits failed:", e);
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message || "Unable to list audits" });
+    }
+  }),
+
+  /**
+   * ✅ Dashboard post-audit aligned with the real drilldown scope (processIds + referentialIds)
+   * This fixes the "total questions = all questions in DB" issue.
+   */
+  getAuditDashboard: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      try {
+        const [audit] = await db
+          .select({
+            id: (audits as any).id,
+            name: (audits as any).name,
+            status: (audits as any).status,
+            createdAt: (audits as any).createdAt,
+            updatedAt: (audits as any).updatedAt,
+            siteId: (audits as any).siteId,
+            referentialIds: (audits as any).referentialIds,
+            processIds: (audits as any).processIds,
+          })
+          .from(audits)
+          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
+          .limit(1);
+
+        if (!audit) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+        }
+
+        const [site] = audit?.siteId
+          ? await db
+              .select({ id: (sites as any).id, name: (sites as any).name })
+              .from(sites)
+              .where(eq((sites as any).id, audit.siteId))
+              .limit(1)
+          : [null];
+
+        const referentialIds = safeJsonArray<any>((audit as any).referentialIds);
+        const processIds = safeJsonArray<any>((audit as any).processIds);
+
+        const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
+        if (!referentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Référentiel ISO manquant sur l'audit" });
+
+        const candidates = await buildProcessCandidates(db, processIds);
+        const selectedDbIds = processIds
+          .map((p: any) => (typeof p === "number" ? p : Number(p)))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+
+        const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+
+        const hasProcessSelection = processIds.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
+        if (hasProcessSelection) {
+          const orParts: any[] = [];
+          if (selectedDbIds.length > 0) {
+            orParts.push(
+              sql`${(questions as any).processId} in (${sql.join(
+                selectedDbIds.map((n: number) => sql`${n}`),
+                sql`, `
+              )})`
+            );
+          }
+          if (candidates.length > 0) {
+            const conds = candidates.map((cand) => {
+              const s = String(cand);
+              const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
+              if (isNumericString(s)) {
+                const n = Number(s);
+                return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
+              }
+              return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
+            });
+            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+          }
+          if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        }
+
+        const questionRows: any[] = (await db
+          .select({
+            questionKey: (questions as any).questionKey,
+            questionText: (questions as any).questionText,
+            article: (questions as any).article,
+            annexe: (questions as any).annexe,
+            criticality: (questions as any).criticality,
+            processId: (questions as any).processId,
+            risk: (questions as any).risk,
+          })
+          .from(questions)
+          .where(and(...whereParts))
+          .orderBy(
+            sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
+          )) as any[];
+
+        const scopedKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey)));
+        const totalQuestions = (questionRows || []).length;
+
+        const responseRowsAll = await db
+          .select({
+            questionKey: (auditResponses as any).questionKey,
+            responseValue: (auditResponses as any).responseValue,
+            responseComment: (auditResponses as any).responseComment,
+            note: (auditResponses as any).note,
+            updatedAt: (auditResponses as any).updatedAt,
+          })
+          .from(auditResponses)
+          .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
+
+        const responseRows = (responseRowsAll || []).filter((r: any) => scopedKeys.has(String(r.questionKey)));
+
+        const qMap = new Map((questionRows || []).map((q: any) => [String(q.questionKey), q]));
+
+        const stats = {
+          totalQuestions,
+          answered: 0,
+          compliant: 0,
+          partial: 0,
+          non_compliant: 0,
+          not_applicable: 0,
+          in_progress: 0,
+          score: 100,
+        } as any;
+
+        const byProcess: Record<
+          string,
+          { compliant: number; partial: number; non_compliant: number; not_applicable: number; in_progress: number }
+        > = {};
+
+        const byCriticality: Record<string, { non_compliant: number; partial: number }> = {};
+
+        const scoreMap: Record<string, number> = {
+          compliant: 100,
+          partial: 60,
+          non_compliant: 20,
+          not_applicable: 100,
+          in_progress: 50,
+        };
+
+        let scoreTotal = 0;
+        let scoreCount = 0;
+
+        for (const r of responseRows || []) {
+          const status = String(r.responseValue || "in_progress");
+          if (!(status in stats)) continue;
+
+          stats[status] += 1;
+          if (status !== "in_progress") stats.answered += 1;
+
+          scoreTotal += scoreMap[status] ?? 50;
+          scoreCount += 1;
+
+          const q = qMap.get(String(r.questionKey));
+          const pid = String((q as any)?.processId ?? "non_renseigne");
+          if (!byProcess[pid]) byProcess[pid] = { compliant: 0, partial: 0, non_compliant: 0, not_applicable: 0, in_progress: 0 };
+          (byProcess[pid] as any)[status] += 1;
+
+          const crit = String((q as any)?.criticality || "unknown").toLowerCase();
+          if (!byCriticality[crit]) byCriticality[crit] = { non_compliant: 0, partial: 0 };
+          if (status === "non_compliant") byCriticality[crit].non_compliant += 1;
+          if (status === "partial") byCriticality[crit].partial += 1;
+        }
+
+        stats.score = Math.round((scoreTotal / (scoreCount || 1)) || 0);
+
+        // questions in scope - responses saved
+        const respondedCount = responseRows.length;
+        stats.in_progress = Math.max(totalQuestions - respondedCount, 0);
+
+        const topRisks = (responseRows || [])
+          .filter((r: any) => r.responseValue === "non_compliant" || r.responseValue === "partial")
+          .map((r: any) => {
+            const q = qMap.get(String(r.questionKey)) || {};
+            return {
+              questionKey: r.questionKey,
+              questionText: (q as any).questionText ?? "Question",
+              article: (q as any).article ?? null,
+              annexe: (q as any).annexe ?? null,
+              criticality: (q as any).criticality ?? "unknown",
+              responseValue: r.responseValue,
+              note: r.note ?? "",
+              responseComment: r.responseComment ?? "",
+              updatedAt: r.updatedAt ?? null,
+            };
+          })
+          .slice(0, 10);
+
+        const timeline = (responseRows || [])
+          .filter((r: any) => r.updatedAt)
+          .map((r: any) => ({ date: r.updatedAt, status: r.responseValue }))
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        return {
+          audit: {
+            id: Number((audit as any).id),
+            name: (audit as any).name ?? `Audit #${input.auditId}`,
+            status: (audit as any).status ?? "draft",
+            createdAt: (audit as any).createdAt ?? null,
+            updatedAt: (audit as any).updatedAt ?? null,
+            siteId: (audit as any).siteId ?? null,
+            siteName: (site as any)?.name ?? null,
+            referentialIds,
+            processIds,
+          },
+          stats,
+          breakdown: {
+            status: {
+              compliant: stats.compliant,
+              partial: stats.partial,
+              non_compliant: stats.non_compliant,
+              not_applicable: stats.not_applicable,
+              in_progress: stats.in_progress,
+            },
+            criticality: byCriticality,
+            process: byProcess,
+          },
+          topRisks,
+          timeline,
+        };
+      } catch (e: any) {
+        const mysql = e?.cause ?? e;
+        console.error("[ISO] getAuditDashboard failed:", {
+          message: e?.message,
+          code: mysql?.code,
+          sqlMessage: mysql?.sqlMessage,
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: mysql?.sqlMessage || e?.message || "Unable to load audit dashboard",
+        });
+      }
+    }),
+
+  /**
+   * ✅ IRCA-like report data for a single ISO audit (download/export)
+   * Returns ONLY the questions in the audit scope (drilldown) with their responses.
+   */
+  getAuditReport: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      try {
+        const [audit] = await db
+          .select({
+            id: (audits as any).id,
+            name: (audits as any).name,
+            status: (audits as any).status,
+            createdAt: (audits as any).createdAt,
+            updatedAt: (audits as any).updatedAt,
+            siteId: (audits as any).siteId,
+            referentialIds: (audits as any).referentialIds,
+            processIds: (audits as any).processIds,
+          })
+          .from(audits)
+          .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
+          .limit(1);
+
+        if (!audit) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+        }
+
+        const [site] = audit?.siteId
+          ? await db
+              .select({ id: (sites as any).id, name: (sites as any).name })
+              .from(sites)
+              .where(eq((sites as any).id, audit.siteId))
+              .limit(1)
+          : [null];
+
+        const referentialIds = safeJsonArray<any>((audit as any).referentialIds);
+        const processIds = safeJsonArray<any>((audit as any).processIds);
+
+        const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
+        if (!referentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Référentiel ISO manquant sur l'audit" });
+
+        const candidates = await buildProcessCandidates(db, processIds);
+        const selectedDbIds = processIds
+          .map((p: any) => (typeof p === "number" ? p : Number(p)))
+          .filter((n: number) => Number.isFinite(n) && n > 0);
+
+        const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+
+        const hasProcessSelection = processIds.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
+        if (hasProcessSelection) {
+          const orParts: any[] = [];
+          if (selectedDbIds.length > 0) {
+            orParts.push(
+              sql`${(questions as any).processId} in (${sql.join(
+                selectedDbIds.map((n: number) => sql`${n}`),
+                sql`, `
+              )})`
+            );
+          }
+          if (candidates.length > 0) {
+            const conds = candidates.map((cand) => {
+              const s = String(cand);
+              const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
+              if (isNumericString(s)) {
+                const n = Number(s);
+                return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
+              }
+              return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
+            });
+            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
+          }
+          if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        }
+
+        const hasRisksColumn = await hasColumn("questions", "risks");
+
+        const questionRows: any[] = (await db
+          .select({
+            id: (questions as any).id,
+            questionKey: (questions as any).questionKey,
+            referentialId: (questions as any).referentialId,
+            processId: (questions as any).processId,
+            article: (questions as any).article,
+            annexe: (questions as any).annexe,
+            title: (questions as any).title,
+            questionType: (questions as any).questionType,
+            questionText: (questions as any).questionText,
+            expectedEvidence: (questions as any).expectedEvidence,
+            criticality: (questions as any).criticality,
+            interviewFunctions: (questions as any).interviewFunctions,
+            risk: (questions as any).risk,
+            risksRaw: hasRisksColumn ? (questions as any).risks : sql`NULL`,
+            displayOrder: (questions as any).displayOrder,
+          })
+          .from(questions)
+          .where(and(...whereParts))
+          .orderBy(
+            sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`
+          )) as any[];
+
+        const scopedKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey)));
+
+        const responseRowsAll = await db
+          .select({
+            questionKey: (auditResponses as any).questionKey,
+            responseValue: (auditResponses as any).responseValue,
+            responseComment: (auditResponses as any).responseComment,
+            note: (auditResponses as any).note,
+            answeredBy: (auditResponses as any).answeredBy,
+            answeredAt: (auditResponses as any).answeredAt,
+            updatedAt: (auditResponses as any).updatedAt,
+          })
+          .from(auditResponses)
+          .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
+
+        const responseRows = (responseRowsAll || []).filter((r: any) => scopedKeys.has(String(r.questionKey)));
+        const responsesByKey = new Map((responseRows || []).map((r: any) => [String(r.questionKey), r]));
+
+        const questionsOut = (questionRows || []).map((q: any) => {
+          const merged = { ...q, ...(responsesByKey.get(String(q.questionKey)) || {}) };
+          const normalized = normalizeIsoQuestion(merged);
+          return {
+            ...normalized,
+            responseValue: (merged as any)?.responseValue ?? "in_progress",
+            responseComment: (merged as any)?.responseComment ?? "",
+            note: (merged as any)?.note ?? "",
+          };
+        });
+
+        return {
+          audit: {
+            id: Number((audit as any).id),
+            name: (audit as any).name ?? `Audit #${input.auditId}`,
+            status: (audit as any).status ?? "draft",
+            createdAt: (audit as any).createdAt ?? null,
+            updatedAt: (audit as any).updatedAt ?? null,
+            siteId: (audit as any).siteId ?? null,
+            siteName: (site as any)?.name ?? null,
+            referentialIds,
+            processIds,
+          },
+          questions: questionsOut,
+        };
+      } catch (e: any) {
+        const mysql = e?.cause ?? e;
+        console.error("[ISO] getAuditReport failed:", {
+          message: e?.message,
+          code: mysql?.code,
+          sqlMessage: mysql?.sqlMessage,
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: mysql?.sqlMessage || e?.message || "Unable to build audit report",
+        });
+      }
+    }),
+
 });
