@@ -436,7 +436,19 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
         );
         notes.push("Non invasif mais contact peau lésée superficielle.");
       } else {
-        assumptions.push("Contact peau lésée suspecté mais profondeur non renseignée : règle 4 nécessite superficialité/profondeur.");
+        // Still anchor on Rule 4 (Annex VIII) but flag missing depth.
+        rules.push(
+          buildRule(
+            "4",
+            "Dispositifs en contact avec peau lésée",
+            "Contact avec peau lésée déclaré mais profondeur non renseignée → Règle 4 applicable. La profondeur (superficielle/profonde) conditionne le sous-classement (I vs IIa/IIb) et doit être confirmée.",
+          ),
+        );
+        missingData.push("Profondeur de la plaie (superficielle / profonde)");
+        assumptions.push(
+          "Peau lésée déclarée sans profondeur : classification proposée sur la base de la Règle 4, à confirmer après caractérisation de la plaie.",
+        );
+        notes.push("Non invasif : peau lésée déclarée sans profondeur (Règle 4 appliquée, à confirmer).");
       }
     } else {
       // default non-invasive
@@ -468,13 +480,25 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   // ---------- Confidence scoring (simple but useful) ----------
   // If no rule could be applied, keep confidence low to avoid misleading outputs.
 
-  // Start at 0.90, penalize missing critical fields and "assumptions"
-  let confidence = 0.90;
-  confidence -= missingData.length * 0.12;
-  confidence -= assumptions.length * 0.08;
-  // clamp
-  confidence = Math.max(0.2, Math.min(0.95, confidence));
+  // Start high, then penalize missing critical fields / assumptions.
+  // NOTE: This is an internal "tool confidence" score (not a regulatory statement).
+  let confidence = 0.92;
+  confidence -= missingData.length * 0.15;
+  confidence -= assumptions.length * 0.07;
+
+  // Small bonus when at least one concrete Annex VIII rule has been applied
+  if (rules.length >= 1) confidence += 0.03;
+
+  // Cap logic: if no rule applied → keep low to avoid misleading outputs.
   if (rules.length === 0) confidence = Math.min(confidence, 0.30);
+
+  // clamp (allow up to 0.99 when inputs are complete and rules are applied)
+  confidence = Math.max(0.2, Math.min(0.99, confidence));
+
+  // If everything required is present and no assumptions remain, push towards "very high"
+  if (rules.length >= 1 && missingData.length === 0 && assumptions.length === 0) {
+    confidence = Math.max(confidence, 0.97);
+  }
 
   // ---------- Next steps (audit/DT-ready) ----------
   nextSteps.push("Valider la classification via revue RA/PRRC (signature et traçabilité).");
