@@ -18,6 +18,7 @@ import { FALLBACK_REFERENTIALS, FALLBACK_PROCESSES } from "./fallback-data";
 import { fdaRouter } from "./fda-router";
 import { mdrRouter } from "./mdr-router";
 import { isoRouter } from "./iso-router";
+import { classificationRouter } from "./classification-router";
 
 import { auditRouter } from "./audit-router";
 import { siteRouter } from "./site-router";
@@ -784,6 +785,9 @@ export const appRouter = router({
 
   // ISO Audit System
   iso: isoRouter,
+
+  // MDR Device Classification (Annex VIII helper)
+  classification: classificationRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,
