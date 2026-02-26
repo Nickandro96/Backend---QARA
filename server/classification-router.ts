@@ -2,13 +2,19 @@ import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 
 /**
- * MDR Device Classification helper (Annex VIII – simplified rule engine)
+ * MDR Device Classification helper (EU MDR 2017/745 – Annex VIII rules)
  *
- * Goal: provide a reliable backend endpoint for the frontend wizard:
- *   trpc.classification.classify
+ * ⚠️ Assistive tool only. Final classification must be validated by RA/PRRC.
+ * Outputs:
+ * - resultingClass (incl. Is/Im/Ir if class I)
+ * - appliedRules (human-readable + audit-ready references)
+ * - justification (structured narrative for DT / audit trail)
+ * - meta: confidence, decisionPath, assumptions, missingData, nextSteps
  *
- * This is NOT a legal opinion. It is an assistive tool that explains the logic and
- * outputs a proposed class + applied rule hints.
+ * This router is designed to be compatible with your existing frontend:
+ * it still returns { resultingClass, appliedRules, justification }.
+ *
+ * Your current version was simplified and produced generic justification. 
  */
 
 const AnswersSchema = z.object({
@@ -56,19 +62,98 @@ const AnswersSchema = z.object({
 
 type MdrClass = "I" | "IIa" | "IIb" | "III";
 
+type RuleRef = {
+  annex: "MDR Annex VIII";
+  ruleNumber: string; // "1".."22" etc.
+  title: string;
+  rationale: string; // why applied
+  references: string[]; // textual references for audit report
+};
+
 function maxClass(a: MdrClass, b: MdrClass): MdrClass {
   const order: MdrClass[] = ["I", "IIa", "IIb", "III"];
   return order.indexOf(b) > order.indexOf(a) ? b : a;
 }
 
+function classRank(c: MdrClass): number {
+  const order: MdrClass[] = ["I", "IIa", "IIb", "III"];
+  return order.indexOf(c);
+}
+
+function uniq<T>(arr: T[]): T[] {
+  return Array.from(new Set(arr));
+}
+
+function boolLabel(v: boolean | undefined) {
+  if (v === true) return "Oui";
+  if (v === false) return "Non";
+  return "Non renseigné";
+}
+
+function durationLabel(d: z.infer<typeof AnswersSchema>["duration"]) {
+  if (!d) return "Non renseignée";
+  if (d === "transitoire") return "Transitoire (< 60 min)";
+  if (d === "court_terme") return "Court terme (≤ 30 jours)";
+  return "Long terme (> 30 jours)";
+}
+
+function invasivenessLabel(i: z.infer<typeof AnswersSchema>["invasiveness"]) {
+  if (!i) return "Non renseigné";
+  if (i === "non-invasif") return "Non invasif";
+  if (i === "invasif_orifice") return "Invasif via orifice corporel";
+  return "Invasif chirurgical";
+}
+
+function formatRuleLine(r: RuleRef) {
+  // Human readable and audit-ready
+  return `MDR 2017/745 — Annexe VIII — Règle ${r.ruleNumber} (${r.title}) : ${r.rationale}`;
+}
+
+function buildRule(
+  ruleNumber: string,
+  title: string,
+  rationale: string,
+  extraRefs?: string[],
+): RuleRef {
+  return {
+    annex: "MDR Annex VIII",
+    ruleNumber,
+    title,
+    rationale,
+    references: uniq([
+      "Règlement (UE) 2017/745 (MDR) — Article 51 (Classification)",
+      "Règlement (UE) 2017/745 (MDR) — Annexe VIII (Règles de classification)",
+      "Règlement (UE) 2017/745 (MDR) — Article 52 (Procédure d’évaluation de conformité selon classe)",
+      `MDR — Annexe VIII — Règle ${ruleNumber}`,
+      ...(extraRefs ?? []),
+    ]),
+  };
+}
+
 function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
-  const appliedRules: string[] = [];
+  // Output containers
+  const rules: RuleRef[] = [];
+  const decisionPath: string[] = [];
+  const assumptions: string[] = [];
+  const missingData: string[] = [];
+  const nextSteps: string[] = [];
   const notes: string[] = [];
 
-  // Default
+  // Basic required fields for a confident classification
+  if (!answers.invasiveness) missingData.push("Caractère invasif (non-invasif / orifice / chirurgical)");
+  if (!answers.duration) missingData.push("Durée de contact (transitoire / court terme / long terme)");
+  if (answers.is_software && !answers.danger_level)
+    missingData.push("Impact du logiciel (danger_level / impact clinique)");
+
+  // Default class
   let resultingClass: MdrClass = "I";
 
-  // ----- High risk special cases (simplified) -----
+  // ---------- Decision framing (audit trail) ----------
+  decisionPath.push(`Type: ${answers.device_type ?? "Non renseigné"} | Actif: ${boolLabel(answers.is_active)} | Logiciel: ${boolLabel(answers.is_software)}`);
+  decisionPath.push(`Invasivité: ${invasivenessLabel(answers.invasiveness)} | Durée: ${durationLabel(answers.duration)}`);
+  decisionPath.push(`Implantable: ${boolLabel(answers.implantable)} | Contact SNC: ${boolLabel(answers.contact_nervous_system)} | Contact circulatoire central: ${boolLabel(answers.contact_circulatory_system)}`);
+
+  // ---------- High risk special cases (simplified but audit structured) ----------
   const specialHigh =
     answers.incorporates_drug ||
     answers.incorporates_blood_derivative ||
@@ -78,113 +163,320 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
 
   if (specialHigh) {
     resultingClass = "III";
-    appliedRules.push("Règles spéciales (substances / tissus / nano / effet biologique) → Classe III (à confirmer Annex VIII)");
+    rules.push(
+      buildRule(
+        "21/22",
+        "Dispositifs intégrant substances / matériaux spécifiques (cas spéciaux)",
+        "Le dispositif déclare l’intégration de substance/matériau à risque (médicament, dérivés sanguins, tissus animaux, nanomatériaux avec exposition interne ou effet biologique) → classification élevée (souvent III) à confirmer au cas par cas.",
+        ["MDR — Annexe VIII — Règles 21/22 (cas spéciaux selon substances/matériaux)"],
+      ),
+    );
     notes.push(
-      "Présence de substances/matériaux à risque (médicament, dérivés sanguins, tissus animaux, nanomatériaux avec exposition interne, effet biologique)."
+      "Cas spécial : substance/matériau à risque déclaré (médicament / dérivé sanguin / tissu animal / nanomatériau avec exposition interne / effet biologique).",
     );
   }
 
-  // Implantable / CNS / circulatory
+  // ---------- Implantable / CNS / circulatory central (Rule 8 orientation) ----------
   if (answers.implantable) {
     resultingClass = maxClass(resultingClass, "IIb");
-    appliedRules.push("Règle 8 (implantables et dispositifs invasifs de longue durée) → au moins IIb");
+    rules.push(
+      buildRule(
+        "8",
+        "Dispositifs implantables et invasifs de longue durée (principes)",
+        "Dispositif déclaré implantable → Règle 8 : au minimum IIb (puis rehaussement si SNC / circulatoire central).",
+      ),
+    );
     notes.push("Dispositif déclaré implantable.");
   }
+
   if (answers.contact_nervous_system) {
     resultingClass = maxClass(resultingClass, "III");
-    appliedRules.push("Règle 8 (contact système nerveux central) → Classe III");
-    notes.push("Contact avec le système nerveux central.");
-  }
-  if (answers.contact_circulatory_system) {
-    resultingClass = maxClass(resultingClass, "IIb");
-    appliedRules.push("Règle 8 (contact système circulatoire central) → IIb / III selon cas");
-    notes.push("Contact avec le système circulatoire central.");
+    rules.push(
+      buildRule(
+        "8",
+        "Contact avec le système nerveux central",
+        "Contact avec le système nerveux central → Règle 8 : tendance Classe III (selon cas).",
+      ),
+    );
+    notes.push("Contact avec le système nerveux central déclaré.");
   }
 
-  // ----- Software (very simplified: based on 'danger_level') -----
+  if (answers.contact_circulatory_system) {
+    resultingClass = maxClass(resultingClass, "IIb");
+    rules.push(
+      buildRule(
+        "8",
+        "Contact avec le système circulatoire central",
+        "Contact avec le système circulatoire central → Règle 8 : IIb / III selon cas (ex. contact direct structures centrales).",
+      ),
+    );
+    notes.push("Contact avec le système circulatoire central déclaré.");
+  }
+
+  // ---------- Software (Rule 11) ----------
   if (answers.is_software) {
-    // If software drives/impacts decisions with potentially serious impact
     if (answers.danger_level === "potentiellement_dangereux") {
       resultingClass = maxClass(resultingClass, "IIb");
-      appliedRules.push("Règle 11 (logiciels) → IIb (si décisions pouvant causer préjudice grave)");
-      notes.push("Logiciel potentiellement dangereux (impact clinique significatif).");
-    } else {
+      rules.push(
+        buildRule(
+          "11",
+          "Logiciels",
+          "Le dispositif est un logiciel influençant des décisions pouvant causer un préjudice grave (danger_level=potentiellement_dangereux) → Règle 11 : IIb (à confirmer selon l’impact réel).",
+        ),
+      );
+      notes.push("Logiciel : impact clinique significatif déclaré (potentiellement dangereux).");
+    } else if (answers.danger_level === "normal") {
       resultingClass = maxClass(resultingClass, "IIa");
-      appliedRules.push("Règle 11 (logiciels) → IIa (si influence sur décisions cliniques non critiques)");
-      notes.push("Logiciel à impact clinique non critique (à confirmer).");
+      rules.push(
+        buildRule(
+          "11",
+          "Logiciels",
+          "Le dispositif est un logiciel influençant une décision clinique sans impact critique déclaré (danger_level=normal) → Règle 11 : IIa (à confirmer selon l’usage prévu).",
+        ),
+      );
+      notes.push("Logiciel : impact clinique non critique déclaré (à confirmer).");
+    } else {
+      // missing danger_level already collected in missingData
+      assumptions.push(
+        "Logiciel déclaré mais impact clinique non renseigné : la règle 11 nécessite une évaluation de l’impact (préjudice possible, gravité, rôle dans la décision).",
+      );
     }
   }
 
-  // ----- Invasiveness / duration (simplified) -----
+  // ---------- Invasiveness / duration (Rules 1, 4, 5, 6, 7, 8 simplified orientation) ----------
   if (answers.invasiveness === "chirurgical") {
     if (answers.duration === "long_terme") {
       resultingClass = maxClass(resultingClass, "IIb");
-      appliedRules.push("Règle 8 (chirurgical long terme) → IIb (voire III selon contact CNS/circulatoire)");
-      notes.push("Dispositif chirurgical avec durée long terme.");
+      rules.push(
+        buildRule(
+          "8",
+          "Dispositifs invasifs chirurgicaux de longue durée",
+          "Dispositif invasif chirurgical avec durée long terme (>30 jours) → orientation Règle 8 : IIb (voire III si SNC/circulatoire central).",
+        ),
+      );
+      notes.push("Invasif chirurgical long terme.");
     } else if (answers.duration === "court_terme") {
       resultingClass = maxClass(resultingClass, "IIa");
-      appliedRules.push("Règle 6/7 (chirurgical court terme) → IIa (selon usage)");
-      notes.push("Dispositif chirurgical court terme.");
+      rules.push(
+        buildRule(
+          "6/7",
+          "Dispositifs invasifs chirurgicaux (transitoire/court terme)",
+          "Dispositif invasif chirurgical court terme (≤30 jours) → orientation Règles 6/7 : IIa (rehaussement possible selon site/énergie/usage).",
+        ),
+      );
+      notes.push("Invasif chirurgical court terme.");
     } else if (answers.duration === "transitoire") {
       resultingClass = maxClass(resultingClass, "IIa");
-      appliedRules.push("Règle 6 (chirurgical transitoire) → IIa (selon cas)");
-      notes.push("Dispositif chirurgical transitoire.");
+      rules.push(
+        buildRule(
+          "6",
+          "Dispositifs invasifs chirurgicaux transitoires",
+          "Dispositif invasif chirurgical transitoire (<60 min) → orientation Règle 6 : IIa (selon cas).",
+        ),
+      );
+      notes.push("Invasif chirurgical transitoire.");
+    } else {
+      assumptions.push("Invasif chirurgical déclaré mais durée non renseignée : impossible de discriminer règles 6/7/8 correctement.");
     }
   } else if (answers.invasiveness === "invasif_orifice") {
     if (answers.duration === "long_terme") {
       resultingClass = maxClass(resultingClass, "IIa");
-      appliedRules.push("Règle 5 (orifices, long terme) → IIa (voire IIb selon cas)");
-      notes.push("Dispositif invasif via orifice – long terme.");
-    } else {
+      rules.push(
+        buildRule(
+          "5",
+          "Dispositifs invasifs via orifice corporel",
+          "Dispositif invasif via orifice corporel long terme (>30 jours) → orientation Règle 5 : IIa (rehaussement selon site critique/risque).",
+        ),
+      );
+      notes.push("Invasif via orifice long terme.");
+    } else if (answers.duration === "court_terme" || answers.duration === "transitoire") {
       resultingClass = maxClass(resultingClass, "I");
-      appliedRules.push("Règle 5 (orifices, transitoire/court terme) → I / IIa selon cas");
-      notes.push("Dispositif invasif via orifice – transitoire/court terme.");
+      rules.push(
+        buildRule(
+          "5",
+          "Dispositifs invasifs via orifice corporel",
+          "Dispositif invasif via orifice corporel transitoire/court terme → orientation Règle 5 : I ou IIa selon cas (ex. absorption, risque, site).",
+        ),
+      );
+      notes.push("Invasif via orifice transitoire/court terme.");
+    } else {
+      assumptions.push("Invasif via orifice déclaré mais durée non renseignée : impossible d’appliquer la règle 5 correctement.");
     }
   } else if (answers.invasiveness === "non-invasif") {
-    // Wounds: crude mapping
-    if (answers.contact_site?.some((s) => s.toLowerCase().includes("peau")) || answers.wound_depth) {
+    const contactPeau = answers.contact_site?.some((s) => s.toLowerCase().includes("peau")) ?? false;
+
+    if (contactPeau || answers.wound_depth) {
       if (answers.wound_depth === "profonde") {
         resultingClass = maxClass(resultingClass, "IIa");
-        appliedRules.push("Règle 4 (contact peau lésée profonde) → IIa (voire IIb selon cas)");
-        notes.push("Contact peau lésée profonde.");
+        rules.push(
+          buildRule(
+            "4",
+            "Dispositifs en contact avec peau lésée",
+            "Contact avec peau lésée profonde → orientation Règle 4 : IIa (voire IIb selon cas).",
+          ),
+        );
+        notes.push("Non invasif mais contact peau lésée profonde.");
       } else if (answers.wound_depth === "superficielle") {
         resultingClass = maxClass(resultingClass, "I");
-        appliedRules.push("Règle 4 (contact peau lésée superficielle) → I");
-        notes.push("Contact peau lésée superficielle.");
+        rules.push(
+          buildRule(
+            "4",
+            "Dispositifs en contact avec peau lésée",
+            "Contact avec peau lésée superficielle → orientation Règle 4 : Classe I (selon cas).",
+          ),
+        );
+        notes.push("Non invasif mais contact peau lésée superficielle.");
+      } else {
+        assumptions.push("Contact peau lésée suspecté mais profondeur non renseignée : règle 4 nécessite superficialité/profondeur.");
       }
     } else {
-      appliedRules.push("Règle 1 (non invasif) → I (par défaut, sous réserve d’autres caractéristiques)");
-      notes.push("Non invasif (par défaut classe I).");
+      // default non-invasive
+      rules.push(
+        buildRule(
+          "1",
+          "Dispositifs non invasifs",
+          "Dispositif non invasif, sans caractéristiques particulières déclarées → Règle 1 : Classe I (sous réserve d’autres règles spécifiques).",
+        ),
+      );
+      notes.push("Non invasif : classification par défaut Règle 1.");
     }
   }
 
-  // ----- Sterile / measuring / reusable surgical (class I sub-classes) -----
-  // These do not change the base class if it's IIa/IIb/III, but we annotate.
+  // ---------- Sterile / measuring / reusable surgical (class I sub-classes) ----------
+  // Only annotate if base class is I
   const modifiers: string[] = [];
   if (answers.provided_sterile) modifiers.push("Is (stérile)");
   if (answers.has_measuring_function) modifiers.push("Im (fonction de mesure)");
   if (answers.reusable_surgical) modifiers.push("Ir (réutilisable – chirurgical)");
 
+  if (resultingClass === "I" && modifiers.length) {
+    notes.push(`Spécificité Classe I: ${modifiers.join(", ")} (impact sur sous-catégorie de classe I).`);
+  }
+
   const classModifier = resultingClass === "I" && modifiers.length ? ` (${modifiers.join(", ")})` : "";
   const resultingClassLabel = `${resultingClass}${classModifier}`;
 
-  const justification =
-    [
-      `Proposition de classe MDR: ${resultingClassLabel}`,
-      "",
-      "Justification (outil d'aide, à confirmer Annex VIII):",
-      ...appliedRules.map((r) => `- ${r}`),
-      "",
-      "Éléments pris en compte:",
-      ...notes.map((n) => `- ${n}`),
-      "",
-      "⚠️ Important: cette classification est indicative. Une revue réglementaire complète est nécessaire (Annex VIII + MDCG applicables).",
-    ].join("\n");
+  // ---------- Confidence scoring (simple but useful) ----------
+  // Start at 0.85, penalize missing critical fields and "assumptions"
+  let confidence = 0.85;
+  confidence -= missingData.length * 0.12;
+  confidence -= assumptions.length * 0.08;
+  // clamp
+  confidence = Math.max(0.2, Math.min(0.95, confidence));
+
+  // ---------- Next steps (audit/DT-ready) ----------
+  nextSteps.push("Valider la classification via revue RA/PRRC (signature et traçabilité).");
+  nextSteps.push("Documenter la justification dans le dossier technique (Annexe II/III) – section 'Classification rationale'.");
+  nextSteps.push("Vérifier les règles Annex VIII alternatives pertinentes (cas d’usage spécifiques, site critique, énergie, substances).");
+  nextSteps.push("Déduire la voie d’évaluation de conformité (MDR Article 52) en fonction de la classe retenue.");
+
+  // ---------- Build structured justification narrative (audit-ready) ----------
+  const uniqueRules = uniq(
+    rules
+      .sort((a, b) => {
+        // try to keep numeric order when possible
+        const an = parseInt(a.ruleNumber.split("/")[0], 10);
+        const bn = parseInt(b.ruleNumber.split("/")[0], 10);
+        if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
+        return a.ruleNumber.localeCompare(b.ruleNumber);
+      })
+      .map((r) => formatRuleLine(r)),
+  );
+
+  const refs = uniq(rules.flatMap((r) => r.references));
+
+  const headerLines: string[] = [];
+  headerLines.push("JUSTIFICATION DE CLASSIFICATION — MDR (UE) 2017/745");
+  headerLines.push(`Dispositif : ${answers.device_name ?? "Non renseigné"}`);
+  if (answers.device_description) headerLines.push(`Description : ${answers.device_description}`);
+  headerLines.push("");
+  headerLines.push("1) Référentiel réglementaire");
+  headerLines.push("- MDR 2017/745 — Article 51 (Classification)");
+  headerLines.push("- MDR 2017/745 — Annexe VIII (Règles de classification)");
+  headerLines.push("- MDR 2017/745 — Article 52 (Procédure d’évaluation de conformité selon classe)");
+  headerLines.push("");
+
+  const scopeLines: string[] = [];
+  scopeLines.push("2) Données d’entrée utilisées (wizard)");
+  scopeLines.push(`- Type : ${answers.device_type ?? "Non renseigné"} | Actif : ${boolLabel(answers.is_active)} | Logiciel : ${boolLabel(answers.is_software)}`);
+  scopeLines.push(`- Invasivité : ${invasivenessLabel(answers.invasiveness)}`);
+  scopeLines.push(`- Durée : ${durationLabel(answers.duration)}`);
+  scopeLines.push(`- Implantable : ${boolLabel(answers.implantable)}`);
+  scopeLines.push(`- Contact SNC : ${boolLabel(answers.contact_nervous_system)} | Contact circulatoire central : ${boolLabel(answers.contact_circulatory_system)}`);
+  scopeLines.push(`- Stérile : ${boolLabel(answers.provided_sterile)} | Mesure : ${boolLabel(answers.has_measuring_function)} | Réutilisable chirurgical : ${boolLabel(answers.reusable_surgical)}`);
+  scopeLines.push("");
+
+  const decisionLines: string[] = [];
+  decisionLines.push("3) Chemin de décision (Annexe VIII)");
+  decisionLines.push(...decisionPath.map((d, idx) => `- Étape ${idx + 1} : ${d}`));
+  decisionLines.push("");
+
+  const rulesLines: string[] = [];
+  rulesLines.push("4) Règle(s) de classification appliquée(s)");
+  if (uniqueRules.length) {
+    rulesLines.push(...uniqueRules.map((r) => `- ${r}`));
+  } else {
+    rulesLines.push("- Aucune règle n’a pu être appliquée (données insuffisantes).");
+  }
+  rulesLines.push("");
+
+  const conclusionLines: string[] = [];
+  conclusionLines.push("5) Conclusion");
+  conclusionLines.push(`- Classe MDR proposée : ${resultingClassLabel}`);
+  conclusionLines.push(`- Niveau de confiance (outil) : ${(confidence * 100).toFixed(0)}%`);
+  conclusionLines.push("");
+
+  const limitsLines: string[] = [];
+  limitsLines.push("6) Hypothèses / limites & données manquantes");
+  if (missingData.length) limitsLines.push(...missingData.map((m) => `- Donnée manquante : ${m}`));
+  if (assumptions.length) limitsLines.push(...assumptions.map((a) => `- Hypothèse : ${a}`));
+  if (!missingData.length && !assumptions.length) limitsLines.push("- Aucune (données suffisantes pour une proposition cohérente).");
+  limitsLines.push("");
+
+  const actionsLines: string[] = [];
+  actionsLines.push("7) Actions requises (audit-ready)");
+  actionsLines.push(...nextSteps.map((s) => `- ${s}`));
+  actionsLines.push("");
+
+  const refsLines: string[] = [];
+  refsLines.push("8) Références (trace)");
+  refsLines.push(...refs.map((r) => `- ${r}`));
+  refsLines.push("");
+
+  const disclaimerLines: string[] = [];
+  disclaimerLines.push("⚠️ Avertissement");
+  disclaimerLines.push(
+    "Cette proposition est indicative et doit être validée par une revue réglementaire complète (Annexe VIII + guides MDCG applicables) et approuvée par RA/PRRC.",
+  );
+
+  const justification = [
+    ...headerLines,
+    ...scopeLines,
+    ...decisionLines,
+    ...rulesLines,
+    ...conclusionLines,
+    ...limitsLines,
+    ...actionsLines,
+    ...refsLines,
+    ...disclaimerLines,
+  ].join("\n");
+
+  // Keep backward-compatible string list for your current UI section "Règles appliquées"
+  const appliedRules = uniqueRules.length ? uniqueRules : [];
 
   return {
+    // Existing fields (frontend expects these)
     resultingClass: resultingClassLabel,
     appliedRules,
     justification,
+
+    // Extra fields (optional to use in frontend)
+    confidence,
+    decisionPath,
+    assumptions,
+    missingData,
+    nextSteps,
+    notes,
   };
 }
 
