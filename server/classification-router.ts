@@ -327,7 +327,18 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
         );
         notes.push("Non invasif mais contact peau lésée superficielle.");
       } else {
-        assumptions.push("Contact peau lésée suspecté mais profondeur non renseignée : règle 4 nécessite superficialité/profondeur.");
+        // If the user indicates contact with injured skin but does not specify depth,
+        // we still anchor the reasoning on Rule 4 (Annex VIII) and mark the depth as missing.
+        // This avoids returning "no rule applied" which is confusing in the UI.
+        missingData.push("Profondeur de la plaie (superficielle / profonde) — nécessaire pour appliquer la règle 4");
+        rules.push(
+          buildRule(
+            "4",
+            "Dispositifs en contact avec peau lésée",
+            "Contact avec peau lésée déclaré, mais profondeur non renseignée. Règle 4 applicable ; la classe dépend de la superficialité/profondeur → classification à confirmer après complétion.",
+          ),
+        );
+        notes.push("Peau lésée déclarée, profondeur non renseignée : appliquer Règle 4 et compléter la donnée.");
       }
     } else {
       // default non-invasive
@@ -357,10 +368,13 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   const resultingClassLabel = `${resultingClass}${classModifier}`;
 
   // ---------- Confidence scoring (simple but useful) ----------
-  // Start at 0.85, penalize missing critical fields and "assumptions"
-  let confidence = 0.85;
+  // Start at 0.9, penalize missing critical fields and assumptions.
+  // If no rule could be applied, confidence must be low by design.
+  let confidence = 0.9;
   confidence -= missingData.length * 0.12;
   confidence -= assumptions.length * 0.08;
+  // If we still have no rule anchors, cap confidence strongly.
+  if (rules.length === 0) confidence = Math.min(confidence, 0.3);
   // clamp
   confidence = Math.max(0.2, Math.min(0.95, confidence));
 
