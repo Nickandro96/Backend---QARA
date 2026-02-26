@@ -8,8 +8,6 @@ from urllib.parse import urlparse, parse_qs
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-# ---------------- DB CONNECT (robust) ----------------
-
 def parse_db_url(url: str) -> dict:
     u = urlparse(url)
     qs = parse_qs(u.query)
@@ -57,8 +55,6 @@ def connect_with_retry(max_attempts: int = 10):
             time.sleep(wait_s)
     raise last_err
 
-# ---------------- Helpers ----------------
-
 def norm(v):
     if v is None:
         return None
@@ -72,16 +68,12 @@ def norm(v):
 def normalize_header(h: str) -> str:
     s = str(h).strip().lower()
     s = s.replace("’", "'")
-    # strip accents (simple)
     s = (s.replace("é", "e").replace("è", "e").replace("ê", "e")
            .replace("à", "a").replace("ç", "c").replace("ù", "u").replace("ô", "o").replace("î", "i"))
     s = re.sub(r"\s+", " ", s)
     return s
 
 def col(df: pd.DataFrame, candidates: list[str]) -> str | None:
-    """
-    Fuzzy match a dataframe column name.
-    """
     norm_map = {normalize_header(c): c for c in df.columns}
     for cand in candidates:
         k = normalize_header(cand)
@@ -101,8 +93,6 @@ def stable_question_key(referential_id: int, process_slug: str, article: str, ti
     base = f"{referential_id}||{process_slug or ''}||{article or ''}||{title or ''}||{question_text or ''}"
     h = hashlib.md5(base.encode("utf-8")).hexdigest()
     return f"q_{h}"
-
-# ---------------- Process mapping ----------------
 
 def table_exists(cur, name: str) -> bool:
     cur.execute("""
@@ -193,10 +183,7 @@ def build_process_map(cur) -> dict:
     print(f"[PROCESS] map size={len(mp)}")
     return mp
 
-# ---------------- Import logic (FILL ONLY) ----------------
-
 def load_rows_from_excel(df: pd.DataFrame, referential_id: int):
-    # Detect columns (fuzzy)
     c_process = col(df, ["Processus concerné", "Processus concerne", "Processus"])
     c_clause = col(df, ["Clause ISO 9001"]) if referential_id == 2 else col(df, ["Clause ISO 13485"])
     c_title = col(df, ["Intitulé", "Intitule", "Intitulé de la question"])
@@ -205,13 +192,7 @@ def load_rows_from_excel(df: pd.DataFrame, referential_id: int):
     c_risk = col(df, ["Risque en cas de NC", "Risque en cas de non conformite", "Risque en cas de non-conformité", "Risque"])
     c_evid = col(df, ["Éléments de preuve attendus", "Elements de preuve attendus", "Preuves attendues", "Éléments de preuve"])
     c_funcs = col(df, ["Fonctions interrogées", "Fonctions interrogees", "Fonctions"])
-    c_crit = col(df, ["Criticité", "Criticite"])
     c_qk = col(df, ["questionKey", "QuestionKey", "question_key"])
-
-    missing = [("Processus", c_process), ("Clause", c_clause), ("QuestionText", c_qtext), ("questionKey", c_qk)]
-    for name, v in missing:
-        if not v:
-            print(f"[WARN] Missing column in Excel for referentialId={referential_id}: {name}")
 
     rows = []
     for _, r in df.iterrows():
@@ -224,11 +205,10 @@ def load_rows_from_excel(df: pd.DataFrame, referential_id: int):
         risk = norm(r.get(c_risk)) if c_risk else None
         evid = norm(r.get(c_evid)) if c_evid else None
         funcs = norm(r.get(c_funcs)) if c_funcs else None
-        crit = norm(r.get(c_crit)) if c_crit else None
 
         if not qk:
-            # fallback key (not recommended)
             qk = stable_question_key(referential_id, slugify(process_name or ""), article or "", title or "", qtext or "")
+
         rows.append({
             "questionKey": qk,
             "process": process_name,
@@ -239,11 +219,9 @@ def load_rows_from_excel(df: pd.DataFrame, referential_id: int):
             "risk": risk,
             "expectedEvidence": evid,
             "interviewFunctions": funcs,
-            "criticality": crit,
             "referentialId": referential_id,
         })
 
-    # Logging about Excel content
     non_empty_risk = sum(1 for x in rows if x["risk"])
     non_empty_evid = sum(1 for x in rows if x["expectedEvidence"])
     print(f"[EXCEL] referentialId={referential_id} rows={len(rows)} risk_non_empty={non_empty_risk} evid_non_empty={non_empty_evid}")
@@ -256,7 +234,6 @@ def upsert_fill_only(df: pd.DataFrame, referential_id: int):
     process_map = build_process_map(cur)
     rows = load_rows_from_excel(df, referential_id)
 
-    # How many DB risks empty currently?
     cur.execute("""
       SELECT COUNT(*) AS total,
              SUM(CASE WHEN risk IS NULL OR risk='' THEN 1 ELSE 0 END) AS risk_empty,
@@ -273,7 +250,6 @@ def upsert_fill_only(df: pd.DataFrame, referential_id: int):
     not_found = 0
     skip_no_process = 0
 
-    # Fill-only: only set values when DB empty AND Excel has value
     for row in rows:
         p = row["process"]
         pid = None
@@ -293,7 +269,6 @@ def upsert_fill_only(df: pd.DataFrame, referential_id: int):
         """, (qk, referential_id))
         existing = cur.fetchone()
         if not existing:
-            # We do NOT insert here (avoid duplicates). You asked "sans doublons".
             not_found += 1
             continue
 
@@ -305,15 +280,12 @@ def upsert_fill_only(df: pd.DataFrame, referential_id: int):
         if not (set_risk or set_evid):
             continue
 
-        # Build update dynamically
         updates = []
         params = []
 
-        # Always keep processId/article/title/questionText/questionType aligned (safe)
-        updates += ["processId=%s", "article=%s", "title=%s", "questionText=%s", "questionType=%s",
-                    "interviewFunctions=%s", "criticality=%s"]
-        params += [pid, row["article"], row["title"], row["questionText"], row["questionType"],
-                   row["interviewFunctions"], row["criticality"]]
+        # ✅ keep alignment safe (no criticality!)
+        updates += ["processId=%s", "article=%s", "title=%s", "questionText=%s", "questionType=%s", "interviewFunctions=%s"]
+        params += [pid, row["article"], row["title"], row["questionText"], row["questionType"], row["interviewFunctions"]]
 
         if set_risk:
             updates.append("risk=%s")
@@ -348,12 +320,8 @@ def upsert_fill_only(df: pd.DataFrame, referential_id: int):
           f"not_found_in_db={not_found} skip_no_process={skip_no_process}")
 
 def run():
-    iso9001_path = "data/Questionnaires audits iso 9001.xlsx"
-    iso13485_path = "data/Questionnaires audits iso 13485.xlsx"
-
-    iso9001 = pd.read_excel(iso9001_path, engine="openpyxl")
-    iso13485 = pd.read_excel(iso13485_path, engine="openpyxl")
-
+    iso9001 = pd.read_excel("data/Questionnaires audits iso 9001.xlsx", engine="openpyxl")
+    iso13485 = pd.read_excel("data/Questionnaires audits iso 13485.xlsx", engine="openpyxl")
     upsert_fill_only(iso9001, 2)
     upsert_fill_only(iso13485, 3)
 
