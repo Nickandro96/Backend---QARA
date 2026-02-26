@@ -1218,6 +1218,13 @@ export const mdrRouter = router({
           risk: (q as any).risk ?? null,
           risks: normalizeRisksValue((q as any).risksRaw ?? (q as any).risks ?? (q as any).risk ?? null),
 
+          // 🔎 Debug-friendly fields (frontend can ignore safely)
+          riskLen: typeof (q as any).risk === "string" ? String((q as any).risk).length : null,
+          riskHash:
+            typeof (q as any).risk === "string"
+              ? crypto.createHash("md5").update(String((q as any).risk)).digest("hex").slice(0, 10)
+              : null,
+
           interviewFunctions: safeParseArray(q.interviewFunctions),
           economicRole: q.economicRole ?? null,
           applicableProcesses: safeParseArray(q.applicableProcesses),
@@ -1232,7 +1239,14 @@ export const mdrRouter = router({
         try {
           const sample = out.slice(0, 5).map((x: any) => ({
             questionKey: x.questionKey,
-            risk: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
+            // show head+tail+hash to detect "looks identical" but differs later
+            riskHead: typeof x.risk === "string" ? x.risk.slice(0, 80) : x.risk,
+            riskTail: typeof x.risk === "string" ? x.risk.slice(Math.max(0, x.risk.length - 60)) : null,
+            riskLen: typeof x.risk === "string" ? x.risk.length : null,
+            riskHash:
+              typeof x.risk === "string"
+                ? crypto.createHash("md5").update(String(x.risk)).digest("hex").slice(0, 10)
+                : null,
           }));
           console.log(`[MDR] sample risks: ${JSON.stringify(sample)}`);
         } catch {}
