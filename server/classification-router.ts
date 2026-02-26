@@ -142,6 +142,8 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   // Basic required fields for a confident classification
   if (!answers.invasiveness) missingData.push("Caractère invasif (non-invasif / orifice / chirurgical)");
   if (!answers.duration) missingData.push("Durée de contact (transitoire / court terme / long terme)");
+  if (!answers.contact_site || answers.contact_site.length === 0) missingData.push("Site(s) anatomique(s) de contact");
+  if (!answers.function || answers.function.length === 0) missingData.push("Fonction(s) du dispositif (au moins 1)");
   if (answers.is_software && !answers.danger_level)
     missingData.push("Impact du logiciel (danger_level / impact clinique)");
 
@@ -243,7 +245,114 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
     }
   }
 
-  // ---------- Invasiveness / duration (Rules 1, 4, 5, 6, 7, 8 simplified orientation) ----------
+  
+  // ---------- Function / energy mapping (Rules 2, 3, 9, 10, 12, 14, 16 - simplified but audit-usable) ----------
+  const funcs = answers.function ?? [];
+
+  // Rule 2 / 3 : Non-invasive devices concerning blood / body liquids
+  if (funcs.includes("canaliser_stocker_sang")) {
+    resultingClass = maxClass(resultingClass, "IIa");
+    rules.push(
+      buildRule(
+        "2",
+        "Dispositifs non invasifs destinés à canaliser / stocker des liquides corporels (dont sang)",
+        "Fonction déclarée : canaliser ou stocker du sang/liquides corporels → Règle 2 : au moins IIa (rehaussement possible si stockage de sang destiné à transfusion ou si modification).",
+      ),
+    );
+    notes.push("Fonction : canaliser/stocker sang/liquides.");
+  }
+
+  if (funcs.includes("modifier_composition")) {
+    resultingClass = maxClass(resultingClass, "IIb");
+    rules.push(
+      buildRule(
+        "3",
+        "Dispositifs non invasifs destinés à modifier la composition biologique/chimique",
+        "Fonction déclarée : modifier la composition biologique/chimique d’un sang/liquide corporel ou d’autres fluides → Règle 3 : IIb (à confirmer selon procédé exact).",
+      ),
+    );
+    notes.push("Fonction : modification composition (Règle 3).");
+  }
+
+  // Rule 9 / 10 : Active devices (therapeutic / diagnostic & monitoring)
+  if (answers.is_active) {
+    if (funcs.includes("administrer_energie") || funcs.includes("energie_dangereuse")) {
+      const dangerous = funcs.includes("energie_dangereuse") || answers.danger_level === "potentiellement_dangereux";
+      resultingClass = maxClass(resultingClass, dangerous ? "IIb" : "IIa");
+      rules.push(
+        buildRule(
+          "9",
+          "Dispositifs actifs thérapeutiques / administrant ou échangeant de l’énergie",
+          dangerous
+            ? "Dispositif actif administrant/échangeant de l’énergie de manière potentiellement dangereuse → Règle 9 : IIb."
+            : "Dispositif actif administrant/échangeant de l’énergie sans caractère dangereux déclaré → Règle 9 : IIa.",
+        ),
+      );
+      notes.push("Actif : énergie (Règle 9).");
+    }
+
+    if (funcs.includes("diagnostic_monitoring") || funcs.includes("monitoring_vital") || funcs.includes("radiations_ionisantes")) {
+      // Diagnostic/monitoring
+      let c: MdrClass = "IIa";
+      let rationale = "Dispositif actif destiné au diagnostic/monitoring → Règle 10 : IIa.";
+      if (funcs.includes("radiations_ionisantes")) {
+        c = "IIb";
+        rationale = "Dispositif actif émettant des radiations ionisantes à des fins de diagnostic → Règle 10 : IIb.";
+      }
+      if (funcs.includes("monitoring_vital")) {
+        c = maxClass(c, "IIb");
+        rationale = "Dispositif actif destiné à surveiller des paramètres vitaux où des variations peuvent entraîner un danger immédiat → Règle 10 : IIb.";
+      }
+      resultingClass = maxClass(resultingClass, c);
+      rules.push(buildRule("10", "Dispositifs actifs de diagnostic et de monitoring", rationale));
+      notes.push("Actif : diagnostic/monitoring (Règle 10).");
+    }
+
+    if (funcs.includes("administrer_medicament")) {
+      // Simplified: usually IIa/IIb depending on risk
+      const dangerous = answers.danger_level === "potentiellement_dangereux";
+      resultingClass = maxClass(resultingClass, dangerous ? "IIb" : "IIa");
+      rules.push(
+        buildRule(
+          "12",
+          "Dispositifs actifs destinés à administrer / retirer des substances",
+          dangerous
+            ? "Dispositif actif administrant/retirant des médicaments ou substances de manière potentiellement dangereuse → rehaussement (souvent IIb) – à confirmer selon cas."
+            : "Dispositif actif administrant/retirant des médicaments ou substances sans caractère dangereux déclaré → orientation IIa – à confirmer selon cas.",
+          ["MDR — Annexe VIII — Règle 12 (administration/retrait substances)"],
+        ),
+      );
+      notes.push("Actif : administration substance (Règle 12).");
+    }
+  }
+
+  // Rule 14 : Contraception / prévention IST (simplified)
+  if (funcs.includes("contraception")) {
+    resultingClass = maxClass(resultingClass, "IIb");
+    rules.push(
+      buildRule(
+        "14",
+        "Contraception ou prévention des IST",
+        "Fonction déclarée : contraception ou prévention des IST → Règle 14 : IIb (voire III selon cas, ex. implantable) – à confirmer.",
+      ),
+    );
+    notes.push("Fonction : contraception/prévention IST (Règle 14).");
+  }
+
+  // Rule 16 : Dispositifs destinés à la stérilisation/désinfection d'autres DM (simplified)
+  if (funcs.includes("sterilisation_dm")) {
+    resultingClass = maxClass(resultingClass, "IIb");
+    rules.push(
+      buildRule(
+        "16",
+        "Dispositifs destinés spécifiquement à la désinfection/ stérilisation",
+        "Fonction déclarée : stérilisation/désinfection d’autres dispositifs médicaux → Règle 16 : IIb (à confirmer selon portée).",
+      ),
+    );
+    notes.push("Fonction : stérilisation/désinfection d'autres DM (Règle 16).");
+  }
+
+// ---------- Invasiveness / duration (Rules 1, 4, 5, 6, 7, 8 simplified orientation) ----------
   if (answers.invasiveness === "chirurgical") {
     if (answers.duration === "long_terme") {
       resultingClass = maxClass(resultingClass, "IIb");
@@ -327,18 +436,7 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
         );
         notes.push("Non invasif mais contact peau lésée superficielle.");
       } else {
-        // If the user indicates contact with injured skin but does not specify depth,
-        // we still anchor the reasoning on Rule 4 (Annex VIII) and mark the depth as missing.
-        // This avoids returning "no rule applied" which is confusing in the UI.
-        missingData.push("Profondeur de la plaie (superficielle / profonde) — nécessaire pour appliquer la règle 4");
-        rules.push(
-          buildRule(
-            "4",
-            "Dispositifs en contact avec peau lésée",
-            "Contact avec peau lésée déclaré, mais profondeur non renseignée. Règle 4 applicable ; la classe dépend de la superficialité/profondeur → classification à confirmer après complétion.",
-          ),
-        );
-        notes.push("Peau lésée déclarée, profondeur non renseignée : appliquer Règle 4 et compléter la donnée.");
+        assumptions.push("Contact peau lésée suspecté mais profondeur non renseignée : règle 4 nécessite superficialité/profondeur.");
       }
     } else {
       // default non-invasive
@@ -368,15 +466,15 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   const resultingClassLabel = `${resultingClass}${classModifier}`;
 
   // ---------- Confidence scoring (simple but useful) ----------
-  // Start at 0.9, penalize missing critical fields and assumptions.
-  // If no rule could be applied, confidence must be low by design.
-  let confidence = 0.9;
+  // If no rule could be applied, keep confidence low to avoid misleading outputs.
+
+  // Start at 0.90, penalize missing critical fields and "assumptions"
+  let confidence = 0.90;
   confidence -= missingData.length * 0.12;
   confidence -= assumptions.length * 0.08;
-  // If we still have no rule anchors, cap confidence strongly.
-  if (rules.length === 0) confidence = Math.min(confidence, 0.3);
   // clamp
   confidence = Math.max(0.2, Math.min(0.95, confidence));
+  if (rules.length === 0) confidence = Math.min(confidence, 0.30);
 
   // ---------- Next steps (audit/DT-ready) ----------
   nextSteps.push("Valider la classification via revue RA/PRRC (signature et traçabilité).");
