@@ -41,6 +41,10 @@ const AnswersSchema = z.object({
   // Function / energy
   function: z.array(z.string()).optional(),
   danger_level: z.enum(["potentiellement_dangereux", "normal"]).optional(),
+  // Annex VIII helper sub-questions
+  modify_composition_simple: z.boolean().optional(),
+  disinfection_target: z.enum(["non_invasif", "invasif", "implantable"]).optional(),
+  other_function_text: z.string().optional(),
 
   // Sterility / measuring
   provided_sterile: z.boolean().optional(),
@@ -263,15 +267,21 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   }
 
   if (funcs.includes("modifier_composition")) {
-    resultingClass = maxClass(resultingClass, "IIb");
+    const simple = answers.modify_composition_simple === true;
+    // Annexe VIII : si la modification est réalisée uniquement par filtration/centrifugation/échanges de gaz ou de chaleur,
+    // la classe est IIa ; sinon IIb.
+    resultingClass = maxClass(resultingClass, simple ? "IIa" : "IIb");
     rules.push(
       buildRule(
         "3",
         "Dispositifs non invasifs destinés à modifier la composition biologique/chimique",
-        "Fonction déclarée : modifier la composition biologique/chimique d’un sang/liquide corporel ou d’autres fluides → Règle 3 : IIb (à confirmer selon procédé exact).",
+        simple
+          ? "Fonction déclarée : modification par filtration/centrifugation/échanges gaz/chaleur → application de l’exception de la règle 3 : IIa."
+          : "Fonction déclarée : modification de composition (hors exception filtration/centrifugation/échanges gaz/chaleur) → Règle 3 : IIb.",
+        ["MDR (UE) 2017/745 — Annexe VIII, règle 3"],
       ),
     );
-    notes.push("Fonction : modification composition (Règle 3).");
+    notes.push(`Fonction : modification composition (Règle 3) — ${simple ? "exception (IIa)" : "standard (IIb)"}.`);
   }
 
   // Rule 9 / 10 : Active devices (therapeutic / diagnostic & monitoring)
@@ -339,17 +349,22 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
     notes.push("Fonction : contraception/prévention IST (Règle 14).");
   }
 
-  // Rule 16 : Dispositifs destinés à la stérilisation/désinfection d'autres DM (simplified)
+  // Rule 16 : Dispositifs destinés à la désinfection / nettoyage / rinçage / stérilisation d'autres DM
   if (funcs.includes("sterilisation_dm")) {
-    resultingClass = maxClass(resultingClass, "IIb");
+    const target = answers.disinfection_target ?? "invasif";
+    const cls: MdrClass = target === "non_invasif" ? "IIa" : "IIb";
+    resultingClass = maxClass(resultingClass, cls);
     rules.push(
       buildRule(
         "16",
-        "Dispositifs destinés spécifiquement à la désinfection/ stérilisation",
-        "Fonction déclarée : stérilisation/désinfection d’autres dispositifs médicaux → Règle 16 : IIb (à confirmer selon portée).",
+        "Dispositifs destinés à la désinfection / stérilisation d'autres DM",
+        target === "non_invasif"
+          ? "Cible déclarée : dispositifs non invasifs → Règle 16 : IIa."
+          : "Cible déclarée : dispositifs invasifs ou implantables → Règle 16 : IIb.",
+        ["MDR (UE) 2017/745 — Annexe VIII, règle 16"],
       ),
     );
-    notes.push("Fonction : stérilisation/désinfection d'autres DM (Règle 16).");
+    notes.push(`Fonction : désinfection/stérilisation (Règle 16) — cible: ${target} → ${cls}.`);
   }
 
 // ---------- Invasiveness / duration (Rules 1, 4, 5, 6, 7, 8 simplified orientation) ----------
