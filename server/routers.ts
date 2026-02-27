@@ -22,6 +22,7 @@ import { classificationRouter } from "./classification-router";
 
 import { auditRouter } from "./audit-router";
 import { siteRouter } from "./site-router";
+import { watchRouter } from "./watch-router";
 
 import { generateAuditReport } from "./report-generator";
 import { auditReports, sites as sitesTable } from "../drizzle/schema";
@@ -59,6 +60,7 @@ const optionalIntOrNull = z.preprocess(
 // -----------------------------
 export const appRouter = router({
   system: systemRouter,
+  watch: watchRouter,
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
