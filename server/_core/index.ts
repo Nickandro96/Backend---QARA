@@ -3,6 +3,7 @@ import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./trpc";
+import { startWatchRefreshJob } from "../jobs/watchRefreshJob";
 
 const app = express();
 
@@ -72,4 +73,6 @@ app.use(
 const port = Number(process.env.PORT) || 3001;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
+  // Non-blocking background refresh (safe if sources are down).
+  startWatchRefreshJob();
 });
