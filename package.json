@@ -7,6 +7,8 @@
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "esbuild server/_core/index.ts --platform=node --bundle --format=esm --outdir=dist --external:./node_modules/*",
 
+    "test": "node --test --import tsx",
+
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push --force",
