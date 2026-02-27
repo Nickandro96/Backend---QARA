@@ -382,6 +382,92 @@ export const auditReports = mysqlTable("audit_reports", {
 });
 
 /* =========================
+   REGULATORY WATCH (VEILLE)
+========================= */
+
+export const regulatoryUpdates = mysqlTable(
+  "regulatory_updates",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(), // uuid
+
+    type: mysqlEnum("type", ["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]).notNull(),
+    title: varchar("title", { length: 1024 }).notNull(),
+    summaryShort: text("summaryShort").notNull(),
+    summaryLong: text("summaryLong").notNull(),
+
+    publishedAt: timestamp("publishedAt").notNull(),
+    effectiveAt: timestamp("effectiveAt"),
+
+    status: mysqlEnum("status", ["NEW", "UPDATED", "REPEALED", "CORRIGENDUM"]).notNull(),
+
+    sourceName: varchar("sourceName", { length: 255 }).notNull(),
+    sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
+    sourceId: varchar("sourceId", { length: 255 }),
+
+    jurisdiction: mysqlEnum("jurisdiction", ["EU", "UK", "CH", "US"]).notNull().default("EU"),
+
+    tags: json("tags"),
+    impactedMdr: json("impactedMdr"),
+    impactedDomains: json("impactedDomains"),
+    impactedRoles: json("impactedRoles"),
+    impactLevel: mysqlEnum("impactLevel", ["Low", "Medium", "High", "Critical"]).notNull(),
+
+    risks: json("risks"),
+    recommendedActions: json("recommendedActions"),
+    expectedEvidence: json("expectedEvidence"),
+
+    hash: varchar("hash", { length: 64 }).notNull(),
+    retrievedAt: timestamp("retrievedAt").notNull(),
+
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    hashUq: uniqueIndex("regulatory_updates_hash_uq").on(t.hash),
+  })
+);
+
+export const regulatoryUpdateVersions = mysqlTable("regulatory_update_versions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  updateId: varchar("updateId", { length: 36 }).notNull(),
+  runId: varchar("runId", { length: 36 }).notNull(),
+  snapshot: json("snapshot").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const watchRefreshRuns = mysqlTable("watch_refresh_runs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  startedAt: timestamp("startedAt").notNull(),
+  finishedAt: timestamp("finishedAt"),
+  success: boolean("success").notNull().default(false),
+  trigger: mysqlEnum("trigger", ["page_open", "job", "manual"]).notNull(),
+  newCount: int("newCount").notNull().default(0),
+  updatedCount: int("updatedCount").notNull().default(0),
+  errors: json("errors"),
+  sourceHealth: json("sourceHealth"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const watchCompanyProfiles = mysqlTable(
+  "watch_company_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    economicRole: mysqlEnum("economicRole", ["fabricant", "importateur", "distributeur", "sous_traitant", "ar"]).notNull(),
+    deviceClass: mysqlEnum("deviceClass", ["I", "IIa", "IIb", "III"]).notNull(),
+    deviceFamilies: json("deviceFamilies"),
+    markets: json("markets"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    userUq: uniqueIndex("watch_company_profiles_user_uq").on(t.userId),
+  })
+);
+
+/* =========================
    RELATIONS
 ========================= */
 export const usersRelations = relations(users, ({ many }) => ({
