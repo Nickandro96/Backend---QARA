@@ -41,11 +41,12 @@ const AnswersSchema = z.object({
   // Function / energy
   function: z.array(z.string()).optional(),
   danger_level: z.enum(["potentiellement_dangereux", "normal"]).optional(),
-  // Annex VIII helper sub-questions
+  // Rule 3 exception: simple modification (filtration/centrifugation/gas or heat exchange)
   modify_composition_simple: z.boolean().optional(),
+  // Rule 16: disinfection/sterilization target
   disinfection_target: z.enum(["non_invasif", "invasif", "implantable"]).optional(),
+  // Other function free text
   other_function_text: z.string().optional(),
-
   // Sterility / measuring
   provided_sterile: z.boolean().optional(),
   has_measuring_function: z.boolean().optional(),
@@ -253,6 +254,16 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   // ---------- Function / energy mapping (Rules 2, 3, 9, 10, 12, 14, 16 - simplified but audit-usable) ----------
   const funcs = answers.function ?? [];
 
+  // Neutral / informative purposes (do not directly change class without other criteria)
+  if (funcs.includes("support_positionnement_patient")) notes.push("Finalité : support / positionnement patient (ex. lit médicalisé).");
+  if (funcs.includes("prevention_escarres")) notes.push("Finalité : prévention/réduction des escarres — redistribution de pression (ex. matelas anti-escarres).");
+  if (funcs.includes("support_compression_immobilisation")) notes.push("Finalité : support/compression/immobilisation (ex. bas de contention, orthèse).");
+  if (funcs.includes("barriere_mecanique")) notes.push("Finalité : barrière/protection mécanique (ex. pansement barrière, protection cutanée).");
+  if (funcs.includes("soin_plaies")) notes.push("Finalité : soin des plaies / gestion de l’environnement de la plaie.");
+  if (funcs.includes("rehabilitation_assistance")) notes.push("Finalité : rééducation / assistance fonctionnelle.");
+  if (funcs.includes("chirurgie_instrumentation")) notes.push("Finalité : chirurgie / instrumentation (l’invasivité/durée orientent la règle applicable).");
+  if (funcs.includes("autre_fonction") && answers.other_function_text) notes.push(`Finalité (autre) : ${answers.other_function_text}`);
+
   // Rule 2 / 3 : Non-invasive devices concerning blood / body liquids
   if (funcs.includes("canaliser_stocker_sang")) {
     resultingClass = maxClass(resultingClass, "IIa");
@@ -267,22 +278,34 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   }
 
   if (funcs.includes("modifier_composition")) {
-    const simple = answers.modify_composition_simple === true;
-    // Annexe VIII : si la modification est réalisée uniquement par filtration/centrifugation/échanges de gaz ou de chaleur,
-    // la classe est IIa ; sinon IIb.
-    resultingClass = maxClass(resultingClass, simple ? "IIa" : "IIb");
-    rules.push(
-      buildRule(
-        "3",
-        "Dispositifs non invasifs destinés à modifier la composition biologique/chimique",
-        simple
-          ? "Fonction déclarée : modification par filtration/centrifugation/échanges gaz/chaleur → application de l’exception de la règle 3 : IIa."
-          : "Fonction déclarée : modification de composition (hors exception filtration/centrifugation/échanges gaz/chaleur) → Règle 3 : IIb.",
-        ["MDR (UE) 2017/745 — Annexe VIII, règle 3"],
-      ),
-    );
-    notes.push(`Fonction : modification composition (Règle 3) — ${simple ? "exception (IIa)" : "standard (IIb)"}.`);
+    if (answers.modify_composition_simple === undefined) {
+      // Need exception detail to decide IIa vs IIb
+      resultingClass = maxClass(resultingClass, "IIb");
+      rules.push(
+        buildRule(
+          "3",
+          "Dispositifs non invasifs destinés à modifier la composition biologique/chimique",
+          "Fonction déclarée : modification de composition biologique/chimique → Règle 3 applicable. Le MDR distingue les procédés de modification 'simple' (filtration, centrifugation, échange de gaz ou de chaleur) pouvant relever de IIa, des procédés substantiels relevant de IIb. Procédé non précisé → classification conservatrice IIb à confirmer.",
+        ),
+      );
+      missingData.push("Procédé de modification (simple vs substantiel) — Règle 3");
+      notes.push("Fonction : modification composition (Règle 3) — procédé non précisé.");
+    } else {
+      const simple = answers.modify_composition_simple === true;
+      resultingClass = maxClass(resultingClass, simple ? "IIa" : "IIb");
+      rules.push(
+        buildRule(
+          "3",
+          "Dispositifs non invasifs destinés à modifier la composition biologique/chimique",
+          simple
+            ? "Procédé déclaré : modification simple (filtration/centrifugation/échange de gaz ou de chaleur) → Règle 3 : IIa."
+            : "Procédé déclaré : modification substantielle de la composition biologique/chimique → Règle 3 : IIb.",
+        ),
+      );
+      notes.push(`Fonction : modification composition (Règle 3) — ${simple ? "simple" : "substantielle"}.`);
+    }
   }
+
 
   // Rule 9 / 10 : Active devices (therapeutic / diagnostic & monitoring)
   if (answers.is_active) {
@@ -349,23 +372,38 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
     notes.push("Fonction : contraception/prévention IST (Règle 14).");
   }
 
-  // Rule 16 : Dispositifs destinés à la désinfection / nettoyage / rinçage / stérilisation d'autres DM
+  // Rule 16 : Dispositifs destinés à la stérilisation/désinfection d'autres DM (simplified)
   if (funcs.includes("sterilisation_dm")) {
-    const target = answers.disinfection_target ?? "invasif";
-    const cls: MdrClass = target === "non_invasif" ? "IIa" : "IIb";
-    resultingClass = maxClass(resultingClass, cls);
-    rules.push(
-      buildRule(
-        "16",
-        "Dispositifs destinés à la désinfection / stérilisation d'autres DM",
-        target === "non_invasif"
-          ? "Cible déclarée : dispositifs non invasifs → Règle 16 : IIa."
-          : "Cible déclarée : dispositifs invasifs ou implantables → Règle 16 : IIb.",
-        ["MDR (UE) 2017/745 — Annexe VIII, règle 16"],
-      ),
-    );
-    notes.push(`Fonction : désinfection/stérilisation (Règle 16) — cible: ${target} → ${cls}.`);
+    if (!answers.disinfection_target) {
+      resultingClass = maxClass(resultingClass, "IIb");
+      rules.push(
+        buildRule(
+          "16",
+          "Dispositifs destinés spécifiquement à la désinfection/ nettoyage/ rinçage/ stérilisation d’autres DM",
+          "Fonction déclarée : désinfection/nettoyage/rinçage/stérilisation d’autres dispositifs médicaux → Règle 16 applicable. La classe dépend du type de dispositifs traités (non invasifs vs invasifs vs implantables). Cible non précisée → classification conservatrice IIb à confirmer.",
+        ),
+      );
+      missingData.push("Cible de la désinfection/stérilisation (non invasif / invasif / implantable) — Règle 16");
+      notes.push("Fonction : désinfection/stérilisation (Règle 16) — cible non précisée.");
+    } else {
+      const target = answers.disinfection_target;
+      const c: MdrClass = target === "non_invasif" ? "IIa" : "IIb";
+      resultingClass = maxClass(resultingClass, c);
+      rules.push(
+        buildRule(
+          "16",
+          "Dispositifs destinés spécifiquement à la désinfection/ nettoyage/ rinçage/ stérilisation d’autres DM",
+          target === "non_invasif"
+            ? "Cible déclarée : dispositifs non invasifs → Règle 16 : IIa."
+            : target === "implantable"
+              ? "Cible déclarée : dispositifs implantables → Règle 16 : IIb."
+              : "Cible déclarée : dispositifs invasifs (hors implantables) → Règle 16 : IIb.",
+        ),
+      );
+      notes.push(`Fonction : désinfection/stérilisation (Règle 16) — cible=${target}.`);
+    }
   }
+
 
 // ---------- Invasiveness / duration (Rules 1, 4, 5, 6, 7, 8 simplified orientation) ----------
   if (answers.invasiveness === "chirurgical") {
