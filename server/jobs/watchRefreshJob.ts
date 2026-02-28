@@ -1,16 +1,8 @@
 import { triggerRefresh } from "../services/watch/WatchAggregator";
 
-/**
- * Lightweight scheduler (no new dependencies).
- *
- * Railway can also run cron separately, but embedding this allows:
- * - local dev parity
- * - resilience if external cron isn't configured
- */
-
-const INTERVAL_MS = Number(process.env.WATCH_JOB_INTERVAL_MS ?? String(6 * 60 * 60 * 1000));
-
 let started = false;
+
+const INTERVAL_MS = Number(process.env.WATCH_JOB_INTERVAL_MS ?? String(6 * 60 * 60 * 1000)); // 6h
 
 export function startWatchRefreshJob(): void {
   const enabled = (process.env.WATCH_JOB_ENABLED ?? "true").toLowerCase() === "true";
@@ -18,15 +10,21 @@ export function startWatchRefreshJob(): void {
   if (started) return;
   started = true;
 
+  console.info(`[WatchJob] started interval=${INTERVAL_MS}ms`);
+
   // Initial slight delay to avoid competing with cold start traffic.
   const initialDelayMs = Number(process.env.WATCH_JOB_INITIAL_DELAY_MS ?? "15000");
   setTimeout(() => {
-    void triggerRefresh("job");
+    // Never let a background job crash the process.
+    void triggerRefresh("job").catch((err) => {
+      console.error("[WatchJob] initial run failed", err);
+    });
   }, initialDelayMs);
 
   setInterval(() => {
-    void triggerRefresh("job");
+    // Never let a background job crash the process.
+    void triggerRefresh("job").catch((err) => {
+      console.error("[WatchJob] periodic run failed", err);
+    });
   }, INTERVAL_MS);
-
-  console.log(`[WatchJob] started interval=${INTERVAL_MS}ms`);
 }
