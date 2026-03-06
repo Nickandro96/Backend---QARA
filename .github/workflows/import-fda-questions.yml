@@ -1,0 +1,45 @@
+name: Import FDA Questionnaires
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/Questionnaires audits FDA - tous les ref.xlsx'
+      - 'scripts/import-questionnaires.ts'
+      - 'drizzle/schema.ts'
+      - 'drizzle/migrations/**'
+      - '.github/workflows/import-fda-questionnaires.yml'
+
+jobs:
+  import-fda-questionnaires:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      EXCEL_PATH: data/Questionnaires audits FDA - tous les ref.xlsx
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run SQL migrations
+        run: node scripts/apply-sql-migrations.ts
+
+      - name: Import FDA questionnaires
+        run: npx tsx scripts/import-questionnaires.ts | tee import.log
+
+      - name: Upload import artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fda-questionnaire-import-report
+          path: |
+            import.log
+            import-report.json
