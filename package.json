@@ -15,6 +15,7 @@
     "db:seed": "tsx server/db/seed.ts",
 
     "import:questions": "node scripts/import-mdr-questions.js",
+    "import:questionnaires": "tsx scripts/import-questionnaires.ts",
 
     "start": "NODE_ENV=production node dist/index.js"
   },
