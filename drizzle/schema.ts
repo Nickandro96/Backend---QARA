@@ -333,6 +333,46 @@ export const resultats = mysqlTable("resultats", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
+
+
+/* =========================
+   FDA QUALIFICATION
+========================= */
+export const fdaQualificationSessions = mysqlTable("fda_qualification_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  tenantId: int("tenantId"),
+  sessionName: varchar("sessionName", { length: 255 }),
+  status: varchar("status", { length: 50 }).default("draft").notNull(),
+  rulesetVersion: varchar("rulesetVersion", { length: 50 }).notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export const fdaQualificationAnswers = mysqlTable("fda_qualification_answers", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull().references(() => fdaQualificationSessions.id),
+  questionKey: varchar("questionKey", { length: 120 }).notNull(),
+  questionLabel: varchar("questionLabel", { length: 500 }).notNull(),
+  answerValue: json("answerValue"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const fdaQualificationResults = mysqlTable("fda_qualification_results", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id),
+  tenantId: int("tenantId"),
+  sessionId: int("sessionId").notNull().references(() => fdaQualificationSessions.id),
+  rulesetVersion: varchar("rulesetVersion", { length: 50 }).notNull(),
+  resultJson: json("resultJson").notNull(),
+  exportSnapshot: json("exportSnapshot"),
+  probableDeviceStatus: boolean("probableDeviceStatus").default(false),
+  probableClass: varchar("probableClass", { length: 20 }),
+  probablePathway: varchar("probablePathway", { length: 50 }),
+  confidenceScore: int("confidenceScore"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
 /* =========================
    MDR ROLE QUALIFICATIONS
 ========================= */
@@ -470,7 +510,25 @@ export const watchCompanyProfiles = mysqlTable(
 /* =========================
    RELATIONS
 ========================= */
+
+export const fdaQualificationSessionsRelations = relations(fdaQualificationSessions, ({ one, many }) => ({
+  user: one(users, { fields: [fdaQualificationSessions.userId], references: [users.id] }),
+  answers: many(fdaQualificationAnswers),
+  results: many(fdaQualificationResults),
+}));
+
+export const fdaQualificationAnswersRelations = relations(fdaQualificationAnswers, ({ one }) => ({
+  session: one(fdaQualificationSessions, { fields: [fdaQualificationAnswers.sessionId], references: [fdaQualificationSessions.id] }),
+}));
+
+export const fdaQualificationResultsRelations = relations(fdaQualificationResults, ({ one }) => ({
+  user: one(users, { fields: [fdaQualificationResults.userId], references: [users.id] }),
+  session: one(fdaQualificationSessions, { fields: [fdaQualificationResults.sessionId], references: [fdaQualificationSessions.id] }),
+}));
+
 export const usersRelations = relations(users, ({ many }) => ({
+  fdaQualificationSessions: many(fdaQualificationSessions),
+  fdaQualificationResults: many(fdaQualificationResults),
   audits: many(audits),
   sites: many(sites),
   organisations: many(organisations),
