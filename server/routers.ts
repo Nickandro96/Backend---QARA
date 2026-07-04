@@ -21,6 +21,7 @@ import { isoRouter } from "./iso-router";
 import { classificationRouter } from "./classification-router";
 import { scoringRouter } from "./scoring/scoringRouter";
 import { capaRouter } from "./capa/capaRouter";
+import { reportRouter } from "./report/reportRouter";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -794,6 +795,9 @@ export const appRouter = router({
 
   // Plan d'action CAPA (Lot 3)
   capa: capaRouter,
+
+  // Rapport d'audit multi-référentiel (Lot 4)
+  report: reportRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,
