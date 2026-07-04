@@ -21,7 +21,6 @@ import { isoRouter } from "./iso-router";
 import { classificationRouter } from "./classification-router";
 
 import { auditRouter } from "./audit-router";
-import { siteRouter } from "./site-router";
 import { watchRouter } from "./watch-router";
 
 import { generateAuditReport } from "./report-generator";
@@ -790,9 +789,6 @@ export const appRouter = router({
 
   // Audit Management (ton router existant)
   audit: auditRouter,
-
-  // ✅ Keep existing mount for compatibility (does not affect trpc.sites.*)
-  site: siteRouter,
 
   // --------------------------------------------
   // Reports

@@ -1,2 +1,7 @@
 node_modules
 dist
+.env
+.env.*
+# pnpm-lock.yaml is the single source of truth for this repo (see
+# docs/audit/02-audit-technique.md, M-02) — don't let npm regenerate this.
+package-lock.json
