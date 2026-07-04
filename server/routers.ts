@@ -20,6 +20,7 @@ import { mdrRouter } from "./mdr-router";
 import { isoRouter } from "./iso-router";
 import { classificationRouter } from "./classification-router";
 import { scoringRouter } from "./scoring/scoringRouter";
+import { capaRouter } from "./capa/capaRouter";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -790,6 +791,9 @@ export const appRouter = router({
 
   // Moteur de scoring multi-référentiel (Lot 2)
   scoring: scoringRouter,
+
+  // Plan d'action CAPA (Lot 3)
+  capa: capaRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,

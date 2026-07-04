@@ -334,6 +334,80 @@ export const actions = mysqlTable("actions", {
 });
 
 /* =========================
+   CAPA — Plan d'action (Lot 3, voir server/capa/ et docs/audit/09-plan-action-capa.md)
+   Distinct de `actions`/`findings` ci-dessus (générique, lié à des `findings`
+   FDA) : ici le plan d'action est généré directement depuis les écarts du
+   moteur de scoring (server/scoring/), scopé par auditId+questionKey.
+========================= */
+export const capa_actions = mysqlTable(
+  "capa_actions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    auditId: int("auditId")
+      .notNull()
+      .references(() => audits.id),
+
+    questionKey: varchar("questionKey", { length: 255 }).notNull(),
+    referentialCode: varchar("referentialCode", { length: 50 }).notNull(),
+    processName: varchar("processName", { length: 255 }),
+
+    gravite: mysqlEnum("gravite", ["majeur", "mineur", "observation"]).notNull(),
+    criticality: varchar("criticality", { length: 50 }).notNull(),
+
+    ecartIdentifie: text("ecartIdentifie").notNull(),
+    analyseCauseRacine: text("analyseCauseRacine"),
+    actionRecommandee: text("actionRecommandee").notNull(),
+    actionRetenue: text("actionRetenue"),
+
+    responsible: varchar("responsible", { length: 255 }),
+    dueDate: timestamp("dueDate"),
+
+    statut: mysqlEnum("statut", [
+      "ouverte",
+      "en_cours",
+      "a_verifier",
+      "cloturee_efficace",
+      "cloturee_inefficace",
+      "cloturee_sans_suite",
+    ])
+      .default("ouverte")
+      .notNull(),
+
+    preuveRealisation: text("preuveRealisation"),
+    dateVerificationEfficacite: timestamp("dateVerificationEfficacite"),
+    preuveEfficacite: text("preuveEfficacite"),
+    resultatEfficacite: mysqlEnum("resultatEfficacite", ["efficace", "inefficace"]),
+
+    referentielsImpactes: json("referentielsImpactes"),
+
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    unq: uniqueIndex("capa_action_unq").on(t.userId, t.auditId, t.questionKey),
+  })
+);
+
+/** Historique immuable des modifications d'une action CAPA (traçabilité, §8 SPEC-2). */
+export const capa_action_history = mysqlTable("capa_action_history", {
+  id: int("id").autoincrement().primaryKey(),
+  actionId: int("actionId")
+    .notNull()
+    .references(() => capa_actions.id),
+  userId: int("userId")
+    .notNull()
+    .references(() => users.id),
+  changedAt: timestamp("changedAt").notNull().defaultNow(),
+  champ: varchar("champ", { length: 100 }).notNull(),
+  ancienneValeur: text("ancienneValeur"),
+  nouvelleValeur: text("nouvelleValeur"),
+});
+
+/* =========================
    RESULTATS
 ========================= */
 export const resultats = mysqlTable("resultats", {
