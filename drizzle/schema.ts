@@ -200,6 +200,13 @@ export const audits = mysqlTable("audits", {
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
+  // Onboarding (Lot onboarding) : multi-valeurs, en complément de
+  // `economicRole` (singulier, legacy ISO/MDR wizards) — voir
+  // docs/audit/12-onboarding.md.
+  economicRoles: json("economicRoles"),
+  markets: json("markets"),
+  situationTags: json("situationTags"),
+
   clientOrganization: varchar("clientOrganization", { length: 255 }),
   siteLocation: varchar("siteLocation", { length: 255 }),
   auditorName: varchar("auditorName", { length: 255 }),
@@ -257,6 +264,13 @@ export const questions = mysqlTable("questions", {
   mappings: json("mappings"),
   referenceStatus: varchar("referenceStatus", { length: 255 }),
   officialSource: text("officialSource"),
+
+  // Onboarding (Lot onboarding) : normalisation de `economicRole` (libellés
+  // bruts mêlant FR/EN, rôles et non-rôles) vers les 4 opérateurs
+  // économiques réglementaires + situations particulières (Art. 16/22) —
+  // voir server/onboarding/scopeEngine.ts et docs/audit/12-onboarding.md.
+  roleReglementaire: json("roleReglementaire"),
+  situationTags: json("situationTags"),
 });
 
 /* =========================
@@ -473,6 +487,27 @@ export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
   hasAuthorizedRepresentative: boolean("hasAuthorizedRepresentative").default(false),
   targetMarkets: json("targetMarkets"),
   deviceClasses: json("deviceClasses"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+/* =========================
+   USER AUDIT SCOPE (Onboarding — source de vérité unique du périmètre,
+   remplace isoQualifications + mdrRoleQualifications fragmentés, voir
+   docs/audit/12-onboarding.md)
+========================= */
+export const userAuditScope = mysqlTable("user_audit_scope", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId")
+    .notNull()
+    .unique()
+    .references(() => users.id),
+  referentialCodes: json("referentialCodes"),
+  economicRoles: json("economicRoles"),
+  markets: json("markets"),
+  situationTags: json("situationTags"),
+  currentStep: varchar("currentStep", { length: 50 }).default("referentiels").notNull(),
+  completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });

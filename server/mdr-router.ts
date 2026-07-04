@@ -10,10 +10,11 @@ import {
   sites,
   auditResponses,
 } from "../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { matchesScope, type RoleReglementaire, type SituationTag } from "./onboarding/scopeEngine";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
@@ -319,11 +320,24 @@ async function getAuditContextInternal(db: any, userId: number, auditId: number)
     .map((n: any) => Number(n))
     .filter((n: any) => !Number.isNaN(n));
 
+  // Onboarding (multi-rôles) : uniquement peuplé sur les audits créés via le
+  // wizard onboarding (`onboarding.complete`) — vide sur les audits legacy
+  // ISO/MDR, qui continuent d'utiliser `economicRole` (singulier) ci-dessus
+  // via l'ancien filtre SQL fragile. Ne PAS retomber sur `economicRole` ici
+  // (qui vaut toujours "fabricant" par défaut, voir normalizeEconomicRole
+  // plus haut) : cela déclencherait le nouveau filtre JS pour TOUS les
+  // audits, y compris ceux sans scope onboarding. Voir
+  // server/onboarding/scopeEngine.ts et docs/audit/12-onboarding.md.
+  const economicRolesFromOnboarding = safeParseArray((audit as any).economicRoles) as RoleReglementaire[];
+  const situationTags = safeParseArray((audit as any).situationTags) as SituationTag[];
+
   return {
     audit,
     auditId: Number((audit as any).id),
     siteId: (audit as any).siteId,
     economicRole,
+    economicRolesFromOnboarding,
+    situationTags,
     processIds,
     referentialIds,
   };
@@ -341,6 +355,54 @@ async function loadQuestionsFromDb(db: any) {
 }
 
 /**
+ * Filtre JS post-requête (onboarding, multi-rôles) : restreint `rows` aux
+ * questionKey dont roleReglementaire/situationTags correspondent au scope
+ * (matchesScope). Partagé par fetchAuditScopedQuestions et
+ * getQuestionsForAudit — voir docs/audit/12-onboarding.md.
+ */
+async function applyOnboardingScopeFilter(
+  db: any,
+  rows: any[],
+  finalWhere: any,
+  economicRolesFromOnboarding: RoleReglementaire[],
+  situationTags: SituationTag[]
+) {
+  const roleRows = finalWhere
+    ? await db
+        .select({
+          questionKey: (questions as any).questionKey,
+          roleReglementaire: (questions as any).roleReglementaire,
+          situationTags: (questions as any).situationTags,
+        })
+        .from(questions)
+        .where(finalWhere)
+    : await db
+        .select({
+          questionKey: (questions as any).questionKey,
+          roleReglementaire: (questions as any).roleReglementaire,
+          situationTags: (questions as any).situationTags,
+        })
+        .from(questions);
+
+  const scope = { economicRoles: economicRolesFromOnboarding, situationTags };
+  const matchedKeys = new Set(
+    (roleRows || [])
+      .filter((r: any) =>
+        matchesScope(
+          {
+            roleReglementaire: typeof r.roleReglementaire === "string" ? JSON.parse(r.roleReglementaire) : r.roleReglementaire,
+            situationTags: typeof r.situationTags === "string" ? JSON.parse(r.situationTags) : r.situationTags,
+          },
+          scope
+        )
+      )
+      .map((r: any) => r.questionKey)
+  );
+
+  return (rows || []).filter((r: any) => matchedKeys.has(r.questionKey));
+}
+
+/**
  * ✅ Internal helper: fetch questions in the EXACT scope of an audit (drilldown).
  * Reuses the same filtering strategy as getQuestionsForAudit:
  * - referentialIds filter
@@ -351,11 +413,14 @@ async function fetchAuditScopedQuestions(db: any, params: {
   auditId: number;
   userId: number;
   economicRole: string | null;
+  economicRolesFromOnboarding?: RoleReglementaire[];
+  situationTags?: SituationTag[];
   processIds: string[];
   referentialIds: number[];
   select: any;
 }) {
-  const { economicRole, processIds, referentialIds, select } = params;
+  const { economicRole, economicRolesFromOnboarding = [], situationTags = [], processIds, referentialIds, select } = params;
+  const useOnboardingScope = economicRolesFromOnboarding.length > 0;
 
   const normalizedProcessIds = (processIds || []).map(String);
 
@@ -369,8 +434,11 @@ async function fetchAuditScopedQuestions(db: any, params: {
 
   // economicRole VARCHAR (or nullable) – accept generic questions too
   // NOTE: if this filter yields 0 results, we will fallback to "no role filter" (safe mode)
+  // Skipped entirely for audits scoped via l'onboarding (économicRolesFromOnboarding
+  // non vide) : le filtre JS post-requête ci-dessous (matchesScope) prend le relais,
+  // basé sur roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
   let economicRoleClause: any | null = null;
-  if (economicRole && economicRole !== "all") {
+  if (!useOnboardingScope && economicRole && economicRole !== "all") {
     economicRoleClause = sql`(
         ${(questions as any).economicRole} IS NULL
         OR ${(questions as any).economicRole} = ''
@@ -479,6 +547,12 @@ async function fetchAuditScopedQuestions(db: any, params: {
           .select(select)
           .from(questions)
           .orderBy((questions as any).displayOrder, (questions as any).id);
+  }
+
+  // Onboarding scope (multi-rôles) : filtre JS post-requête sur
+  // roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
+  if (useOnboardingScope) {
+    rows = await applyOnboardingScopeFilter(db, rows, finalWhere, economicRolesFromOnboarding, situationTags);
   }
 
   return rows || [];
@@ -947,6 +1021,8 @@ export const mdrRouter = router({
           auditId: input.auditId,
           userId: ctx.user.id,
           economicRole: auditContext.economicRole,
+          economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+          situationTags: auditContext.situationTags,
           processIds: auditContext.processIds,
           referentialIds: auditContext.referentialIds,
           select: {
@@ -1154,6 +1230,8 @@ export const mdrRouter = router({
           auditId: input.auditId,
           userId: ctx.user.id,
           economicRole: auditContext.economicRole,
+          economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+          situationTags: auditContext.situationTags,
           processIds: auditContext.processIds,
           referentialIds: auditContext.referentialIds,
           select: {
@@ -1349,11 +1427,9 @@ export const mdrRouter = router({
 
       const hasRisksColumn = await hasColumn("questions", "risks");
 
-      const { auditId, economicRole, processIds, referentialIds } = await getAuditContextInternal(
-        db,
-        ctx.user.id,
-        input.auditId
-      );
+      const { auditId, economicRole, economicRolesFromOnboarding, situationTags, processIds, referentialIds } =
+        await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const useOnboardingScope = economicRolesFromOnboarding.length > 0;
 
       const normalizedProcessIds = (processIds || []).map(String);
 
@@ -1401,8 +1477,11 @@ export const mdrRouter = router({
 
         // economicRole VARCHAR (or nullable) – accept generic questions too
         // NOTE: if this filter yields 0 results, we will fallback to "no role filter" (safe mode)
+        // Skipped for audits scoped via l'onboarding (economicRolesFromOnboarding non
+        // vide) : le filtre JS post-requête ci-dessous (matchesScope) prend le relais,
+        // basé sur roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
         let economicRoleClause: any | null = null;
-        if (economicRole && economicRole !== "all") {
+        if (!useOnboardingScope && economicRole && economicRole !== "all") {
           economicRoleClause = sql`(
               ${(questions as any).economicRole} IS NULL
               OR ${(questions as any).economicRole} = ''
@@ -1513,6 +1592,12 @@ export const mdrRouter = router({
                 .orderBy((questions as any).displayOrder, (questions as any).id);
 
           console.log(`[MDR] role-filter returned 0 → fallback without role filter (role=${economicRole}) => ${rows.length}`);
+        }
+
+        // Onboarding scope (multi-rôles) : filtre JS post-requête sur
+        // roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
+        if (useOnboardingScope) {
+          rows = await applyOnboardingScopeFilter(db, rows, finalWhere, economicRolesFromOnboarding, situationTags);
         }
 
         console.log(`[MDR] DB filtered questions count: ${rows.length}`);

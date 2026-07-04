@@ -22,6 +22,7 @@ import { classificationRouter } from "./classification-router";
 import { scoringRouter } from "./scoring/scoringRouter";
 import { capaRouter } from "./capa/capaRouter";
 import { reportRouter } from "./report/reportRouter";
+import { onboardingRouter } from "./onboarding/onboardingRouter";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -798,6 +799,9 @@ export const appRouter = router({
 
   // Rapport d'audit multi-référentiel (Lot 4)
   report: reportRouter,
+
+  // Onboarding (sélection du périmètre : référentiels, rôles, marchés MDSAP)
+  onboarding: onboardingRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,
