@@ -408,7 +408,7 @@ export async function createSite(input: {
   };
 
   const result = await db.insert(sites).values(payload as any);
-  return { id: (result as any).insertId, ...payload };
+  return { id: (result as any)?.[0]?.insertId ?? (result as any)?.insertId, ...payload };
 }
 
 /**
@@ -455,7 +455,7 @@ export async function upsertOrganisation(input: {
         ...payload,
         createdAt: new Date(),
       } as any);
-      return { id: (result as any).insertId, ...payload };
+      return { id: (result as any)?.[0]?.insertId ?? (result as any)?.insertId, ...payload };
     }
   } catch (error: any) {
     console.error("[Database] Failed to upsert organisation:", error?.message ?? error);
@@ -522,7 +522,7 @@ export async function createAudit(input: any) {
     updatedAt: now,
   };
   const result = await db.insert(audits).values(payload as any);
-  return { id: (result as any).insertId, ...payload };
+  return { id: (result as any)?.[0]?.insertId ?? (result as any)?.insertId, ...payload };
 }
 
 export async function listAuditsByUserId(userId: number) {
@@ -597,7 +597,7 @@ export async function createEvidenceFile(input: any) {
     updatedAt: now,
   };
   const result = await db.insert(evidenceFiles).values(payload as any);
-  return { id: (result as any).insertId, ...payload };
+  return { id: (result as any)?.[0]?.insertId ?? (result as any)?.insertId, ...payload };
 }
 
 export async function listEvidenceFilesByUserId(userId: number) {
@@ -681,7 +681,7 @@ export async function upsertUser(data: {
         },
       });
 
-    return (result as any).insertId;
+    return (result as any)?.[0]?.insertId ?? (result as any)?.insertId;
   } catch (error: any) {
     console.error(
       "[Database] Failed to upsert user. FULL ERROR:",
