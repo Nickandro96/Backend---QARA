@@ -244,6 +244,19 @@ export const questions = mysqlTable("questions", {
 
   displayOrder: int("displayOrder"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+
+  // Champs riches du corpus vérifié (voir docs/audit/07-import-corpus.md) : préservent
+  // la profondeur d'auditeur et la pédagogie que le mapping vers les colonnes ci-dessus
+  // seul ne peut pas porter.
+  auditVerifies: text("auditVerifies"),
+  relances: json("relances"),
+  explanationSimple: text("explanationSimple"),
+  concreteExample: text("concreteExample"),
+  conformityCriteria: json("conformityCriteria"),
+  typicalNc: json("typicalNc"),
+  mappings: json("mappings"),
+  referenceStatus: varchar("referenceStatus", { length: 255 }),
+  officialSource: text("officialSource"),
 });
 
 /* =========================
