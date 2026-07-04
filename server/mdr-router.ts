@@ -485,8 +485,23 @@ async function fetchAuditScopedQuestions(db: any, params: {
 }
 
 
-// shared zod enum used by frontend buttons
-const ResponseValueEnum = z.enum(["compliant", "non_compliant", "not_applicable", "partial", "in_progress"]);
+// shared zod enum used by frontend buttons. Les niveaux "0".."5" couvrent les
+// questions questionType=maturity_0_5 (voir server/scoring/types.ts) — sans
+// cela, aucune réponse ne peut être enregistrée pour ~80% des questions du
+// corpus vérifié (voir docs/audit/08-moteur-scoring.md).
+const ResponseValueEnum = z.enum([
+  "compliant",
+  "non_compliant",
+  "not_applicable",
+  "partial",
+  "in_progress",
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+]);
 
 export const mdrRouter = router({
   /**
@@ -1488,12 +1503,12 @@ export const mdrRouter = router({
 
           rows = finalWhereNoRole
             ? await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .where(finalWhereNoRole)
                 .orderBy((questions as any).displayOrder, (questions as any).id)
             : await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .orderBy((questions as any).displayOrder, (questions as any).id);
 

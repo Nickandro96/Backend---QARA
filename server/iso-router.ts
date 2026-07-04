@@ -485,8 +485,10 @@ export const isoRouter = router({
         z.object({
           auditId: z.number().int().positive(),
           questionKey: z.string().min(1),
+          // "0".."5" couvrent les questions questionType=maturity_0_5 — voir
+          // server/mdr-router.ts pour l'explication (même besoin, même corpus).
           responseValue: z
-            .enum(["compliant", "non_compliant", "partial", "not_applicable", "in_progress"])
+            .enum(["compliant", "non_compliant", "partial", "not_applicable", "in_progress", "0", "1", "2", "3", "4", "5"])
             .default("in_progress"),
           responseComment: z.string().optional().default(""),
           note: z.string().optional().default(""),
@@ -499,7 +501,7 @@ export const isoRouter = router({
         z.object({
           auditId: z.number().int().positive(),
           questionId: z.number().int().positive(),
-          responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable"]),
+          responseValue: z.enum(["compliant", "non_compliant", "partial", "not_applicable", "0", "1", "2", "3", "4", "5"]),
           responseComment: z.string().optional().nullable(),
         }),
       ])

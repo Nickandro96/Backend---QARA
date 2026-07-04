@@ -19,6 +19,7 @@ import { fdaRouter } from "./fda-router";
 import { mdrRouter } from "./mdr-router";
 import { isoRouter } from "./iso-router";
 import { classificationRouter } from "./classification-router";
+import { scoringRouter } from "./scoring/scoringRouter";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -786,6 +787,9 @@ export const appRouter = router({
 
   // MDR Device Classification (Annex VIII helper)
   classification: classificationRouter,
+
+  // Moteur de scoring multi-référentiel (Lot 2)
+  scoring: scoringRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,
