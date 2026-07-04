@@ -6,7 +6,7 @@ import * as db from "../db";
 import { sdk } from "./sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
-import { hashPassword, verifyPassword } from "./passwordUtils";
+import { hashPassword, verifyPassword, isBcryptHash } from "./passwordUtils";
 
 function errMsg(e: any) {
   if (!e) return "unknown";
@@ -18,47 +18,6 @@ export const systemRouter = router({
   health: publicProcedure
     .input(z.object({ timestamp: z.number().min(0) }))
     .query(() => ({ ok: true })),
-
-  /**
-   * Route temporaire pour créer un utilisateur local et se connecter.
-   * À utiliser uniquement pour le premier utilisateur ou en développement.
-   */
-  devLogin: publicProcedure
-    .input(z.object({ email: z.string().email(), name: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const dbConn = await db.getDb();
-      if (!dbConn) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            "DB indisponible. Vérifie que DATABASE_URL (ou MYSQL_URL/vars Railway) est bien défini dans le service Backend.",
-        });
-      }
-
-      const openId = `local_${input.email}`;
-
-      await db.upsertUser({
-        openId,
-        name: input.name,
-        email: input.email,
-        loginMethod: "local",
-        lastSignedIn: new Date(),
-        role: "admin",
-      });
-
-      const sessionToken = await sdk.createSessionToken(openId, { name: input.name });
-
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, sessionToken, {
-        ...cookieOptions,
-        maxAge: ONE_YEAR_MS,
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-      });
-
-      return { success: true, message: "Utilisateur créé et connecté localement" };
-    }),
 
   /**
    * Route pour s'inscrire avec email et mot de passe
@@ -90,7 +49,7 @@ export const systemRouter = router({
       }
 
       const openId = `local_${input.email}`;
-      const hashedPassword = hashPassword(input.password);
+      const hashedPassword = await hashPassword(input.password);
 
       await db.upsertUser({
         openId,
@@ -109,9 +68,6 @@ export const systemRouter = router({
       ctx.res.cookie(COOKIE_NAME, sessionToken, {
         ...cookieOptions,
         maxAge: ONE_YEAR_MS,
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
       });
 
       return { success: true, message: "Inscription réussie" };
@@ -134,47 +90,35 @@ export const systemRouter = router({
       }
 
       try {
-        console.log("[Login] Start for:", input.email);
-
-        let user = await db.getUserByEmail(input.email);
-        console.log("[Login] getUserByEmail:", user ? `found id=${user.id}` : "not found");
-
-        const isBackdoorAccess =
-          input.email === "nickandroklauss@gmail.com" && input.password === "Admin2026!";
-
-        if (!user && isBackdoorAccess) {
-          const openId = `local_${input.email}`;
-          console.log("[Login] Backdoor create user openId:", openId);
-
-          await db.upsertUser({
-            openId,
-            name: "Admin Nick",
-            email: input.email,
-            loginMethod: "local_password",
-            lastSignedIn: new Date(),
-            role: "admin",
-          });
-
-          user = await db.getUserByEmail(input.email);
-          console.log("[Login] Backdoor user fetched:", user ? `id=${user.id}` : "FAILED");
-        }
+        const user = await db.getUserByEmail(input.email);
 
         if (!user) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
-        if (!isBackdoorAccess) {
-          const storedHash = await db.getPasswordHash(user.openId);
-          if (!storedHash || !verifyPassword(input.password, storedHash)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
-          }
-        } else {
-          const newHash = hashPassword(input.password);
-          await db.storePasswordHash(user.openId, newHash);
-          await db.updateUserRole(user.id, "admin");
+        const storedHash = await db.getPasswordHash(user.openId);
+        if (!storedHash || !(await verifyPassword(input.password, storedHash))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
-        await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        // Migration transparente : si le mot de passe stocké n'est pas encore un hash
+        // bcrypt (compte créé avant ce correctif), on le remplace maintenant qu'on a
+        // confirmé le mot de passe en clair — voir passwordUtils.ts.
+        if (!isBcryptHash(storedHash)) {
+          await db.storePasswordHash(user.openId, await hashPassword(input.password));
+        }
+
+        // Ne met à jour que lastSignedIn : un appel à upsertUser ici sans email/name
+        // enverrait `email: null` sur une colonne NOT NULL et ferait échouer CHAQUE
+        // reconnexion (voir docs/audit/02-audit-technique.md, C-06).
+        await db.upsertUser({
+          openId: user.openId,
+          name: user.name ?? undefined,
+          email: user.email,
+          loginMethod: user.loginMethod ?? undefined,
+          role: user.role as any,
+          lastSignedIn: new Date(),
+        });
 
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name });
 
@@ -189,9 +133,6 @@ export const systemRouter = router({
         ctx.res.cookie(COOKIE_NAME, sessionToken, {
           ...cookieOptions,
           maxAge: ONE_YEAR_MS,
-          httpOnly: true,
-          secure: true,
-          sameSite: "none",
         });
 
         return { success: true, message: "Connexion réussie" };

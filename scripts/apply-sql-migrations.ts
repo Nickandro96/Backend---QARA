@@ -17,11 +17,18 @@ function isIgnorableMigrationError(e: any) {
   if (code === "ER_TABLE_EXISTS_ERROR") return true; // Table already exists
   if (code === "ER_MULTIPLE_PRI_KEY") return true; // multiple primary key defined
   if (code === "ER_CANT_DROP_FIELD_OR_KEY" && msg.includes("check that column/key exists")) return true;
+  // ✅ Sur une base neuve, les migrations 0000-0017 (ALTER TABLE sur des tables
+  // core créées historiquement hors du contrôle de version) échouent car ces
+  // tables n'existent pas encore : 0018_baseline_core_tables.sql les crée en fin
+  // de liste avec leur structure finale, ce qui rend ces échecs intermédiaires
+  // sans conséquence (voir docs/audit/02-audit-technique.md, C-01).
+  if (code === "ER_NO_SUCH_TABLE") return true; // Table doesn't exist yet
 
   // Certaines variantes MySQL renvoient juste un message
   if (msg.toLowerCase().includes("duplicate column name")) return true;
   if (msg.toLowerCase().includes("duplicate key name")) return true;
   if (msg.toLowerCase().includes("already exists")) return true;
+  if (msg.toLowerCase().includes("doesn't exist")) return true;
 
   return false;
 }

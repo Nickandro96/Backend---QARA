@@ -70,9 +70,6 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, {
         ...cookieOptions,
         maxAge: -1,
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
       });
 
       return { success: true } as const;

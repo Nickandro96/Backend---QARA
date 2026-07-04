@@ -1,18 +1,19 @@
 /* scripts/import-mdr-questions.js
- * Import Excel -> MySQL table `questions`
+ * Import Excel -> MySQL table `questions`, scoped to the MDR referential (id 1) only.
  * - Keeps the schema (columns) as-is
- * - Replaces ALL rows in `questions`
+ * - Replaces only MDR rows (referentialId = 1) — other referentials (ISO/FDA) are untouched
  * - Generates questionKey (stable md5)
  *
  * Required env:
  * - DATABASE_URL (mysql://user:pass@host:port/db)
  */
 
-const path = require("path");
-const crypto = require("crypto");
-const xlsx = require("xlsx");
-const mysql = require("mysql2/promise");
+import path from "node:path";
+import crypto from "node:crypto";
+import xlsx from "xlsx";
+import mysql from "mysql2/promise";
 
+const MDR_REFERENTIAL_ID = 1;
 const EXCEL_PATH = path.join(process.cwd(), "data", "MDR_questionnaire_V7_CORRIGE.xlsx");
 
 const PROCESS_MAP = {
@@ -68,7 +69,7 @@ function normalizeCriticality(v) {
   if (!s) return null;
   const key = s
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // remove accents
+    .replace(/[̀-ͯ]/g, ""); // remove accents
   return CRIT_MAP[key] ?? s;
 }
 
@@ -140,7 +141,7 @@ async function main() {
       const intitule = r["Intitulé"];
       const questionText = r["Question d’audit détaillée"];
       const type = r["Type"];
-      const risks = r["Risque en cas de NC"];
+      const risk = r["Risque en cas de NC"];
       const expectedEvidence = r["Preuves attendues"];
       const fonctions = r["Fonctions interrogées"];
       const criticite = r["Criticité"];
@@ -153,7 +154,7 @@ async function main() {
 
       return {
         // Keep DB columns intact
-        referentialId: 1, // MDR
+        referentialId: MDR_REFERENTIAL_ID,
         processId: null, // optional (you filter via applicableProcesses)
         questionKey,
         article: normStr(clause) || null,
@@ -165,8 +166,9 @@ async function main() {
         questionText: normStr(questionText) || null,
         expectedEvidence: normStr(expectedEvidence) || null,
         criticality: normalizeCriticality(criticite),
-        risk: null,
-        risks: normStr(risks) || null,
+        // NB: the `risks` column was dropped by migration 0015_questions_unify_risk_drop_risks.sql —
+        // only `risk` exists now.
+        risk: normStr(risk) || null,
         interviewFunctions: safeJsonStringify(interviewFunctions),
         actionPlan: null,
         aiPrompt: null,
@@ -183,20 +185,25 @@ async function main() {
   try {
     await conn.beginTransaction();
 
-    // Optional backup table
-    const backupName = `questions_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+    // Backup of the rows this run is about to replace (MDR only), not the whole table.
+    const backupName = `questions_mdr_backup_${Date.now()}`;
     console.log("[IMPORT] Creating backup table:", backupName);
-    await conn.query(`CREATE TABLE IF NOT EXISTS \`${backupName}\` LIKE \`questions\``);
-    await conn.query(`INSERT INTO \`${backupName}\` SELECT * FROM \`questions\``);
+    await conn.query(`CREATE TABLE \`${backupName}\` LIKE \`questions\``);
+    await conn.query(`INSERT INTO \`${backupName}\` SELECT * FROM \`questions\` WHERE \`referentialId\` = ?`, [
+      MDR_REFERENTIAL_ID,
+    ]);
 
-    console.log("[IMPORT] Truncating questions...");
-    await conn.query("TRUNCATE TABLE `questions`");
+    // Scoped to MDR only: ISO/FDA questions (other referentialId values) are untouched.
+    // A blanket TRUNCATE here previously wiped every referential sharing this table
+    // (see docs/audit/02-audit-technique.md, C-02).
+    console.log("[IMPORT] Deleting existing MDR questions...");
+    await conn.query("DELETE FROM `questions` WHERE `referentialId` = ?", [MDR_REFERENTIAL_ID]);
 
     const sqlInsert = `
       INSERT INTO \`questions\`
       (\`referentialId\`, \`processId\`, \`questionKey\`, \`article\`, \`annexe\`, \`title\`,
        \`economicRole\`, \`applicableProcesses\`, \`questionType\`, \`questionText\`, \`expectedEvidence\`,
-       \`criticality\`, \`risk\`, \`risks\`, \`interviewFunctions\`, \`actionPlan\`, \`aiPrompt\`, \`displayOrder\`)
+       \`criticality\`, \`risk\`, \`interviewFunctions\`, \`actionPlan\`, \`aiPrompt\`, \`displayOrder\`)
       VALUES ?
     `;
 
@@ -216,7 +223,6 @@ async function main() {
         t.expectedEvidence,
         t.criticality,
         t.risk,
-        t.risks,
         t.interviewFunctions,
         t.actionPlan,
         t.aiPrompt,
@@ -230,7 +236,7 @@ async function main() {
     console.log("[IMPORT] ✅ Import finished successfully");
   } catch (e) {
     await conn.rollback();
-    console.error("[IMPORT] ❌ Import failed, rolled back:", e);
+    console.error("[IMPORT] ❌ Import failed, rolled back (MDR questions untouched, other referentials were never touched):", e);
     throw e;
   } finally {
     await conn.end();
