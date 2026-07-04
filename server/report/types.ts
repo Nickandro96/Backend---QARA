@@ -1,6 +1,34 @@
 import type { Ecart, CouvertureCroisee, ReferentialResult, GroupResult, Statut } from "../scoring/types";
 import type { CapaAction } from "../capa/types";
 
+/**
+ * Écart enrichi des champs riches du corpus (auditVerifies, explanationSimple,
+ * concreteExample, conformityCriteria, referenceStatus, officialSource) —
+ * voir docs/audit/11-integrite-bout-en-bout.md, écart E1 : ces champs sont
+ * remplis à 100 % en base mais n'étaient pas exposés dans le registre des
+ * écarts du rapport (Lot 4 initial). `typicalNc` (déjà sur `Ecart`) reste la
+ * source de la gravité en texte libre — voir la même note pour la déviation
+ * documentée sur `grade_mdsap`.
+ */
+export interface EcartEnrichi extends Ecart {
+  auditVerifies: string | null;
+  explanationSimple: string | null;
+  concreteExample: string | null;
+  conformityCriteria: Record<string, string> | null;
+  referenceStatus: string | null;
+  officialSource: string | null;
+}
+
+/** Champs riches d'une question, indexés par questionKey pour l'enrichissement du rapport. */
+export interface QuestionRichFields {
+  auditVerifies: string | null;
+  explanationSimple: string | null;
+  concreteExample: string | null;
+  conformityCriteria: Record<string, string> | null;
+  referenceStatus: string | null;
+  officialSource: string | null;
+}
+
 export type Verdict = "pret" | "pret_avec_reserves" | "pas_pret";
 
 export interface ReportMeta {
@@ -48,7 +76,7 @@ export interface AuditReport {
   syntheseExecutive: ExecutiveSummary;
   radarParProcessus: RadarPoint[];
   resultatsParReferentiel: ReferentialResult[];
-  registreEcarts: Ecart[];
+  registreEcarts: EcartEnrichi[];
   planAction: CapaAction[];
   couvertureCroisee: CouvertureCroisee[];
   annexes: AnnexeMethodologie;

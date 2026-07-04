@@ -83,6 +83,7 @@ test("buildAuditReport : verdict conforme -> pret", () => {
     scoringResult: makeScoringResult({ statut: "conforme", score: 95 }),
     capaActions: [],
     config: DEFAULT_SCORING_CONFIG,
+    questionsByKey: new Map(),
   });
   assert.equal(report.syntheseExecutive.verdict, "pret");
 });
@@ -93,6 +94,7 @@ test("buildAuditReport : verdict conforme_avec_reserves -> pret_avec_reserves", 
     scoringResult: makeScoringResult({ statut: "conforme_avec_reserves" }),
     capaActions: [],
     config: DEFAULT_SCORING_CONFIG,
+    questionsByKey: new Map(),
   });
   assert.equal(report.syntheseExecutive.verdict, "pret_avec_reserves");
 });
@@ -103,6 +105,7 @@ test("buildAuditReport : verdict non_conforme -> pas_pret", () => {
     scoringResult: makeScoringResult({ statut: "non_conforme" }),
     capaActions: [],
     config: DEFAULT_SCORING_CONFIG,
+    questionsByKey: new Map(),
   });
   assert.equal(report.syntheseExecutive.verdict, "pas_pret");
 });
@@ -113,6 +116,7 @@ test("buildAuditReport : assemble toutes les sections attendues (§2 SPEC-3)", (
     scoringResult: makeScoringResult(),
     capaActions: [makeCapaAction()],
     config: DEFAULT_SCORING_CONFIG,
+    questionsByKey: new Map(),
   });
   assert.equal(report.meta.organisationName, "Acme MedTech");
   assert.ok(report.meta.generatedAt);
@@ -124,6 +128,50 @@ test("buildAuditReport : assemble toutes les sections attendues (§2 SPEC-3)", (
   assert.equal(report.couvertureCroisee.length, 1);
   assert.equal(report.annexes.seuilConforme, DEFAULT_SCORING_CONFIG.seuilConforme);
   assert.match(report.mentionLegale, /auto-évaluation préparatoire/);
+});
+
+test("buildAuditReport : enrichit le registre des écarts avec les champs riches du corpus", () => {
+  const questionsByKey = new Map([
+    [
+      "Q-1",
+      {
+        auditVerifies: "Que la CAPA est réellement suivie jusqu'à vérification d'efficacité",
+        explanationSimple: "On vérifie que les actions correctives sont bien terminées et efficaces.",
+        concreteExample: "Comme un contrôle qualité final avant expédition.",
+        conformityCriteria: { conforme: "CAPA clôturée avec preuve d'efficacité", non_conforme: "CAPA ouverte sans suivi" },
+        referenceStatus: "vérifié",
+        officialSource: "ISO 13485:2016 §8.5.2",
+      },
+    ],
+  ]);
+  const report = buildAuditReport({
+    meta: baseMeta(),
+    scoringResult: makeScoringResult(),
+    capaActions: [],
+    config: DEFAULT_SCORING_CONFIG,
+    questionsByKey,
+  });
+  const [ecart] = report.registreEcarts;
+  assert.equal(ecart.explanationSimple, "On vérifie que les actions correctives sont bien terminées et efficaces.");
+  assert.equal(ecart.officialSource, "ISO 13485:2016 §8.5.2");
+  assert.deepEqual(ecart.conformityCriteria, {
+    conforme: "CAPA clôturée avec preuve d'efficacité",
+    non_conforme: "CAPA ouverte sans suivi",
+  });
+});
+
+test("buildAuditReport : écart sans correspondance dans questionsByKey -> champs riches à null (pas de crash)", () => {
+  const report = buildAuditReport({
+    meta: baseMeta(),
+    scoringResult: makeScoringResult(),
+    capaActions: [],
+    config: DEFAULT_SCORING_CONFIG,
+    questionsByKey: new Map(),
+  });
+  const [ecart] = report.registreEcarts;
+  assert.equal(ecart.explanationSimple, null);
+  assert.equal(ecart.officialSource, null);
+  assert.equal(ecart.conformityCriteria, null);
 });
 
 test("topPriorities : exclut les actions déjà clôturées", () => {

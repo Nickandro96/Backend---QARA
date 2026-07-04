@@ -12,10 +12,10 @@
  * saisie manuelle » — tout dérive de l'objet résultat du moteur).
  */
 
-import type { ScoringConfig, ScoringResult } from "../scoring/types";
+import type { Ecart, ScoringConfig, ScoringResult } from "../scoring/types";
 import type { CapaAction } from "../capa/types";
 import { sortByPriority } from "../capa/capaEngine";
-import type { AuditReport, ExecutiveSummary, RadarPoint, ReportMeta, Verdict } from "./types";
+import type { AuditReport, EcartEnrichi, ExecutiveSummary, QuestionRichFields, RadarPoint, ReportMeta, Verdict } from "./types";
 
 const MENTION_LEGALE =
   "Outil d'auto-évaluation préparatoire ; ne remplace pas l'audit de certification par un organisme notifié ou une autorité compétente.";
@@ -41,6 +41,27 @@ export function topPriorities(capaActions: CapaAction[], limit = 5): CapaAction[
     (a) => a.statut !== "cloturee_efficace" && a.statut !== "cloturee_sans_suite"
   );
   return sortByPriority(open).slice(0, limit);
+}
+
+const EMPTY_RICH_FIELDS: QuestionRichFields = {
+  auditVerifies: null,
+  explanationSimple: null,
+  concreteExample: null,
+  conformityCriteria: null,
+  referenceStatus: null,
+  officialSource: null,
+};
+
+/**
+ * Enrichit le registre des écarts avec les champs riches du corpus (§4 SPEC-3
+ * "Intégrité et crédibilité" — statut de vérification + source officielle
+ * citée). Voir docs/audit/11-integrite-bout-en-bout.md, écart E1.
+ */
+export function enrichEcarts(ecarts: Ecart[], questionsByKey: Map<string, QuestionRichFields>): EcartEnrichi[] {
+  return ecarts.map((ecart) => ({
+    ...ecart,
+    ...(questionsByKey.get(ecart.questionKey) ?? EMPTY_RICH_FIELDS),
+  }));
 }
 
 function buildRadarPoints(scoringResult: ScoringResult): RadarPoint[] {
@@ -74,17 +95,18 @@ export interface BuildAuditReportInput {
   scoringResult: ScoringResult;
   capaActions: CapaAction[];
   config: ScoringConfig;
+  questionsByKey: Map<string, QuestionRichFields>;
 }
 
 export function buildAuditReport(input: BuildAuditReportInput): AuditReport {
-  const { meta, scoringResult, capaActions, config } = input;
+  const { meta, scoringResult, capaActions, config, questionsByKey } = input;
 
   return {
     meta: { ...meta, generatedAt: new Date().toISOString() },
     syntheseExecutive: buildExecutiveSummary(scoringResult, capaActions),
     radarParProcessus: buildRadarPoints(scoringResult),
     resultatsParReferentiel: scoringResult.parReferentiel,
-    registreEcarts: scoringResult.ecarts,
+    registreEcarts: enrichEcarts(scoringResult.ecarts, questionsByKey),
     planAction: sortByPriority(capaActions),
     couvertureCroisee: scoringResult.couvertureCroisee,
     annexes: {

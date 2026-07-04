@@ -11,6 +11,7 @@ import { buildAuditReport } from "./reportBuilder";
 import { buildGapRegisterCsv, buildActionPlanCsv } from "./csvExport";
 import type { CapaAction, CapaReferentielImpacte } from "../capa/types";
 import type { CapaStatus } from "../capa/types";
+import type { QuestionRichFields } from "./types";
 
 function toCapaAction(row: typeof capa_actions.$inferSelect): CapaAction {
   return {
@@ -53,15 +54,31 @@ async function loadReportInputs(db: NonNullable<Awaited<ReturnType<typeof getDb>
     ? await db.select().from(sites).where(eq(sites.id, audit.siteId)).limit(1)
     : [null];
 
-  const { scoringQuestions, scoringResponses } = await loadAuditScoringContext(db, auditId, userId);
+  const { scoringQuestions, scoringResponses, questionRows } = await loadAuditScoringContext(db, auditId, userId);
   const scoringResult = buildScoringResult(scoringQuestions, scoringResponses);
+
+  const questionsByKey = new Map<string, QuestionRichFields>(
+    questionRows
+      .filter((q) => q.questionKey)
+      .map((q) => [
+        q.questionKey!,
+        {
+          auditVerifies: q.auditVerifies ?? null,
+          explanationSimple: q.explanationSimple ?? null,
+          concreteExample: q.concreteExample ?? null,
+          conformityCriteria: safeJsonParse<Record<string, string> | null>(q.conformityCriteria, null),
+          referenceStatus: q.referenceStatus ?? null,
+          officialSource: q.officialSource ?? null,
+        },
+      ])
+  );
 
   const capaRows = await db
     .select()
     .from(capa_actions)
     .where(and(eq(capa_actions.auditId, auditId), eq(capa_actions.userId, userId)));
 
-  return { audit, site, scoringResult, capaActions: capaRows.map(toCapaAction) };
+  return { audit, site, scoringResult, capaActions: capaRows.map(toCapaAction), questionsByKey };
 }
 
 export const reportRouter = router({
@@ -77,8 +94,11 @@ export const reportRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const { audit, site, scoringResult, capaActions } = await loadReportInputs(db, input.auditId, ctx.user.id);
-      const referentialIds: number[] = safeJsonParse(audit.referentialIds, []);
+      const { audit, site, scoringResult, capaActions, questionsByKey } = await loadReportInputs(
+        db,
+        input.auditId,
+        ctx.user.id
+      );
 
       const report = buildAuditReport({
         meta: {
@@ -96,6 +116,7 @@ export const reportRouter = router({
         scoringResult,
         capaActions,
         config: DEFAULT_SCORING_CONFIG,
+        questionsByKey,
       });
 
       if (input.niveau === "synthetique") {
