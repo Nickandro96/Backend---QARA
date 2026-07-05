@@ -37,10 +37,19 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
       `buildAuditorModeSystemPrompt` (mêmes garde-fous + renvoi explicite
       vers le plan d'action CAPA plutôt que de s'y substituer). Vérifié en
       direct via curl sur un audit réel avec un écart enregistré.
-- [ ] T4. Frontend : panneau chat mode utilisateur sur l'écran de question.
-      Bouton « Aide-moi à répondre ».
-- [ ] T5. Frontend : panneau chat mode auditeur sur le rapport/dashboard.
-      Bouton « Analyser mes résultats ».
+- [x] T4. Frontend (`frontend-qara`) : composant réutilisable
+      `client/src/components/AssistantChatPanel.tsx` (chat générique — même
+      composant pour les 2 modes, seul `onSend` diffère). Intégré dans
+      l'onglet existant « IA Copilot » de `MDRAuditDrilldown.tsx` (l'écran de
+      question), en complément des suggestions statiques déjà présentes
+      (non supprimées — ajout, pas remplacement). Vérifié en direct via
+      Playwright piloté : panneau visible, message envoyé, erreur gracieuse
+      affichée en l'absence de clé API (comportement attendu).
+- [x] T5. Frontend : même composant intégré dans `MDRAuditReview.tsx` (écran
+      de résultats après complétion — aucune page frontend dédiée
+      "rapport/dashboard" Lot 4 n'existe encore, voir décision ci-dessous),
+      bouton d'envoi sous le titre « Analyser mes résultats ». Vérifié en
+      direct via Playwright piloté, même résultat que T4.
 - [ ] T6. Garde-fous vérifiés en direct : tenter de faire inventer une clause
       hors corpus → l'assistant refuse et cite la source. Documenter le test.
       **Bloqué : nécessite une vraie clé ANTHROPIC_API_KEY, absente de cet
@@ -64,6 +73,15 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
 - Champ "reference" du corpus (mission brief) : n'existe pas comme colonne
   DB dédiée — mappé sur `article`+`annexe` (colonnes réellement présentes,
   déjà utilisées ainsi par le scoring/rapport).
+- Pas de page frontend "rapport/dashboard" consommant les Lots 2-4
+  (scoring/CAPA/rapport) — `MDRAuditReview.tsx` utilise encore
+  `mdr.getAuditDashboard` (un dashboard antérieur, non lié aux nouveaux
+  moteurs). Construire cette page serait le pendant frontend du Lot 4,
+  hors périmètre de la mission IA réglementaire. Le panneau auditeur a donc
+  été ajouté sur `MDRAuditReview.tsx` (écran de résultats existant) plutôt
+  que sur une page rapport qui n'existe pas encore — l'assistant
+  `assistantAuditor` recalcule lui-même le scoring (Lot 2) côté serveur,
+  donc cette intégration ne dépend d'aucune page Lot 4 manquante.
 
 ## Idées notées, non traitées
 
@@ -77,7 +95,8 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
 
 ## PROCHAINE ÉTAPE
 
-T2 et T3 (backend) faits et vérifiés en direct (hors appel LLM réel, faute
-de clé). Prochaine étape : T4 — panneau chat mode utilisateur côté frontend
-(MDRAuditDrilldown.tsx / ISOAuditDrilldown.tsx), bouton « Aide-moi à
-répondre », appelle `assistant.assistantUser`.
+T2 à T5 faits et vérifiés (backend + frontend, hors appel LLM réel faute de
+clé). Prochaine étape : T6 — demander à l'utilisateur une clé
+ANTHROPIC_API_KEY pour la vérification live des garde-fous, puis T7 (doc
+finale + E2E complète). Suite E2E Playwright en cours de vérification
+(aucune régression attendue, chat panels vérifiés séparément).
