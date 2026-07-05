@@ -9,16 +9,17 @@ import { sortByPriority } from "../capa/capaEngine";
 import { buildAuditorModeSystemPrompt, buildUserModeSystemPrompt } from "./promptBuilder";
 import type { AuditorGapContext, ConformityCriteria, QuestionAssistantContext } from "./types";
 
-const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 1024;
-const MAX_HISTORY_MESSAGES = 12;
-const MAX_MESSAGE_LENGTH = 4000;
-const MAX_GAPS_IN_CONTEXT = 15;
+export const MODEL = "claude-sonnet-5";
+export const MAX_TOKENS = 1024;
+export const MAX_HISTORY_MESSAGES = 12;
+export const MAX_MESSAGE_LENGTH = 4000;
+export const MAX_GAPS_IN_CONTEXT = 15;
 
 const chatMessageInput = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1).max(MAX_MESSAGE_LENGTH),
 });
+export type ChatMessage = z.infer<typeof chatMessageInput>;
 
 /**
  * Garde-fou de coût / anti-boucle (§ "Intégration technique" de la spec) :
@@ -26,12 +27,12 @@ const chatMessageInput = z.object({
  * historique complet pour l'affichage ; seul ce qui est envoyé au modèle est
  * tronqué.
  */
-function capHistory(messages: z.infer<typeof chatMessageInput>[]): z.infer<typeof chatMessageInput>[] {
+export function capHistory(messages: ChatMessage[]): ChatMessage[] {
   return messages.slice(-MAX_HISTORY_MESSAGES);
 }
 
 let anthropicClient: Anthropic | null = null;
-function getAnthropicClient(): Anthropic {
+export function getAnthropicClient(): Anthropic {
   if (anthropicClient) return anthropicClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -44,16 +45,29 @@ function getAnthropicClient(): Anthropic {
   return anthropicClient;
 }
 
-async function callAssistant(systemPrompt: string, messages: z.infer<typeof chatMessageInput>[]): Promise<string> {
-  const client = getAnthropicClient();
+/**
+ * Client minimal requis par `callAssistant` — permet d'injecter un client
+ * factice en test (voir assistant-router.test.ts) sans jamais appeler
+ * l'API Anthropic réelle. En production, le paramètre est omis et
+ * `getAnthropicClient()` (singleton lisant `ANTHROPIC_API_KEY`) est utilisé.
+ */
+export type MinimalAnthropicClient = {
+  messages: { create: Anthropic["messages"]["create"] };
+};
+
+export async function callAssistant(
+  systemPrompt: string,
+  messages: ChatMessage[],
+  client: MinimalAnthropicClient = getAnthropicClient()
+): Promise<string> {
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
     system: systemPrompt,
     messages: capHistory(messages).map((m) => ({ role: m.role, content: m.content })),
   });
-  const textBlock = response.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  const textBlock = (response as any).content?.find((block: any) => block.type === "text");
+  if (!textBlock || typeof textBlock.text !== "string") {
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Réponse de l'assistant vide ou inattendue." });
   }
   return textBlock.text;

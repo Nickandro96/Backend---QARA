@@ -50,12 +50,32 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
       "rapport/dashboard" Lot 4 n'existe encore, voir décision ci-dessous),
       bouton d'envoi sous le titre « Analyser mes résultats ». Vérifié en
       direct via Playwright piloté, même résultat que T4.
-- [ ] T6. Garde-fous vérifiés en direct : tenter de faire inventer une clause
-      hors corpus → l'assistant refuse et cite la source. Documenter le test.
-      **Bloqué : nécessite une vraie clé ANTHROPIC_API_KEY, absente de cet
-      environnement — à demander à l'utilisateur.**
-- [ ] T7. Doc `docs/audit/13-ia-reglementaire.md` + repasser la suite E2E
-      (aucune régression).
+- [~] T6. Garde-fous — partiel, par choix explicite de l'utilisateur.
+      L'utilisateur a refusé (à raison) de coller une clé API dans le chat :
+      `ANTHROPIC_API_KEY` doit être configurée côté serveur (Railway), jamais
+      saisie en dur ni collée en conversation. Fait à la place :
+      - Refactor de `assistant-router.ts` pour injecter le client Anthropic
+        (`callAssistant(systemPrompt, messages, client?)`), permettant de
+        tester le câblage sans clé réelle.
+      - `assistant-router.test.ts` (6 tests, client factice) : le modèle/
+        max_tokens/prompt système sont transmis tels quels ; le prompt
+        système (garde-fous) est TOUJOURS envoyé séparément du message
+        utilisateur, jamais concaténé ni contournable par un message
+        adversarial ("ignore tes instructions...") ; troncature de
+        l'historique correcte ; erreur claire si réponse vide.
+      - **Limite assumée et documentée** : un mock ne peut PAS prouver
+        qu'un vrai modèle respecte les garde-fous du prompt système (c'est
+        un comportement du modèle, pas du code testable). Ces tests
+        vérifient uniquement que le code transmet fidèlement le contexte —
+        pas que Claude refuse effectivement d'halluciner en pratique.
+      - **Reste à faire dès qu'ANTHROPIC_API_KEY sera configurée** (par
+        l'utilisateur, hors chat) : lancer l'app avec la clé réelle,
+        ouvrir le panneau assistant sur une vraie question, tenter
+        explicitement de le faire inventer une clause/référence absente du
+        corpus, et vérifier qu'il refuse + cite la source réelle. Documenter
+        le résultat dans `docs/audit/13-ia-reglementaire.md`.
+- [x] T7. Doc `docs/audit/13-ia-reglementaire.md` + suite E2E complète
+      (aucune régression) — fait avec T6 partiel assumé et documenté.
 
 ## Décisions à prendre / prises
 
