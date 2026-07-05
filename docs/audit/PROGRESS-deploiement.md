@@ -210,11 +210,48 @@ besoin de ce fichier. Supprimé (commit `8cfeb83f`), vérifié localement :
 `pnpm install --frozen-lockfile --prefer-offline` (commande exacte de
 Railway), `npm run build`, et `npm test` (70/70) passent tous sans lui.
 
+Build réussi confirmé par l'utilisateur. Base MySQL de `New Claude`
+confirmée vide ("You have no tables").
+
+## Blocage T1 : pas d'accès TCP brut à la base depuis mon environnement
+
+Tentative de connexion directe à la base de test via sa chaîne de connexion
+publique (`mysql://root:...@reseau.proxy.rlwy.net:28240/railway`) —
+échec : `ERROR 2002 (HY000): Can't connect to server` (timeout confirmé
+via test TCP brut). Cause : la politique réseau de mon environnement
+bloque explicitement les connexions TCP brutes vers des bases de données
+externes (documenté dans `/root/.ccr/README.md` : "Not supported through
+the proxy (report, do not work around): ... raw-TCP databases"). Ce n'est
+pas contournable, et je ne dois pas essayer.
+
+**Pivot retenu** : au lieu de me connecter moi-même à la base, faire
+exécuter les migrations + l'import du corpus **par le service backend
+Railway lui-même**, qui peut atteindre sa propre base MySQL sans
+restriction (réseau privé Railway). Les deux scripts existants
+(`scripts/apply-sql-migrations.ts`, `scripts/import-corpus.mjs`) ne
+nécessitent que `DATABASE_URL` (déjà lu depuis l'environnement) et sont
+idempotents (vérifié à de multiples reprises dans cette session) — donc
+sûrs à enchaîner en une seule commande de démarrage temporaire :
+```
+npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/import-corpus.mjs && node dist/index.js
+```
+Pas de nouveau script à écrire : réutilisation telle quelle des deux
+scripts déjà éprouvés. `tsx` est en devDependency mais Railway installe
+tout le `node_modules` (pas de `--production`, confirmé par le build qui
+vient de réussir), donc disponible au runtime.
+
 ## PROCHAINE ÉTAPE
 
-Le fix est poussé sur la branche. Attente que l'utilisateur redéploie
-(Railway devrait normalement relancer un build automatiquement suite au
-nouveau commit sur la branche connectée ; sinon, redéployer manuellement
-depuis l'onglet Deployments) et confirme que le build réussit cette fois.
-Ensuite : vérifier que la base MySQL de `New Claude` est bien vide (T1,
-étape 3 du plan), puis configurer les variables d'environnement (T2).
+Donner à l'utilisateur les instructions précises pour :
+1. Vérifier/compléter les variables d'environnement du service backend
+   dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
+   probablement auto-injectée par Railway entre les deux services du même
+   environnement — à confirmer).
+2. Définir temporairement la commande de démarrage personnalisée
+   ci-dessus (Settings → Deploy → Custom Start Command) sur le service
+   backend de `New Claude`.
+3. Redéployer, observer les logs (doivent montrer les migrations puis
+   l'import du corpus puis "Server listening on port...").
+4. Une fois confirmé, remettre la commande de démarrage normale
+   (`node dist/index.js`) — les scripts n'ont besoin de tourner qu'une
+   fois (idempotents, mais pas la peine de les relancer à chaque boot).
