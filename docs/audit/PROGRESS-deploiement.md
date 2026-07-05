@@ -190,10 +190,31 @@ Je vérifierai/confirmerai chacun de ces points avant de te donner le lien :
 URL de test + checklist de test manuel + où reporter les problèmes (voir
 le prompt de mission original pour le contenu exact de la checklist).
 
+## Bug bloquant trouvé et corrigé en cours de route
+
+L'utilisateur a créé l'environnement Railway `New Claude` (dupliqué depuis
+la prod, backend + MySQL), changé la branche du service backend vers
+`claude/qara-compliance-audit-qitbxl`, et le premier déploiement a échoué :
+```
+pnpm install --frozen-lockfile --prefer-offline
+ERROR  packages field missing or empty
+Build Failed: ... exit code: 1
+```
+Cause : `pnpm-workspace.yaml` à la racine du dépôt, un fichier auto-généré
+par erreur lors d'un `pnpm add @anthropic-ai/sdk` pendant le Lot IA
+réglementaire (contenu : `allowBuilds: esbuild: <texte de placeholder>`),
+committé par erreur. Un `pnpm-workspace.yaml` sans champ `packages:` est
+invalide, et `pnpm install --frozen-lockfile` (utilisé par Railway) le
+traite comme fatal — ce projet n'est pas un monorepo et n'a jamais eu
+besoin de ce fichier. Supprimé (commit `8cfeb83f`), vérifié localement :
+`pnpm install --frozen-lockfile --prefer-offline` (commande exacte de
+Railway), `npm run build`, et `npm test` (70/70) passent tous sans lui.
+
 ## PROCHAINE ÉTAPE
 
-Attente de la confirmation utilisateur pour lancer T1, étape 2 (création du
-nouvel environnement Railway `test-qara`, duplication des deux services).
-Je ne peux pas cliquer dans Railway moi-même — instructions ci-dessus
-données, en attente que l'utilisateur les exécute et me confirme le
-résultat de l'étape 3 (base MySQL neuve confirmée vide) avant de continuer.
+Le fix est poussé sur la branche. Attente que l'utilisateur redéploie
+(Railway devrait normalement relancer un build automatiquement suite au
+nouveau commit sur la branche connectée ; sinon, redéployer manuellement
+depuis l'onglet Deployments) et confirme que le build réussit cette fois.
+Ensuite : vérifier que la base MySQL de `New Claude` est bien vide (T1,
+étape 3 du plan), puis configurer les variables d'environnement (T2).
