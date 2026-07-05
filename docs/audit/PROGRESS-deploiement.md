@@ -93,28 +93,107 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
   suffit normalement à déclencher un déploiement de preview automatique**,
   sans action supplémentaire de ma part — à confirmer dans le dashboard.
 
-## Questions en attente (accès dashboard requis, je ne peux pas les vérifier moi-même)
+## Réponses de l'utilisateur (T0)
 
-1. **Railway** : le projet a-t-il actuellement un seul service (backend) ou
-   plusieurs (ex. backend + MySQL managé séparé) ? Combien
-   d'environnements Railway existent déjà (Production seul, ou déjà
-   Staging/autre) ?
-2. **Railway** : quelles variables d'environnement existent déjà sur le
-   service de production actuellement (juste les **noms**, pas les
-   valeurs) ? Cela permet de savoir lesquelles dupliquer/recréer pour
-   l'environnement de test.
-3. **Vercel** : le dépôt frontend est-il connecté à Vercel via l'intégration
-   GitHub (déploiements automatiques par branche) ? As-tu déjà vu apparaître
-   un déploiement de preview pour `claude/qara-compliance-audit-qitbxl` dans
-   l'onglet "Deployments" du projet Vercel (la branche a déjà été poussée
-   plusieurs fois durant les lots précédents) ?
-4. Préférence : dupliquer le service Railway existant dans un **nouvel
-   environnement Railway** (fonctionnalité native "Environments", recommandé
-   — garde tout dans le même projet, isolation propre), ou créer un
-   **nouveau projet Railway** entièrement séparé ?
+1. Railway : backend et MySQL sont **deux services distincts** dans le
+   projet de production.
+2. Vercel : **une preview existe déjà** pour
+   `claude/qara-compliance-audit-qitbxl` (déploiements automatiques par
+   branche déjà actifs sur ce projet).
+3. Isolation Railway : « peu importe, le plus simple » → **nouvel
+   environnement Railway** (fonctionnalité native "Environments") retenu :
+   duplique les deux services existants (backend + MySQL) ensemble dans un
+   environnement isolé du même projet, sans configuration manuelle de
+   variables partagées entre services (Railway les reconnecte
+   automatiquement dans le nouvel environnement).
+
+## Plan concret (T1-T5)
+
+### T1 — Base de test (Railway, nouvel environnement)
+1. Dans le dashboard Railway, ouvrir le projet de production.
+2. Créer un nouvel environnement (menu des environnements, généralement en
+   haut de la page projet — souvent un sélecteur déroulant à côté de
+   "Production" avec une option "+ New Environment"). Le nommer par ex.
+   `test-qara`. Choisir l'option qui duplique les services existants
+   (Railway propose en général de dupliquer depuis "Production" en
+   choisissant quels services inclure — inclure le service **backend** et
+   le service **MySQL** tous les deux).
+3. **Vérifier immédiatement** (avant toute autre action) que le nouveau
+   service MySQL dans `test-qara` est une base **vide/neuve** (pas une copie
+   des données de prod) — ouvrir son onglet "Data"/"Query" dans Railway et
+   confirmer qu'il n'y a aucune table, ou très peu (juste celles créées par
+   défaut). Me confirmer ce que tu vois avant de continuer.
+4. Dans le service **backend** de l'environnement `test-qara` : onglet
+   "Settings" → "Source" → changer la branche déployée sur
+   `claude/qara-compliance-audit-qitbxl` (au lieu de `main`).
+5. Une fois le nouveau service MySQL confirmé vide, je te donnerai la
+   commande exacte pour appliquer les migrations + importer le corpus
+   (473 questions) — nécessite que tu me communiques la chaîne de
+   connexion MySQL **publique** de ce nouveau service de test (Railway
+   l'affiche dans l'onglet "Connect" du service MySQL, variable
+   `MYSQL_PUBLIC_URL` ou équivalent) pour que je puisse m'y connecter
+   depuis cet environnement et lancer le script d'import. **Ne me donne
+   jamais la chaîne de connexion de la base de PRODUCTION.**
+
+### T2 — Backend (Railway, service `test-qara`)
+Variables à définir sur le service backend de l'environnement `test-qara`
+(Settings → Variables) :
+- `JWT_SECRET` : une valeur aléatoire longue et différente de celle de
+  prod (ex. générée avec `openssl rand -hex 32`) — je peux te donner une
+  valeur si tu préfères que je la génère.
+- `ALLOWED_ORIGINS` : normalement pas nécessaire — les previews Vercel de ce
+  projet (`*.vercel.app` contenant "frontend-qara") sont déjà autorisées
+  automatiquement par le code (voir §Diagnostic). À définir seulement si tu
+  utilises un domaine de test personnalisé qui ne suit pas ce pattern.
+- **Ne PAS définir** `ANTHROPIC_API_KEY` (IA désactivée intentionnellement).
+- Les variables de connexion MySQL (`MYSQL_PRIVATE_URL`/`DATABASE_URL`/etc.)
+  sont normalement déjà injectées automatiquement par Railway entre les
+  deux services du même environnement — rien à faire ici si l'étape T1 a
+  bien reconnecté le service MySQL au service backend dans `test-qara`.
+- Une fois les variables définies, redéployer le service backend
+  (normalement automatique après un changement de variable/branche) et me
+  donner l'URL publique du service (Settings → Networking → Public
+  Networking, ou le domaine `*.up.railway.app` déjà généré) pour que je
+  vérifie le health check.
+
+### T3 — Frontend (Vercel, preview existante)
+1. Dans le dashboard Vercel, ouvrir le projet frontend → onglet
+   "Deployments" → trouver le déploiement de preview pour
+   `claude/qara-compliance-audit-qitbxl`.
+2. Aller dans Settings → Environment Variables du projet Vercel, et
+   vérifier/ajouter `VITE_API_URL` **scopée à "Preview"** (pas
+   "Production") avec la valeur `https://<url-backend-test>.up.railway.app/trpc`
+   (l'URL obtenue à la fin de T2, avec `/trpc` à la fin).
+3. Redéployer la preview (ou pousser un commit vide sur la branche) pour
+   que la nouvelle variable soit prise en compte — Vite lit les variables
+   d'environnement au moment du build, pas à l'exécution.
+4. Me donner l'URL de preview finale.
+
+### T4 — Vérification de sécurité (avant de livrer le lien)
+Je vérifierai/confirmerai chacun de ces points avant de te donner le lien :
+- [ ] Mots de passe hachés (bcrypt, Lot 0 C-03) — vérifiable via une
+  inscription de test + lecture directe de la table `users` sur la base de
+  test (`passwordHash` doit commencer par `$2`).
+- [ ] Backdoor `devLogin`/`dummy-token` absent (Lot 0 C-04/C-06) — déjà
+  supprimé du code, vérifiable par lecture du dépôt déployé.
+- [ ] CORS n'autorise que l'URL de test (pas `*`) — déjà garanti par le
+  code (`server/_core/index.ts`), vérifiable en observant les en-têtes de
+  réponse.
+- [ ] Base de test isolée de la prod — confirmé en T1 (nouvel environnement
+  Railway avec sa propre base).
+- [ ] L'app tourne sans `ANTHROPIC_API_KEY` — vérifiable en observant les
+  logs du service backend de test au démarrage (pas d'erreur bloquante) et
+  en testant que l'assistant échoue proprement (pas de crash serveur) si
+  sollicité.
+
+### T5 — Livraison
+URL de test + checklist de test manuel + où reporter les problèmes (voir
+le prompt de mission original pour le contenu exact de la checklist).
 
 ## PROCHAINE ÉTAPE
 
-T0 fait à partir du code. Question posée à l'utilisateur (voir
-§Questions en attente) avant de proposer le plan concret T1-T5, faute
-d'accès aux dashboards Vercel/Railway.
+Attente de la confirmation utilisateur pour lancer T1, étape 2 (création du
+nouvel environnement Railway `test-qara`, duplication des deux services).
+Je ne peux pas cliquer dans Railway moi-même — instructions ci-dessus
+données, en attente que l'utilisateur les exécute et me confirme le
+résultat de l'étape 3 (base MySQL neuve confirmée vide) avant de continuer.
