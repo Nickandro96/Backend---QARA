@@ -23,6 +23,7 @@ import { scoringRouter } from "./scoring/scoringRouter";
 import { capaRouter } from "./capa/capaRouter";
 import { reportRouter } from "./report/reportRouter";
 import { onboardingRouter } from "./onboarding/onboardingRouter";
+import { assistantRouter } from "./assistant/assistant-router";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -802,6 +803,9 @@ export const appRouter = router({
 
   // Onboarding (sélection du périmètre : référentiels, rôles, marchés MDSAP)
   onboarding: onboardingRouter,
+
+  // Assistant IA réglementaire (mode utilisateur + mode auditeur)
+  assistant: assistantRouter,
 
   // Audit Management (ton router existant)
   audit: auditRouter,
