@@ -240,6 +240,57 @@ scripts déjà éprouvés. `tsx` est en devDependency mais Railway installe
 tout le `node_modules` (pas de `--production`, confirmé par le build qui
 vient de réussir), donc disponible au runtime.
 
+## Bug bloquant #2 trouvé et corrigé : race condition sur double exécution concurrente
+
+Premier essai de la commande de démarrage temporaire : logs montrent une
+erreur `ER_NO_REFERENCED_ROW_2` (violation de clé étrangère) sur l'insertion
+d'une question FDA (`referentialId=8` inexistant au moment de l'insert).
+
+**Diagnostic** (reproduit localement, pas de spéculation) :
+- Reproduit la chaîne exacte des migrations + import sur une base MySQL
+  locale neuve : un run unique et séquentiel réussit parfaitement (473/473,
+  aucune erreur).
+- Les logs Railway montraient des lignes clairement **entrelacées** entre
+  deux exécutions du même script (deux tableaux `Found migrations` mélangés
+  ligne à ligne) — signature d'une exécution **concurrente**, pas d'un
+  crash-restart séquentiel. Confirmé en lançant volontairement 2 processus
+  `import-corpus.mjs` en parallèle sur la même base locale neuve : reproduit
+  une erreur de contrainte unique (`processus.slug`) dans le même style.
+- Cause racine : `scripts/import-corpus.mjs` fait un pattern "SELECT puis
+  INSERT si absent" pour upsert `referentiels` (par `code`) et `processus`
+  (par nom/slug) — mais **aucune contrainte UNIQUE** n'existe sur
+  `referentiels.code` en base (vérifié dans `drizzle/schema.ts` et les
+  migrations). Deux exécutions concurrentes du script (probable : Railway a
+  brièvement fait tourner 2 instances du conteneur au démarrage/redéploiement)
+  peuvent toutes les deux voir "le référentiel n'existe pas encore" et
+  l'insérer chacune de son côté avec un id différent — corrompant le mapping
+  code→id utilisé ensuite pour insérer les questions, d'où la FK cassée.
+- **Effet de bord découvert en cours de route (non bloquant, documenté, pas
+  corrigé — hors périmètre)** : la migration `0001_seed_iso_referentiels.sql`
+  est today un no-op silencieux sur toute base neuve (elle s'exécute, par
+  tri alphabétique des fichiers, **avant** `0006_create_referentiels_and_processus.sql`
+  qui crée la table — elle tombe donc systématiquement dans sa branche de
+  repli `INSERT INTO referentials` (sans "ie", table qui n'existe nulle part
+  dans le schéma), erreur `ER_NO_SUCH_TABLE` avalée par le mécanisme
+  "ignorable error"). Conséquence : ISO9001/ISO13485 n'obtiennent jamais les
+  ids fixes 2/3 prévus, ils sont recréés avec des ids auto-incrémentés par
+  `import-corpus.mjs` à la place — sans conséquence fonctionnelle (le code
+  applicatif référence toujours les référentiels par `code`, jamais par id
+  en dur), donc non corrigé pour rester strictement dans le périmètre
+  déploiement.
+
+**Fix appliqué** (`scripts/import-corpus.mjs`, commit à suivre) : verrou
+nommé MySQL (`GET_LOCK('qara_import_corpus', 120)` / `RELEASE_LOCK`) autour
+de tout le corps du script. Si une deuxième exécution démarre pendant que la
+première tourne, elle attend (jusqu'à 120s) que le verrou se libère, puis
+s'exécute normalement sur un état déjà cohérent (idempotent par
+`questionKey`/`code`) au lieu de courir en parallèle sur les mêmes lignes.
+
+**Vérifié par reproduction locale** : 2 processus lancés en parallèle sur
+une base neuve → avec le fix, les deux terminent avec succès (exit 0),
+sérialisés par le verrou ; état final = 473 questions, aucun `referentiels.code`
+en double. Suite de tests backend repassée : 70/70, aucune régression.
+
 ## PROCHAINE ÉTAPE
 
 Donner à l'utilisateur les instructions précises pour :
@@ -250,8 +301,10 @@ Donner à l'utilisateur les instructions précises pour :
 2. Définir temporairement la commande de démarrage personnalisée
    ci-dessus (Settings → Deploy → Custom Start Command) sur le service
    backend de `New Claude`.
-3. Redéployer, observer les logs (doivent montrer les migrations puis
-   l'import du corpus puis "Server listening on port...").
+3. Redéployer avec le fix (verrou anti-concurrence) qui vient d'être poussé,
+   observer les logs (doivent montrer les migrations puis l'import du
+   corpus — 473 au total entre insérées/mises à jour — puis "Server
+   listening on port...").
 4. Une fois confirmé, remettre la commande de démarrage normale
    (`node dist/index.js`) — les scripts n'ont besoin de tourner qu'une
    fois (idempotents, mais pas la peine de les relancer à chaque boot).

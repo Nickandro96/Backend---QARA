@@ -34,6 +34,32 @@ const OLD_FDA_CODES = ["FDA_QSR_21CFR820", "FDA_US_MARKET_ACCESS"];
 
 async function main() {
   const conn = await mysql.createConnection(process.env.DATABASE_URL);
+
+  // Verrou nommé MySQL : ce script fait des "SELECT puis INSERT si absent" sur
+  // referentiels/processus (pas de contrainte UNIQUE sur ces colonnes de
+  // matching), donc deux exécutions concurrentes (ex. double démarrage de
+  // conteneur au déploiement) peuvent créer des doublons ou provoquer une
+  // violation de clé étrangère. Le verrou sérialise : la deuxième exécution
+  // attend que la première ait fini (idempotente) plutôt que de courir en
+  // parallèle sur les mêmes lignes.
+  const [[{ acquired }]] = await conn.query(
+    "SELECT GET_LOCK('qara_import_corpus', 120) AS acquired"
+  );
+  if (!acquired) {
+    console.log("Un autre import est déjà en cours (verrou non obtenu après 120s) — abandon.");
+    await conn.end();
+    return;
+  }
+
+  try {
+    await runImport(conn);
+  } finally {
+    await conn.query("SELECT RELEASE_LOCK('qara_import_corpus')");
+    await conn.end();
+  }
+}
+
+async function runImport(conn) {
   const db = drizzle(conn);
   const rows = JSON.parse(readFileSync(new URL("./questions_import_ready.json", import.meta.url)));
 
@@ -148,6 +174,5 @@ async function main() {
   }
 
   console.log(`Import terminé : ${inserted} insérées, ${updated} mises à jour, sur ${rows.length}.`);
-  await conn.end();
 }
 main().catch((e) => { console.error(e); process.exit(1); });
