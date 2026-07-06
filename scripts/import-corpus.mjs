@@ -12,6 +12,13 @@
  * Idempotent pour les référentiels ISO13485/ISO9001/ISO14971/IVDR/MDSAP (upsert
  * par questionKey). Pour MDR/FDA, la toute première exécution purge l'ancien
  * contenu (voir §0) ; les exécutions suivantes sont un upsert normal.
+ *
+ * Option RESET_BEFORE_IMPORT=1 : vide entièrement `questions`/`referentiels`
+ * avant l'import, DANS LA MÊME section verrouillée (voir plus bas) — utile
+ * pour repartir d'un état propre après une corruption (voir
+ * docs/audit/PROGRESS-deploiement.md). Contrairement à un script séparé non
+ * verrouillé, ce chemin ne laisse aucune fenêtre où une autre exécution
+ * concurrente pourrait vider les tables pendant un import en cours.
  */
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
@@ -62,6 +69,15 @@ async function main() {
 async function runImport(conn) {
   const db = drizzle(conn);
   const rows = JSON.parse(readFileSync(new URL("./questions_import_ready.json", import.meta.url)));
+
+  if (process.env.RESET_BEFORE_IMPORT === "1") {
+    console.log("[RESET] RESET_BEFORE_IMPORT=1 — vidage de questions/referentiels avant import...");
+    await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+    await conn.query("TRUNCATE TABLE `questions`");
+    await conn.query("TRUNCATE TABLE `referentiels`");
+    await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+    console.log("[RESET] Tables vidées, compteurs auto_increment remis à zéro.");
+  }
 
   // 0) Remplacement de l'ancien contenu MDR/FDA (décision validée le 04/07/2026 —
   //    voir docs/audit/07-import-corpus.md). N'affecte pas ISO9001/ISO13485 (déjà

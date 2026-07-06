@@ -384,13 +384,53 @@ fois l'import réussi une fois — recommandée ; ou protéger
 palliatif). **Aucune de ces deux solutions n'a été appliquée** : en
 attente de lecture du document par l'utilisateur et de sa décision.
 
+## Fix #4 appliqué : reset et import fusionnés sous un seul verrou
+
+L'utilisateur a demandé d'appliquer les corrections nécessaires. Plutôt que
+de choisir entre les deux options du document de diagnostic (retirer la
+commande de démarrage personnalisée / ajouter un verrou au script de
+reset), les deux ont été faites :
+
+1. **`scripts/import-corpus.mjs`** : nouvelle option `RESET_BEFORE_IMPORT=1`
+   — le vidage des tables (`TRUNCATE questions`/`referentiels`) se fait
+   maintenant **à l'intérieur de la même section verrouillée** que l'import
+   (une seule connexion, un seul `GET_LOCK`, tenu de bout en bout). Il n'y a
+   donc plus aucune fenêtre entre "vidage" et "import" où une exécution
+   concurrente pourrait s'intercaler — contrairement à l'ancien
+   enchaînement de deux scripts séparés (deux connexions, deux verrous
+   pris/relâchés indépendamment).
+2. **`scripts/reset-corpus-tables.mjs`** (conservé pour un usage manuel
+   ponctuel hors chaîne de démarrage) : reçoit maintenant le même verrou
+   nommé MySQL que `import-corpus.mjs`, par défense en profondeur.
+
+**Vérifié par reproduction locale** :
+- Import normal (sans le flag) : comportement inchangé, 473/473.
+- État corrompu simulé (`referentialId` invalide) + `RESET_BEFORE_IMPORT=1` :
+  récupération complète en un seul passage, 473/473.
+- **Deux processus `RESET_BEFORE_IMPORT=1` lancés en parallèle** sur la
+  même base (le scénario exact soupçonné sur Railway) : les deux se
+  terminent avec succès (exit 0), strictement sérialisés par le verrou,
+  état final = 473 questions, 7 référentiels avec des ids propres — plus
+  aucune corruption possible même en cas de chevauchement de conteneurs.
+- Suite de tests backend : 70/70.
+
+**Nouvelle commande de démarrage personnalisée à utiliser sur Railway**
+(remplace l'ancienne, qui appelait `reset-corpus-tables.mjs` séparément) :
+```
+npx tsx scripts/apply-sql-migrations.ts && RESET_BEFORE_IMPORT=1 npx tsx scripts/import-corpus.mjs && node dist/index.js
+```
+
 ## PROCHAINE ÉTAPE
 
-Attendre le retour de l'utilisateur sur `docs/audit/ETAT-DES-LIEUX-backend.md`
-avant toute nouvelle action. Ne pas relancer de nouveaux correctifs sans
-validation (consigne explicite de cette mission de diagnostic).
+Donner à l'utilisateur la nouvelle commande de démarrage ci-dessus,
+redéployer, observer les logs (migrations, puis `[RESET] ...`, puis
+`Import terminé : 473 insérées, 0 mises à jour, sur 473.`, puis enfin
+`Server listening on port...` — cette dernière ligne n'est encore jamais
+apparue dans aucun log jusqu'ici, donc c'est le signal de succès à
+confirmer).
 
-Si l'utilisateur valide la solution recommandée (§6.1 du document) :
+Une fois confirmé (recommandation inchangée du document de diagnostic,
+§6.1) :
 1. Vérifier/compléter les variables d'environnement du service backend
    dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
    probablement auto-injectée par Railway entre les deux services du même
