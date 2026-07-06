@@ -607,6 +607,76 @@ prochain déploiement/service, que les variables `DATABASE_URL`/`MYSQL_*`
 utilisent bien une référence Railway (`${{NomDuService.VARIABLE}}`) et non
 une valeur copiée en dur, pour ne jamais reproduire ce risque.
 
+## Bug de contenu trouvé et corrigé : classement des questions par processus (228 fins vs 15 canoniques)
+
+En testant le parcours utilisateur réel sur l'environnement de test (choix
+d'un processus au démarrage d'un audit), aucune question ne s'affichait
+sauf pour "Documentation technique". L'utilisateur a fourni un dossier
+consolidé (`DOSSIERCONSOLIDEQARA.md`) et un kit contenant
+`process_mapping_228_to_15.json` (table de correspondance déjà préparée,
+228 intitulés fins du corpus → l'une des 15 catégories canoniques de
+`server/processes-catalog.ts`).
+
+**Cause** : `import-corpus.mjs` reliait `questions.processId` aux 228
+intitulés fins du corpus en créant une nouvelle ligne `processus` par
+intitulé (matching mot-à-mot), au lieu de rattacher chaque question à
+l'une des 15 catégories que l'application propose au démarrage d'un audit.
+Résultat : 472 questions sur 473 pointaient vers des catégories "fantômes"
+invisibles du filtrage.
+
+**En creusant, un second bug plus profond et antérieur à cette mission a
+été découvert** : la migration `0007_create_referentiels_and_processus.sql`
+censée créer les processus canoniques 1-10 modifie, dans le même fichier/
+transaction, des tables (`audits`, `mdr_role_qualifications`) qui n'existent
+pas encore à ce stade de l'ordre des migrations (créées juste après par
+`0007b_baseline_core_tables.sql`). Sur une base neuve, ces `UPDATE` échouent
+(`ER_NO_SUCH_TABLE`), toute la transaction du fichier est annulée — y
+compris l'insertion des processus 1-10 faite plus tôt dans le même fichier
+— mais l'erreur est absorbée comme "ignorable" et le hash de la migration
+marqué "appliqué" quand même (elle ne se rejoue donc jamais). **Les
+processus canoniques 1-10 n'ont donc jamais existé dans aucun
+environnement** (seuls 11-15 existent, créés séparément sans risque par
+`0010_processus_unify_15.sql`). Reproduit et confirmé sur une base neuve en
+local avant correction.
+
+**Fix appliqué** (3 changements, tous vérifiés de bout en bout en local) :
+1. `drizzle/migrations/0024_reseed_canonical_processus_1_10.sql` — réamorce
+   les processus 1-10 (upsert par id, ne touche que la table `processus`,
+   aucun risque de rollback lié à une autre table).
+2. `drizzle/migrations/0023_add_process_detail_column.sql` +
+   `drizzle/schema.ts` — nouvelle colonne `questions.processDetail` pour
+   conserver l'intitulé fin du corpus séparément du `processId` canonique
+   (rien n'est perdu).
+3. `scripts/import-corpus.mjs` — charge
+   `scripts/process_mapping_228_to_15.json`, résout chaque `processName` du
+   corpus vers l'une des 15 catégories canoniques (erreur explicite si un
+   intitulé n'est pas dans le mapping, au lieu de créer une catégorie
+   fantôme silencieusement), et nettoie en fin d'import les processus
+   fantômes hérités des anciens imports (plus aucune question ne les
+   référence).
+
+**Vérifié par reproduction locale bout en bout** :
+- Base neuve + migrations 0000-0024 → les 15 processus canoniques existent
+  tous avec le bon nom/slug → import → **473/473, 0 sans processId**,
+  répartition sur les 15 catégories exactement conforme au mapping fourni
+  (ex. QMS: 44, Gestion des risques: 56, Documentation technique: 3...).
+- État corrompu simulé (232 processus fantômes hérités d'anciens imports,
+  processus 1-10 manquants comme sur l'environnement réel) → migrations →
+  import → **227 processus fantômes supprimés automatiquement, seuls les
+  15 canoniques restent, 473/473 correctement répartis**.
+- Réimport (idempotent) : distribution finale inchangée.
+- Suite de tests backend : 70/70.
+
+**Fichiers de référence ajoutés au dépôt** :
+`scripts/process_mapping_228_to_15.json` (utilisé par le script),
+`docs/audit/mapping_processus.csv` (version lisible pour relecture humaine).
+
+**Point de vigilance pour l'avenir** : si de nouvelles questions sont
+ajoutées au corpus avec un nouvel intitulé fin de processus non présent
+dans le mapping, l'import échouera désormais explicitement (au lieu de
+créer silencieusement une catégorie fantôme) — il faudra alors ajouter
+l'entrée correspondante dans `scripts/process_mapping_228_to_15.json`.
+
 ## PROCHAINE ÉTAPE
 
 **T1 confirmé réussi** (voir logs du 2026-07-06 15:38-15:41 : migration 0022

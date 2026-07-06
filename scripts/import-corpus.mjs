@@ -25,6 +25,7 @@ import mysql from "mysql2/promise";
 import { eq } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { referentiels, processus, questions } from "../drizzle/schema.ts";
+import { CANONICAL_PROCESSES } from "../server/processes-catalog.ts";
 
 const REFS = [
   { code: "MDR", name: "Règlement (UE) 2017/745 (MDR)", type: "regulation" },
@@ -122,37 +123,57 @@ async function runImport(conn) {
     }
   }
 
-  // 2) Processus : table PARTAGÉE entre référentiels (pas de colonne referentialId
-  //    dans le schéma actuel — voir drizzle/schema.ts). On matche/crée par nom
-  //    uniquement, cohérent avec le modèle des 15 processus canoniques déjà en place.
-  const procIdByName = {};
+  // 2) Processus : table PARTAGÉE entre référentiels, limitée aux 15 catégories
+  //    canoniques (server/processes-catalog.ts). Le corpus classe ses questions
+  //    en 228 intitulés fins (row.processName) — un matching mot-à-mot contre les
+  //    15 catégories créait des dizaines de processus "fantômes" (une seule
+  //    correspondance exacte sur 228), rendant le filtrage par processus de
+  //    l'audit inopérant pour 472 questions sur 473 (voir
+  //    docs/audit/ETAT-DES-LIEUX-mission5-deploiement-complet.md §7).
+  //    scripts/process_mapping_228_to_15.json résout chaque intitulé fin vers
+  //    l'une des 15 catégories ; l'intitulé fin lui-même est conservé dans
+  //    questions.processDetail (migration 0023) pour ne rien perdre.
+  const processMapping = JSON.parse(
+    readFileSync(new URL("./process_mapping_228_to_15.json", import.meta.url))
+  );
+
   const existingProcesses = await db.select().from(processus);
+  const procIdByName = {};
   for (const p of existingProcesses) procIdByName[p.name] = p.id;
 
-  for (const row of rows) {
-    if (!row.processName || procIdByName[row.processName] !== undefined) continue;
-    const slug = row.processName
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 250);
-    const [res] = await conn.execute(
-      "INSERT INTO processus (slug, name, createdAt, updatedAt) VALUES (?, ?, NOW(), NOW())",
-      [slug, row.processName]
-    );
-    procIdByName[row.processName] = res.insertId;
+  const procIdByCanonicalId = {};
+  for (const c of CANONICAL_PROCESSES) {
+    const pid = procIdByName[c.name];
+    if (pid === undefined) {
+      throw new Error(
+        `Processus canonique introuvable en base : "${c.name}" (id="${c.id}"). ` +
+          `Vérifier que les migrations 0007/0012 (seed des 15 processus canoniques) sont bien appliquées.`
+      );
+    }
+    procIdByCanonicalId[c.id] = pid;
   }
 
   // 3) Questions (upsert par questionKey)
   let inserted = 0, updated = 0;
   for (const row of rows) {
     const refId = refIdByCode[row.referentialCode];
-    const pid = row.processName ? (procIdByName[row.processName] ?? null) : null;
+
+    let pid = null;
+    if (row.processName) {
+      const canonicalId = processMapping[row.processName];
+      if (!canonicalId) {
+        throw new Error(
+          `Intitulé de processus absent du mapping : "${row.processName}" (question ${row.questionKey}). ` +
+            `Ajouter une entrée dans scripts/process_mapping_228_to_15.json avant de réimporter.`
+        );
+      }
+      pid = procIdByCanonicalId[canonicalId] ?? null;
+    }
+
     const values = {
       referentialId: refId,
       processId: pid,
+      processDetail: row.processName || null,
       questionKey: row.questionKey,
       article: row.article || null,
       annexe: row.annexe || null,
@@ -190,5 +211,20 @@ async function runImport(conn) {
   }
 
   console.log(`Import terminé : ${inserted} insérées, ${updated} mises à jour, sur ${rows.length}.`);
+
+  // 4) Nettoyage des processus "fantômes" créés par d'anciennes exécutions de ce
+  //    script (avant le mapping vers les 15 catégories canoniques) : plus aucune
+  //    question n'y référence désormais, sûr de les supprimer.
+  const canonicalIds = Object.values(procIdByCanonicalId);
+  const [orphans] = await conn.query(
+    `SELECT id FROM processus WHERE id NOT IN (${canonicalIds.map(() => "?").join(",")})
+       AND id NOT IN (SELECT DISTINCT processId FROM questions WHERE processId IS NOT NULL)`,
+    canonicalIds
+  );
+  if (orphans.length > 0) {
+    const ids = orphans.map((o) => o.id);
+    console.log(`[CLEANUP] Suppression de ${ids.length} processus fantômes non référencés (ids: ${ids.slice(0, 10).join(", ")}${ids.length > 10 ? "..." : ""})...`);
+    await conn.query(`DELETE FROM processus WHERE id IN (${ids.map(() => "?").join(",")})`, ids);
+  }
 }
 main().catch((e) => { console.error(e); process.exit(1); });

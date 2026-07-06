@@ -227,6 +227,9 @@ export const questions = mysqlTable("questions", {
 
   referentialId: int("referentialId"),
   processId: int("processId"),
+  // Intitulé fin du processus du corpus (228 valeurs), distinct de processId
+  // qui référence l'une des 15 catégories canoniques — voir migration 0023.
+  processDetail: varchar("processDetail", { length: 255 }),
 
   questionKey: varchar("questionKey", { length: 255 }),
   article: varchar("article", { length: 255 }),

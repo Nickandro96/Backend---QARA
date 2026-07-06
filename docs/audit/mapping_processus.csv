@@ -1,0 +1,229 @@
+intitule_fin_corpus,categorie_id,categorie_nom,nb_questions
+Action corrective,audits_conformity,Audits & conformité,2
+Action préventive,audits_conformity,Audits & conformité,2
+Amélioration,audits_conformity,Audits & conformité,2
+Amélioration continue,audits_conformity,Audits & conformité,1
+Analyse des données,audits_conformity,Audits & conformité,3
+Certificats ON,audits_conformity,Audits & conformité,1
+Conformity assessment,audits_conformity,Audits & conformité,2
+Conformity assessment IVDR,audits_conformity,Audits & conformité,2
+Déclaration UE conformité IVDR,audits_conformity,Audits & conformité,2
+Déclaration UE de conformité,audits_conformity,Audits & conformité,2
+Examen type UE IVDR,audits_conformity,Audits & conformité,1
+Intervention ON,audits_conformity,Audits & conformité,1
+Marquage CE,audits_conformity,Audits & conformité,2
+Marquage CE IVDR,audits_conformity,Audits & conformité,2
+"Measurement, Analysis and Improvement",audits_conformity,Audits & conformité,12
+NC Grading,audits_conformity,Audits & conformité,1
+Non-conformité et action corrective,audits_conformity,Audits & conformité,2
+Ressources de surveillance et mesure,audits_conformity,Audits & conformité,1
+Revue de direction,audits_conformity,Audits & conformité,4
+Surveillance et mesure,audits_conformity,Audits & conformité,2
+Évaluation conformité SMQ,audits_conformity,Audits & conformité,2
+Évaluation conformité SMQ IVDR,audits_conformity,Audits & conformité,2
+Carte implant,design_dev,Conception & développement,1
+Conception et développement,design_dev,Conception & développement,3
+Design and Development,design_dev,Conception & développement,15
+Design change→submission,design_dev,Conception & développement,2
+Dispositifs stériles,design_dev,Conception & développement,3
+Dispositifs sur mesure,design_dev,Conception & développement,1
+Documentation performance,design_dev,Conception & développement,3
+Dossier conception,design_dev,Conception & développement,2
+Entrées conception,design_dev,Conception & développement,2
+Exigences produit,design_dev,Conception & développement,1
+GSPR conception/fabrication,design_dev,Conception & développement,2
+GSPR performance/conception IVD,design_dev,Conception & développement,3
+Investigations cliniques,design_dev,Conception & développement,3
+Modifications conception,design_dev,Conception & développement,2
+Performance evaluation,design_dev,Conception & développement,3
+Planification conception,design_dev,Conception & développement,2
+Revue exigences,design_dev,Conception & développement,1
+Revues conception,design_dev,Conception & développement,2
+Réalisation produit,design_dev,Conception & développement,3
+SSCP,design_dev,Conception & développement,3
+Sorties conception,design_dev,Conception & développement,2
+Systèmes et nécessaires,design_dev,Conception & développement,1
+Transfert conception,design_dev,Conception & développement,2
+Validation conception,design_dev,Conception & développement,3
+Validation procédés,design_dev,Conception & développement,3
+Validation stérilisation,design_dev,Conception & développement,3
+Vérification conception,design_dev,Conception & développement,2
+Études de performance,design_dev,Conception & développement,2
+Évaluation clinique,design_dev,Conception & développement,3
+Distributeur,distribution_logistics,Distribution & logistique,2
+Distributeur IVDR,distribution_logistics,Distribution & logistique,2
+Relabelling/repackaging,distribution_logistics,Distribution & logistique,2
+Relabelling/repackaging IVDR,distribution_logistics,Distribution & logistique,2
+Contexte de l’organisme,gov_strat,Gouvernance & stratégie réglementaire,1
+Engagement direction,gov_strat,Gouvernance & stratégie réglementaire,1
+Leadership,gov_strat,Gouvernance & stratégie réglementaire,1
+Management,gov_strat,Gouvernance & stratégie réglementaire,12
+Orientation client/réglementaire,gov_strat,Gouvernance & stratégie réglementaire,1
+Parties intéressées,gov_strat,Gouvernance & stratégie réglementaire,1
+Process Linkage,gov_strat,Gouvernance & stratégie réglementaire,1
+Foreign establishment/importer,importation,Importation,1
+Importateur,importation,Importation,2
+Importateur IVDR,importation,Importation,1
+Lien risques-logiciel,it_data_cybersecurity,IT / données / cybersécurité,3
+Software/Cybersecurity,it_data_cybersecurity,IT / données / cybersécurité,3
+Actions post-production,pms_pmcf,PMS / PMCF,3
+Documentation PMS,pms_pmcf,PMS / PMCF,3
+Documentation PMS IVDR,pms_pmcf,PMS / PMCF,3
+Feedback,pms_pmcf,PMS / PMCF,1
+Lien risques-PMS-CAPA,pms_pmcf,PMS / PMCF,3
+PMS,pms_pmcf,PMS / PMCF,3
+PMS IVDR,pms_pmcf,PMS / PMCF,3
+PSUR,pms_pmcf,PMS / PMCF,1
+PSUR IVDR,pms_pmcf,PMS / PMCF,1
+Plan PMS,pms_pmcf,PMS / PMCF,3
+Plan PMS IVDR,pms_pmcf,PMS / PMCF,3
+Production et post-production,pms_pmcf,PMS / PMCF,2
+Rapport PMS,pms_pmcf,PMS / PMCF,3
+Rapport PMS IVDR,pms_pmcf,PMS / PMCF,3
+Revue des informations post-production,pms_pmcf,PMS / PMCF,3
+Surveillance marché,pms_pmcf,PMS / PMCF,1
+Surveillance marché IVDR,pms_pmcf,PMS / PMCF,1
+Assurance qualité production,production_sub,Production & sous-traitance,1
+Assurance qualité production IVDR,production_sub,Production & sous-traitance,1
+Environnement de travail,production_sub,Production & sous-traitance,1
+Environnement opérationnel,production_sub,Production & sous-traitance,1
+Infrastructure,production_sub,Production & sous-traitance,3
+Installation,production_sub,Production & sous-traitance,1
+Libération,production_sub,Production & sous-traitance,1
+Production and Service Controls,production_sub,Production & sous-traitance,8
+Production et prestation,production_sub,Production & sous-traitance,1
+Production/service,production_sub,Production & sous-traitance,1
+Produit non conforme,production_sub,Production & sous-traitance,1
+Propreté produit,production_sub,Production & sous-traitance,1
+Préservation produit,production_sub,Production & sous-traitance,2
+Service après-vente,production_sub,Production & sous-traitance,1
+Sorties non conformes,production_sub,Production & sous-traitance,1
+Surveillance processus,production_sub,Production & sous-traitance,1
+Surveillance produit,production_sub,Production & sous-traitance,1
+Équipements mesure,production_sub,Production & sous-traitance,1
+Achats,purchasing_suppliers,Achats & fournisseurs,2
+Informations d’achat,purchasing_suppliers,Achats & fournisseurs,2
+Prestataires externes,purchasing_suppliers,Achats & fournisseurs,2
+Processus externalisés,purchasing_suppliers,Achats & fournisseurs,2
+Propriété client,purchasing_suppliers,Achats & fournisseurs,2
+Purchasing,purchasing_suppliers,Achats & fournisseurs,7
+Supplier/QMSR,purchasing_suppliers,Achats & fournisseurs,2
+Vérification achat,purchasing_suppliers,Achats & fournisseurs,1
+Applicabilité QMSR,qms,Système de management qualité (QMS),1
+Changements SMQ,qms,Système de management qualité (QMS),1
+Clarification de concepts,qms,Système de management qualité (QMS),2
+Communication,qms,Système de management qualité (QMS),1
+Communication client,qms,Système de management qualité (QMS),2
+Communication interne,qms,Système de management qualité (QMS),1
+Compétence,qms,Système de management qualité (QMS),1
+Connaissances organisationnelles,qms,Système de management qualité (QMS),1
+Control of records,qms,Système de management qualité (QMS),1
+Documentation SMQ,qms,Système de management qualité (QMS),1
+Définitions QMSR,qms,Système de management qualité (QMS),1
+Exigences clients,qms,Système de management qualité (QMS),1
+Incorporation ISO 13485,qms,Système de management qualité (QMS),1
+Informations documentées,qms,Système de management qualité (QMS),1
+Manuel qualité,qms,Système de management qualité (QMS),1
+Maîtrise documentaire,qms,Système de management qualité (QMS),1
+Objectifs qualité,qms,Système de management qualité (QMS),1
+Objectifs qualité DM,qms,Système de management qualité (QMS),1
+Personnel,qms,Système de management qualité (QMS),1
+Planification SMQ,qms,Système de management qualité (QMS),1
+Planification opérationnelle,qms,Système de management qualité (QMS),1
+Politique qualité,qms,Système de management qualité (QMS),1
+Politique qualité DM,qms,Système de management qualité (QMS),1
+Processus SMQ,qms,Système de management qualité (QMS),1
+Périmètre du SMQ,qms,Système de management qualité (QMS),1
+Représentant direction,qms,Système de management qualité (QMS),1
+Responsabilités,qms,Système de management qualité (QMS),1
+Ressources,qms,Système de management qualité (QMS),1
+Ressources générales,qms,Système de management qualité (QMS),1
+Ressources humaines,qms,Système de management qualité (QMS),2
+Rôles et responsabilités,qms,Système de management qualité (QMS),1
+SMQ fabricant IVDR,qms,Système de management qualité (QMS),3
+SMQ fabricant MDR,qms,Système de management qualité (QMS),3
+SMQ médical,qms,Système de management qualité (QMS),1
+Satisfaction client,qms,Système de management qualité (QMS),1
+Sensibilisation,qms,Système de management qualité (QMS),1
+Système qualité QMSR,qms,Système de management qualité (QMS),1
+510(k),ra,Affaires réglementaires (RA),2
+Classification,ra,Affaires réglementaires (RA),1
+Classification IVD,ra,Affaires réglementaires (RA),1
+Country-specific requirements,ra,Affaires réglementaires (RA),2
+De Novo,ra,Affaires réglementaires (RA),3
+Device Marketing Authorization and Facility Registration,ra,Affaires réglementaires (RA),6
+Device labeling and packaging controls,ra,Affaires réglementaires (RA),1
+Enregistrement dispositifs,ra,Affaires réglementaires (RA),1
+Enregistrement dispositifs IVD,ra,Affaires réglementaires (RA),1
+Enregistrement opérateurs,ra,Affaires réglementaires (RA),1
+Enregistrement opérateurs IVDR,ra,Affaires réglementaires (RA),1
+GSPR IVD général,ra,Affaires réglementaires (RA),3
+GSPR général,ra,Affaires réglementaires (RA),3
+GSPR information utilisateur,ra,Affaires réglementaires (RA),2
+GSPR information utilisateur IVD,ra,Affaires réglementaires (RA),2
+Labeling,ra,Affaires réglementaires (RA),1
+Mandataire,ra,Affaires réglementaires (RA),1
+Mandataire IVDR,ra,Affaires réglementaires (RA),1
+Maîtrise des enregistrements,ra,Affaires réglementaires (RA),1
+Mise sur le marché,ra,Affaires réglementaires (RA),1
+Mise sur le marché IVD,ra,Affaires réglementaires (RA),1
+Obligations fabricant,ra,Affaires réglementaires (RA),3
+Obligations fabricant IVD,ra,Affaires réglementaires (RA),3
+PMA,ra,Affaires réglementaires (RA),1
+PRRC,ra,Affaires réglementaires (RA),2
+PRRC IVDR,ra,Affaires réglementaires (RA),2
+Records non-reportable corrections,ra,Affaires réglementaires (RA),1
+Registration and listing,ra,Affaires réglementaires (RA),2
+Responsabilité produit,ra,Affaires réglementaires (RA),3
+Règles classification,ra,Affaires réglementaires (RA),1
+Règles classification IVDR,ra,Affaires réglementaires (RA),1
+Analyse bénéfice-risque,risk_mgmt,Gestion des risques (ISO 14971),3
+Analyse des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Analyse options de maîtrise,risk_mgmt,Gestion des risques (ISO 14971),3
+Caractéristiques sécurité,risk_mgmt,Gestion des risques (ISO 14971),1
+Complétude maîtrise,risk_mgmt,Gestion des risques (ISO 14971),1
+Compétence risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Dangers et situations dangereuses,risk_mgmt,Gestion des risques (ISO 14971),1
+Dossier de gestion des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Estimation des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Lien risques-utilisabilité,risk_mgmt,Gestion des risques (ISO 14971),3
+Maîtrise des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Mise en œuvre contrôles,risk_mgmt,Gestion des risques (ISO 14971),1
+Plan de gestion des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Processus gestion des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Responsabilités direction risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Revue gestion des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Risque résiduel global,risk_mgmt,Gestion des risques (ISO 14971),3
+Risques et opportunités,risk_mgmt,Gestion des risques (ISO 14971),3
+Risques issus des contrôles,risk_mgmt,Gestion des risques (ISO 14971),3
+Résidu de risque individuel,risk_mgmt,Gestion des risques (ISO 14971),3
+Usage prévu,risk_mgmt,Gestion des risques (ISO 14971),1
+Évaluation des risques,risk_mgmt,Gestion des risques (ISO 14971),3
+Documentation technique,tech_doc,Documentation technique,1
+Documentation technique IVDR,tech_doc,Documentation technique,1
+Dossier dispositif médical,tech_doc,Documentation technique,1
+Audit interne,traceability_udi,Traçabilité / UDI,5
+Identification,traceability_udi,Traçabilité / UDI,1
+New Device Identifier,traceability_udi,Traçabilité / UDI,1
+Performance studies IVDR,traceability_udi,Traçabilité / UDI,2
+Traçabilité,traceability_udi,Traçabilité / UDI,2
+Traçabilité chaîne d’approvisionnement,traceability_udi,Traçabilité / UDI,2
+UDI,traceability_udi,Traçabilité / UDI,2
+UDI IVDR,traceability_udi,Traçabilité / UDI,2
+UDI Label,traceability_udi,Traçabilité / UDI,2
+UDI System,traceability_udi,Traçabilité / UDI,2
+Analyse incidents/FSCA,vigilance_incidents,Vigilance & incidents,3
+Analyse incidents/FSCA IVDR,vigilance_incidents,Vigilance & incidents,3
+Complaint→MDR→CAPA,vigilance_incidents,Vigilance & incidents,3
+Corrections and removals,vigilance_incidents,Vigilance & incidents,3
+Medical Device Adverse Events and Advisory Notices Reporting,vigilance_incidents,Vigilance & incidents,10
+Medical Device Reporting,vigilance_incidents,Vigilance & incidents,2
+Procédure MDR reporting,vigilance_incidents,Vigilance & incidents,2
+Report corrections/removals,vigilance_incidents,Vigilance & incidents,1
+Reporting fabricant,vigilance_incidents,Vigilance & incidents,1
+Réclamations,vigilance_incidents,Vigilance & incidents,2
+Signalement autorités,vigilance_incidents,Vigilance & incidents,1
+Trend reporting,vigilance_incidents,Vigilance & incidents,3
+Trend reporting IVDR,vigilance_incidents,Vigilance & incidents,1
+Vigilance IVDR,vigilance_incidents,Vigilance & incidents,3
+Vigilance incidents graves/FSCA,vigilance_incidents,Vigilance & incidents,3
