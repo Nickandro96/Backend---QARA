@@ -467,6 +467,53 @@ déploiement réussi — voir instructions ci-dessous.
 
 Vérifié : `npm test` 70/70 après l'ajout du script `release`.
 
+## Rechute #5 (nouveaux logs) : confirme que la Start Command n'a pas encore été changée — pas un bug de code
+
+Nouveaux logs partagés par l'utilisateur : même erreur `ER_NO_REFERENCED_ROW_2`
+sur `referentialId=5` / `Q-13485-SM-2399`, identique à chaque tentative,
+tentatives espacées de 2-5 secondes, `[RESET] ...` présent à chaque fois,
+blocs `Found migrations: [...]` toujours entrelacés entre eux.
+
+L'utilisateur a proposé sa propre théorie : `import-corpus.mjs`
+« suppose des IDs numériques stables » pour les référentiels et devrait
+faire un lookup dynamique par clé métier au lieu d'un id « en dur ».
+
+**Vérifié sur le code réel — théorie écartée** : `import-corpus.mjs` ne
+contient aucun id numérique littéral. L'étape 1 (§ « Référentiels ») construit
+`refIdByCode` à l'exécution, uniquement à partir de résultats réels
+(`existing[0].id` si la ligne existe déjà, sinon `res.insertId` juste après
+l'`INSERT`) :
+```js
+const existing = await db.select().from(referentiels).where(eq(referentiels.code, r.code));
+if (existing.length) {
+  refIdByCode[r.code] = existing[0].id;
+  ...
+} else {
+  const [res] = await conn.execute("INSERT INTO referentiels ...");
+  refIdByCode[r.code] = res.insertId;
+}
+```
+L'étape 3 (insertion des questions) ne fait que relire cette map :
+`const refId = refIdByCode[row.referentialCode];` — c'est déjà exactement le
+lookup dynamique par clé métier proposé. Le "5" qui apparaît dans l'erreur
+n'est donc pas une constante du script : c'est l'id réellement obtenu pour
+`ISO13485` **pendant cette exécution précise**. S'il n'existe plus au moment
+de l'`INSERT` de la question, la seule explication possible est qu'un
+**autre processus concurrent** a fait un `TRUNCATE referentiels` entre le
+moment où ce processus a résolu l'id 5 et le moment où il a essayé de s'en
+servir — donc toujours le même phénomène de fond que les rechutes #2 et #4
+(plusieurs conteneurs/tentatives qui tournent en même temps), pas un
+nouveau bug de logique. Aucune modification de `import-corpus.mjs` jugée
+nécessaire à ce stade.
+
+Les blocs `Found migrations` toujours entrelacés + tentatives toutes les
+2-5 secondes sont la preuve directe que la **Start Command personnalisée
+tourne toujours** sur Railway (elle seule peut relancer toute la chaîne à
+chaque redémarrage/tentative de conteneur) — donc que l'étape 1 de la
+section "PROCHAINE ÉTAPE" (basculer vers Release Command) n'a pas encore
+été appliquée dans le dashboard. C'est l'action prioritaire, avant toute
+nouvelle conclusion tirée des logs.
+
 ## PROCHAINE ÉTAPE
 
 Donner à l'utilisateur les instructions précises pour basculer sur le
