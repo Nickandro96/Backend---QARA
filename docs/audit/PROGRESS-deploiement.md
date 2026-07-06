@@ -562,6 +562,51 @@ tests backend : 70/70 (le premier run avait semblé bloqué à cause d'une
 variable `DATABASE_URL` restée pointée sur la base de test locale dans le
 shell — sans rapport avec le fix, résolu en relançant dans un shell propre).
 
+## Incident critique découvert et résolu : `DATABASE_URL` du backend de test pointait vers la base de PRODUCTION
+
+Une fois le déploiement réussi (T1), en vérifiant les données via le
+dashboard Railway, la table `questions` du service `MySQL-vr64` (service
+MySQL de l'environnement `New Claude`) apparaissait vide — alors que les
+logs venaient de confirmer un import réussi de 473 lignes. Investigation :
+
+- `MySQL-vr64` (Connect → Public Network) : hôte `turntable.proxy.rlwy.net:32678`.
+- Le backend (`Backend---QARA`, variable `DATABASE_URL`) : hôte
+  `metro.proxy.rlwy.net:17616` — **différent**.
+- Vérifié en ouvrant l'environnement `production` : son service MySQL a
+  exactement pour hôte `metro.proxy.rlwy.net:17616/railway` — **confirmé
+  identique**.
+
+**Conclusion** : `DATABASE_URL` (et `MYSQL_PUBLIC_URL`) du service backend
+de `New Claude` étaient définies en dur avec une valeur copiée pointant
+vers la base de production, au lieu d'une référence Railway automatique
+vers le service MySQL de cet environnement. Conséquence : toutes les
+opérations de cette mission de déploiement (migrations 0000-0022, et
+surtout les `TRUNCATE questions`/`referentiels` + réimport du corpus 473
+questions, répétés à chaque tentative du crash-loop) **se sont exécutées
+contre la base de production**, pas contre une base de test isolée.
+
+**Impact évalué avec l'utilisateur** : la production était encore en phase
+de test, sans audits/réponses utilisateur réels — donc pas de rupture de
+lien `audit_responses.questionId` ↔ `questions.id` (le risque identifié
+plus tôt dans la session, voir section Release Command, ne s'est pas
+concrétisé). Le remplacement du contenu `questions`/`referentiels`
+correspond de toute façon à une décision déjà validée (`docs/audit/07-import-corpus.md`,
+remplacement complet MDR/FDA) — déclenchée plus tôt que prévu et par un
+autre chemin, mais sans perte de contenu métier légitime. Décision : pas de
+restauration depuis une sauvegarde jugée nécessaire.
+
+**Fix appliqué** : l'utilisateur a corrigé `DATABASE_URL`/`MYSQL_PUBLIC_URL`
+du service backend de test pour pointer vers `MySQL-vr64`
+(`turntable.proxy.rlwy.net:32678/railway`) et redéployé — confirmé : la
+table `questions` de `MySQL-vr64` contient maintenant bien les données.
+Plus aucun risque d'écriture supplémentaire vers la production depuis ce
+service de test.
+
+**Point de vigilance pour la suite** : toujours vérifier, pour tout
+prochain déploiement/service, que les variables `DATABASE_URL`/`MYSQL_*`
+utilisent bien une référence Railway (`${{NomDuService.VARIABLE}}`) et non
+une valeur copiée en dur, pour ne jamais reproduire ce risque.
+
 ## PROCHAINE ÉTAPE
 
 **T1 confirmé réussi** (voir logs du 2026-07-06 15:38-15:41 : migration 0022
