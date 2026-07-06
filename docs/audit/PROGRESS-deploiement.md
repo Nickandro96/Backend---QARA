@@ -291,6 +291,35 @@ une base neuve → avec le fix, les deux terminent avec succès (exit 0),
 sérialisés par le verrou ; état final = 473 questions, aucun `referentiels.code`
 en double. Suite de tests backend repassée : 70/70, aucune régression.
 
+## Rechute après le fix #2 : état déjà corrompu, pas une nouvelle race
+
+Après avoir poussé le verrou anti-concurrence, le redéploiement a rechuté
+**exactement** sur la même erreur (`referentialId=8` inexistant), à chaque
+tentative du crash-loop Railway, de façon parfaitement déterministe.
+
+**Diagnostic** : le verrou empêche une *nouvelle* corruption, mais ne répare
+pas une base déjà dans un état incohérent (référentiels dupliqués/orphelins
+créés par les tentatives concurrentes d'AVANT le fix). Reproduit
+localement : une base fraîche + import unique réussit toujours (473/473,
+vérifié à nouveau) ; en simulant volontairement l'état corrompu observé sur
+Railway (un `questions.referentialId` pointant vers un id de `referentiels`
+supprimé), la ré-exécution du seul `import-corpus.mjs` échoue bien avec la
+même erreur — confirmant que c'est l'état des données, pas une nouvelle
+race, qui bloque.
+
+**Fix** : nouveau script `scripts/reset-corpus-tables.mjs` — vide
+(`TRUNCATE`, compteurs auto_increment remis à zéro) uniquement les tables
+`questions` et `referentiels` (aucune autre table n'a de FK entrante vers
+celles-ci), à lancer une seule fois avant le réimport pour repartir d'un
+état propre. Choisi plutôt que de demander à l'utilisateur de supprimer/
+recréer le service MySQL dans le dashboard Railway (plus simple, plus
+fiable, ne dépend pas de trouver le bon bouton dans l'UI).
+
+**Vérifié par reproduction locale** : état corrompu simulé (même symptôme
+exact que le log Railway) → `reset-corpus-tables.mjs` puis `import-corpus.mjs`
+→ 473 questions, 7 référentiels avec des ids propres 1-7, aucune erreur.
+Suite de tests backend : 70/70.
+
 ## PROCHAINE ÉTAPE
 
 Donner à l'utilisateur les instructions précises pour :
@@ -298,13 +327,14 @@ Donner à l'utilisateur les instructions précises pour :
    dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
    probablement auto-injectée par Railway entre les deux services du même
    environnement — à confirmer).
-2. Définir temporairement la commande de démarrage personnalisée
-   ci-dessus (Settings → Deploy → Custom Start Command) sur le service
-   backend de `New Claude`.
-3. Redéployer avec le fix (verrou anti-concurrence) qui vient d'être poussé,
-   observer les logs (doivent montrer les migrations puis l'import du
-   corpus — 473 au total entre insérées/mises à jour — puis "Server
-   listening on port...").
+2. Définir la commande de démarrage personnalisée temporaire (mise à jour,
+   inclut maintenant l'étape de reset) sur le service backend de
+   `New Claude` (Settings → Deploy → Custom Start Command) :
+   `npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/reset-corpus-tables.mjs && npx tsx scripts/import-corpus.mjs && node dist/index.js`
+3. Redéployer, observer les logs (doivent montrer les migrations, puis
+   "Tables questions/referentiels réinitialisées...", puis l'import du
+   corpus — 473 insérées, 0 mises à jour — puis "Server listening on
+   port...").
 4. Une fois confirmé, remettre la commande de démarrage normale
-   (`node dist/index.js`) — les scripts n'ont besoin de tourner qu'une
-   fois (idempotents, mais pas la peine de les relancer à chaque boot).
+   (`node dist/index.js`) — le reset+import n'a besoin de tourner qu'une
+   fois, pas à chaque boot futur.
