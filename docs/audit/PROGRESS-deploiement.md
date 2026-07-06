@@ -420,31 +420,73 @@ reset), les deux ont été faites :
 npx tsx scripts/apply-sql-migrations.ts && RESET_BEFORE_IMPORT=1 npx tsx scripts/import-corpus.mjs && node dist/index.js
 ```
 
+## Adoption de la fonctionnalité Railway "Release Command"
+
+Un tiers consulté par l'utilisateur a proposé d'utiliser la fonctionnalité
+native Railway "Release Command" plutôt que de brancher la préparation de
+base de données sur la commande de démarrage elle-même. Analysé, jugé
+supérieur à toutes les options précédentes (garantit une exécution unique
+et bloque le démarrage du vrai serveur tant que la commande n'a pas réussi
+— élimine la concurrence par construction, pas seulement par verrou) :
+adopté.
+
+**Deux bugs identifiés et corrigés dans le code proposé par ce tiers avant
+adoption** (voir échange avec l'utilisateur) : table `referentials` au lieu
+de `referentiels` (le nom réel de la table dans ce projet — même piège que
+la section 5.4 du document de diagnostic), et un nom de verrou MySQL
+différent de celui déjà utilisé dans `import-corpus.mjs` (`qara_corpus_reset_lock`
+vs `qara_import_corpus` — deux verrous distincts ne s'excluent pas
+mutuellement, ça n'aurait pas fermé la race). Le fix déjà en place (fusion
+reset+import sous UN seul verrou, voir "Fix #4" ci-dessus) reste la bonne
+version.
+
+**Risque identifié et écarté de la solution permanente** : ne PAS inclure
+le vidage (`RESET_BEFORE_IMPORT=1` / `reset-corpus-tables.mjs`) dans le
+script `release` de façon permanente. `TRUNCATE` remet à zéro les
+compteurs auto_increment, donc chaque réimport futur donnerait de
+nouveaux ids numériques aux questions. Vérifié dans le code :
+`server/report-generator.ts:114` fait une jointure sur l'id numérique
+(`auditResponses.questionId` ↔ `questions.id`) — un vidage+réimport
+répété casserait silencieusement cette jointure pour tout audit déjà
+répondu, dès que la base contiendra de vraies données utilisateur (la
+plupart des autres accès utilisent `questionKey`, une chaîne stable, qui ne
+serait pas affectée). Ce risque ne concerne pas l'état actuel (base de test
+encore sans données utilisateur réelles), mais concernerait tout
+déploiement futur si le vidage restait permanent dans le script `release`.
+
+**Décision retenue** : `package.json` reçoit un script `release` **sans**
+le vidage, permanent et sûr à rejouer indéfiniment (idempotent par
+upsert) :
+```json
+"release": "npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/import-corpus.mjs"
+```
+Le nettoyage ponctuel de l'état actuellement corrompu se fait via une
+variable d'environnement **temporaire** `RESET_BEFORE_IMPORT=1` sur le
+service Railway (pas dans le script), à retirer après le premier
+déploiement réussi — voir instructions ci-dessous.
+
+Vérifié : `npm test` 70/70 après l'ajout du script `release`.
+
 ## PROCHAINE ÉTAPE
 
-Donner à l'utilisateur la nouvelle commande de démarrage ci-dessus,
-redéployer, observer les logs (migrations, puis `[RESET] ...`, puis
-`Import terminé : 473 insérées, 0 mises à jour, sur 473.`, puis enfin
-`Server listening on port...` — cette dernière ligne n'est encore jamais
-apparue dans aucun log jusqu'ici, donc c'est le signal de succès à
-confirmer).
-
-Une fois confirmé (recommandation inchangée du document de diagnostic,
-§6.1) :
-1. Vérifier/compléter les variables d'environnement du service backend
-   dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
-   probablement auto-injectée par Railway entre les deux services du même
-   environnement — à confirmer).
-2. Le service backend a déjà la bonne commande de démarrage personnalisée
-   (Settings → Deploy → Custom Start Command) :
-   `npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/reset-corpus-tables.mjs && npx tsx scripts/import-corpus.mjs && node dist/index.js`
-   — pas de changement nécessaire cette fois, juste redéployer avec le
-   dernier commit (migration 0021 incluse).
-3. Redéployer, observer les logs (doivent montrer les migrations — avec
-   cette fois `0021_fix_criticality_column_type.sql` qui s'applique
-   réellement (pas "already applied") —, puis le reset, puis l'import du
-   corpus — 473 insérées, 0 mises à jour — puis "Server listening on
-   port...").
-4. Une fois confirmé, remettre la commande de démarrage normale
-   (`node dist/index.js`) — le reset+import n'a besoin de tourner qu'une
-   fois, pas à chaque boot futur.
+Donner à l'utilisateur les instructions précises pour basculer sur le
+Release Command Railway :
+1. Dans le service backend de `New Claude` (Settings → Deploy) :
+   - **Start Command** : vider le champ, ou remettre `node dist/index.js`
+     (comportement par défaut du `package.json`).
+   - **Release Command** (nouveau champ à chercher dans les mêmes
+     réglages) : `npm run release`.
+2. Dans l'onglet Variables du même service, ajouter **temporairement** :
+   `RESET_BEFORE_IMPORT=1` — pour ce premier déploiement uniquement, afin
+   de garantir un corpus propre après tous les échecs précédents.
+3. Redéployer. Observer les logs : ils devraient maintenant montrer une
+   phase "release" distincte (migrations, `[RESET] ...`, puis
+   `Import terminé : 473 insérées, 0 mises à jour, sur 473.`), suivie du
+   démarrage du vrai serveur — `Server listening on port...` — qui n'est
+   encore jamais apparu dans aucun log jusqu'ici. C'est le signal de succès
+   à confirmer.
+4. Une fois confirmé, **retirer la variable `RESET_BEFORE_IMPORT`** du
+   service (pas besoin de la garder : `import-corpus.mjs` seul est déjà
+   idempotent pour tous les déploiements suivants).
+5. Vérifier le nombre de questions en base (473 attendues) avant de
+   considérer T1 terminé.
