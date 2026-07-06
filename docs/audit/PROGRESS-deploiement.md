@@ -24,8 +24,11 @@ lire ce fichier en premier, reprendre à la première tâche non cochée.*
       §Diagnostic ci-dessous. **Des questions restent à te poser avant de
       proposer un plan concret (accès dashboard requis) — voir
       §Questions en attente.**
-- [ ] T1. Base de test créée, migrations appliquées, corpus importé (473 en
-      base).
+- [x] T1. Base de test créée, migrations appliquées, corpus importé (473 en
+      base). Confirmé par les logs : `Import terminé : 473 insérées, 0 mises
+      à jour, sur 473.` puis `Server listening on port 8080` (première
+      apparition) et `[Database] MySQL ping OK`. Reste à faire : retirer la
+      variable temporaire `RESET_BEFORE_IMPORT` du service Railway.
 - [ ] T2. Backend branche déployé sur base de test, variables OK, health
       check vert.
 - [ ] T3. Frontend branche déployé (URL preview), pointe vers backend de
@@ -561,18 +564,20 @@ shell — sans rapport avec le fix, résolu en relançant dans un shell propre).
 
 ## PROCHAINE ÉTAPE
 
-Le pre-deploy step (`npm run release`) et la variable temporaire
-`RESET_BEFORE_IMPORT=1` sont déjà en place côté Railway (confirmé par les
-derniers logs). Le fix #6 (migration 0022) vient d'être poussé.
+**T1 confirmé réussi** (voir logs du 2026-07-06 15:38-15:41 : migration 0022
+appliquée, 473/473 importées, `Server listening on port 8080`,
+`[Database] MySQL ping OK`).
 
-1. Redéployer (déclenché automatiquement par le push, sinon relancer
-   manuellement depuis Railway).
-2. Observer les logs : migrations (dont `0022_fix_questions_referentialId_fk_target.sql`
-   qui doit apparaître comme `Applying:` puis `✅ Applied:`), `[RESET] ...`,
-   puis `Import terminé : 473 insérées, 0 mises à jour, sur 473.`, puis enfin
-   — signal de succès jamais vu jusqu'ici — `Server listening on port...`.
-3. Une fois confirmé, **retirer la variable `RESET_BEFORE_IMPORT`** du
-   service (`import-corpus.mjs` seul est déjà idempotent pour tous les
-   déploiements suivants).
-4. Vérifier le nombre de questions en base (473 attendues) avant de
-   considérer T1 terminé.
+Reste à faire avant de clore T1 et passer à T2 :
+1. Retirer la variable temporaire `RESET_BEFORE_IMPORT` du service Railway
+   (`import-corpus.mjs` seul est déjà idempotent pour tous les déploiements
+   suivants — la garder viderait la base à chaque redéploiement).
+2. Récupérer l'URL publique du service (`Settings → Networking`, domaine
+   `*.up.railway.app` déjà vu dans une capture précédente :
+   `backend-qara-new-claude.up.railway.app`) pour vérifier le health check.
+3. Enchaîner sur T2 : définir `JWT_SECRET` (valeur aléatoire, distincte de
+   la prod) sur le service, vérifier `ALLOWED_ORIGINS` (normalement pas
+   nécessaire, voir §Diagnostic), confirmer `ANTHROPIC_API_KEY` toujours
+   absente.
+4. Puis T3 (Vercel) : `VITE_API_URL` scopée "Preview" pointant vers l'URL
+   Railway de test + `/trpc`.
