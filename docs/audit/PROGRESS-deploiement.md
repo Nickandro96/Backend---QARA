@@ -352,9 +352,45 @@ accepte ensuite 'critical'. Chaîne complète rejouée sur base neuve
 (migrations 0000-0021 + reset + import) : 473/473, aucune erreur. Suite de
 tests backend : 70/70.
 
+## Bug bloquant #4 (identifié, pas corrigé — pivot vers diagnostic) : `reset-corpus-tables.mjs` sans verrou
+
+Après le fix #3, même erreur de clé étrangère qu'avant (section "Rechute
+après le fix #2"), mais sur une **ligne différente** (`Q-13485-SM-2399`,
+`referentialId=5`), à chaque nouvelle tentative, dans des logs montrant à
+nouveau plusieurs blocs `Found migrations: [...]` entrelacés entre eux
+(preuve d'exécutions concurrentes réelles, pas d'un simple redémarrage
+séquentiel — voir §4.4 du nouveau document de diagnostic).
+
+**Diagnostic** : `scripts/import-corpus.mjs` a un verrou MySQL (fix #1),
+mais `scripts/reset-corpus-tables.mjs` (ajouté par le fix #2) **n'en a
+aucun**. Si Railway fait bien tourner plusieurs copies de la chaîne de
+démarrage en parallèle (hypothèse forte, cohérente avec toutes les preuves,
+mais pas encore reproduite en isolation avec certitude absolue), une copie
+peut `TRUNCATE` les tables pendant qu'une autre copie est en train d'y
+insérer des questions avec un identifiant de référentiel qui vient de
+disparaître.
+
+**Décision de l'utilisateur à ce stade** : plutôt que de continuer les
+correctifs ponctuels un par un, l'utilisateur a demandé un document de
+diagnostic complet, autonome et transmissible à un tiers, avant toute
+nouvelle correction. Livré :
+`docs/audit/ETAT-DES-LIEUX-backend.md` — contient le diagnostic détaillé
+(cause de fond : une procédure de préparation de base de données pensée
+pour tourner une fois a été branchée sur la commande de démarrage du
+conteneur, qui peut s'exécuter plusieurs fois/en parallèle) et deux
+solutions proposées (retirer la commande de démarrage personnalisée une
+fois l'import réussi une fois — recommandée ; ou protéger
+`reset-corpus-tables.mjs` par le même verrou que `import-corpus.mjs` —
+palliatif). **Aucune de ces deux solutions n'a été appliquée** : en
+attente de lecture du document par l'utilisateur et de sa décision.
+
 ## PROCHAINE ÉTAPE
 
-Donner à l'utilisateur les instructions précises pour :
+Attendre le retour de l'utilisateur sur `docs/audit/ETAT-DES-LIEUX-backend.md`
+avant toute nouvelle action. Ne pas relancer de nouveaux correctifs sans
+validation (consigne explicite de cette mission de diagnostic).
+
+Si l'utilisateur valide la solution recommandée (§6.1 du document) :
 1. Vérifier/compléter les variables d'environnement du service backend
    dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
    probablement auto-injectée par Railway entre les deux services du même
