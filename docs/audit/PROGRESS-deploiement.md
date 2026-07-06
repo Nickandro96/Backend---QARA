@@ -320,6 +320,38 @@ exact que le log Railway) → `reset-corpus-tables.mjs` puis `import-corpus.mjs`
 → 473 questions, 7 référentiels avec des ids propres 1-7, aucune erreur.
 Suite de tests backend : 70/70.
 
+## Bug bloquant #3 : colonne `criticality` avec un type trop restrictif
+
+Une fois le reset fonctionnel confirmé (log `Tables questions/referentiels
+réinitialisées...` bien présent, plus d'erreur de clé étrangère), nouvelle
+erreur, différente et déterministe (pas une race) :
+```
+Data truncated for column 'criticality' at row 1
+code: 'WARN_DATA_TRUNCATED'
+```
+sur toute question dont `criticality='critical'` (présentes dans le corpus
+FDA/QMSR).
+
+**Diagnostic** : `drizzle/schema.ts` et les migrations déclarent
+`criticality` comme `varchar(50)` — largement suffisant pour "critical".
+Mais `0007b_baseline_core_tables.sql` crée la table `questions` avec
+`CREATE TABLE IF NOT EXISTS`, qui ne fait **rien** si la table existe déjà.
+Or cette base (héritée/dupliquée depuis un état antérieur non versionné —
+même famille de problème que C-01, déjà documenté) avait cette colonne en
+`ENUM('low','medium','high')` — sans 'critical'. Reproduit localement en
+recréant volontairement cette colonne en ENUM restrictif : erreur identique
+obtenue immédiatement.
+
+**Fix** : nouvelle migration `drizzle/migrations/0021_fix_criticality_column_type.sql`
+— `ALTER TABLE questions MODIFY COLUMN criticality varchar(50) DEFAULT NULL`
+(force le bon type peu importe l'état actuel de la colonne).
+
+**Vérifié par reproduction locale** : colonne remise en ENUM restrictif
+volontairement → l'ALTER de la migration la corrige, confirmé qu'elle
+accepte ensuite 'critical'. Chaîne complète rejouée sur base neuve
+(migrations 0000-0021 + reset + import) : 473/473, aucune erreur. Suite de
+tests backend : 70/70.
+
 ## PROCHAINE ÉTAPE
 
 Donner à l'utilisateur les instructions précises pour :
@@ -327,12 +359,14 @@ Donner à l'utilisateur les instructions précises pour :
    dans `New Claude` (T2 : JWT_SECRET à générer, DATABASE_URL déjà
    probablement auto-injectée par Railway entre les deux services du même
    environnement — à confirmer).
-2. Définir la commande de démarrage personnalisée temporaire (mise à jour,
-   inclut maintenant l'étape de reset) sur le service backend de
-   `New Claude` (Settings → Deploy → Custom Start Command) :
+2. Le service backend a déjà la bonne commande de démarrage personnalisée
+   (Settings → Deploy → Custom Start Command) :
    `npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/reset-corpus-tables.mjs && npx tsx scripts/import-corpus.mjs && node dist/index.js`
-3. Redéployer, observer les logs (doivent montrer les migrations, puis
-   "Tables questions/referentiels réinitialisées...", puis l'import du
+   — pas de changement nécessaire cette fois, juste redéployer avec le
+   dernier commit (migration 0021 incluse).
+3. Redéployer, observer les logs (doivent montrer les migrations — avec
+   cette fois `0021_fix_criticality_column_type.sql` qui s'applique
+   réellement (pas "already applied") —, puis le reset, puis l'import du
    corpus — 473 insérées, 0 mises à jour — puis "Server listening on
    port...").
 4. Une fois confirmé, remettre la commande de démarrage normale
