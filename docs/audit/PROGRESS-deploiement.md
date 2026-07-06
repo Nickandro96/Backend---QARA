@@ -514,26 +514,65 @@ section "PROCHAINE ÉTAPE" (basculer vers Release Command) n'a pas encore
 été appliquée dans le dashboard. C'est l'action prioritaire, avant toute
 nouvelle conclusion tirée des logs.
 
+## Bug bloquant #6 trouvé et corrigé : FK `questions.referentialId` héritée pointant vers la mauvaise table
+
+Une fois le pre-deploy step Railway ("Add pre-deploy step" = Release Command,
+juste renommé) correctement configuré, les logs ont enfin montré une seule
+exécution propre (plus d'entrelacement) — mais l'import plantait encore,
+de façon déterministe, à l'insertion de `Q-13485-SM-2399`. Railway a fourni
+un diagnostic (via son assistant) : la contrainte de clé étrangère sur
+`questions.referentialId` référence une table `referentials` (anglais) et
+non `referentiels` (français).
+
+**Vérifié comme exact** (pas une supposition) :
+- `docs/audit/ETAT-DES-LIEUX-backend.md` §4.3 contient déjà le message
+  d'erreur réel capturé plus tôt dans la session :
+  `CONSTRAINT questions_referentialId_referentials_id_fk FOREIGN KEY
+  (referentialId) REFERENCES referentials (id)`.
+- Aucune migration versionnée ne crée cette contrainte (`grep` sur
+  `drizzle/migrations/` : zéro résultat) — elle a été créée hors contrôle de
+  version, avant le renommage de la table en `referentiels` (même famille
+  que C-01). `drizzle/schema.ts:712` a un alias `export const referentials =
+  referentiels` pour la compatibilité du code JS, mais ça ne change rien à
+  la contrainte SQL déjà gravée dans la base.
+- Reproduit exactement en local : recréé la contrainte legacy
+  (`questions_referentialId_referentials_id_fk` → `referentials`), confirmé
+  le même crash exact (`referentialId=5` inexistant dans `referentials`
+  alors qu'il existe bien dans `referentiels`).
+
+**Fix** : nouvelle migration
+`drizzle/migrations/0022_fix_questions_referentialId_fk_target.sql` :
+1. Met à `NULL` les `referentialId` orphelins (sécurité, sans effet si aucun).
+2. Supprime dynamiquement (lookup via `information_schema`, pas de nom en
+   dur) l'ancienne contrainte si elle ne référence pas `referentiels`.
+3. Ajoute la bonne contrainte vers `referentiels(id)` si elle n'existe pas
+   déjà.
+Idempotent, sans effet sur une base saine (le lookup dynamique ne trouve
+rien à corriger).
+
+**Vérifié par reproduction locale bout en bout** : base neuve → migrations
+0000-0021 → contrainte legacy injectée manuellement (même nom exact que le
+log réel) → migration 0022 (première exécution sur cet état) → contrainte
+corrigée → `import-corpus.mjs RESET_BEFORE_IMPORT=1` → **473 insérées, 0
+erreur**. Réexécution sans le flag : idempotent (upsert normal). Suite de
+tests backend : 70/70 (le premier run avait semblé bloqué à cause d'une
+variable `DATABASE_URL` restée pointée sur la base de test locale dans le
+shell — sans rapport avec le fix, résolu en relançant dans un shell propre).
+
 ## PROCHAINE ÉTAPE
 
-Donner à l'utilisateur les instructions précises pour basculer sur le
-Release Command Railway :
-1. Dans le service backend de `New Claude` (Settings → Deploy) :
-   - **Start Command** : vider le champ, ou remettre `node dist/index.js`
-     (comportement par défaut du `package.json`).
-   - **Release Command** (nouveau champ à chercher dans les mêmes
-     réglages) : `npm run release`.
-2. Dans l'onglet Variables du même service, ajouter **temporairement** :
-   `RESET_BEFORE_IMPORT=1` — pour ce premier déploiement uniquement, afin
-   de garantir un corpus propre après tous les échecs précédents.
-3. Redéployer. Observer les logs : ils devraient maintenant montrer une
-   phase "release" distincte (migrations, `[RESET] ...`, puis
-   `Import terminé : 473 insérées, 0 mises à jour, sur 473.`), suivie du
-   démarrage du vrai serveur — `Server listening on port...` — qui n'est
-   encore jamais apparu dans aucun log jusqu'ici. C'est le signal de succès
-   à confirmer.
-4. Une fois confirmé, **retirer la variable `RESET_BEFORE_IMPORT`** du
-   service (pas besoin de la garder : `import-corpus.mjs` seul est déjà
-   idempotent pour tous les déploiements suivants).
-5. Vérifier le nombre de questions en base (473 attendues) avant de
+Le pre-deploy step (`npm run release`) et la variable temporaire
+`RESET_BEFORE_IMPORT=1` sont déjà en place côté Railway (confirmé par les
+derniers logs). Le fix #6 (migration 0022) vient d'être poussé.
+
+1. Redéployer (déclenché automatiquement par le push, sinon relancer
+   manuellement depuis Railway).
+2. Observer les logs : migrations (dont `0022_fix_questions_referentialId_fk_target.sql`
+   qui doit apparaître comme `Applying:` puis `✅ Applied:`), `[RESET] ...`,
+   puis `Import terminé : 473 insérées, 0 mises à jour, sur 473.`, puis enfin
+   — signal de succès jamais vu jusqu'ici — `Server listening on port...`.
+3. Une fois confirmé, **retirer la variable `RESET_BEFORE_IMPORT`** du
+   service (`import-corpus.mjs` seul est déjà idempotent pour tous les
+   déploiements suivants).
+4. Vérifier le nombre de questions en base (473 attendues) avant de
    considérer T1 terminé.
