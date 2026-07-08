@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, protectedProcedure, requireCapability } from "./_core/trpc";
 import { getDb, createAudit } from "./db";
 import {
   actions,
@@ -227,9 +227,10 @@ async function getReferentialIdByCode(database: any, code: string) {
 export const fdaRouter = router({
   getFrameworks: protectedProcedure.query(() => FRAMEWORKS),
 
-  getQualificationQuestions: protectedProcedure.query(() => ({ questions: QUALIFICATION_QUESTIONS })),
+  // Pathway/qualification determination is Pro-only; the FDA QMSR audit itself (below) stays free.
+  getQualificationQuestions: requireCapability("canUseFDA").query(() => ({ questions: QUALIFICATION_QUESTIONS })),
 
-  getQualification: protectedProcedure.query(async ({ ctx }) => {
+  getQualification: requireCapability("canUseFDA").query(async ({ ctx }) => {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
@@ -244,7 +245,7 @@ export const fdaRouter = router({
     return latest;
   }),
 
-  saveQualification: protectedProcedure
+  saveQualification: requireCapability("canUseFDA")
     .input(
       z.object({
         sessionName: z.string().optional(),

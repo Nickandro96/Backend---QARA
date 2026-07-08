@@ -7,7 +7,8 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, requireCapability, router } from "./_core/trpc";
+import { maxReferentiels } from "./lib/plans";
 
 import * as db from "./db";
 import * as dashboardV2 from "./db-dashboard-v2";
@@ -23,6 +24,7 @@ import { classificationRouter } from "./classification-router";
 import { auditRouter } from "./audit-router";
 import { siteRouter } from "./site-router";
 import { watchRouter } from "./watch-router";
+import { onboardingRouter } from "./onboarding-router";
 
 import { generateAuditReport } from "./report-generator";
 import { auditReports, sites as sitesTable } from "../drizzle/schema";
@@ -63,7 +65,11 @@ export const appRouter = router({
   watch: watchRouter,
 
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query((opts) => {
+      if (!opts.ctx.user) return null;
+      const { passwordHash, ...safeUser } = opts.ctx.user;
+      return safeUser;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
 
@@ -352,6 +358,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
 
+        const allowedReferentiels = maxReferentiels(ctx.user);
+        if (input.referentialIds.length > allowedReferentiels) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Votre plan limite l'audit à ${allowedReferentiels} référentiel(s). Passez au plan Pro pour en activer davantage.`,
+          });
+        }
+
         const auditId = await db.createAudit({
           userId,
           siteId: input.siteId,
@@ -457,6 +471,16 @@ export const appRouter = router({
           }
         }
 
+        if (updateData.referentialIds) {
+          const allowedReferentiels = maxReferentiels(ctx.user);
+          if (updateData.referentialIds.length > allowedReferentiels) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Votre plan limite l'audit à ${allowedReferentiels} référentiel(s). Passez au plan Pro pour en activer davantage.`,
+            });
+          }
+        }
+
         try {
           await db.updateAudit(id, {
             ...updateData,
@@ -521,6 +545,16 @@ export const appRouter = router({
             code: "NOT_FOUND",
             message: "Audit not found or does not belong to the user",
           });
+        }
+
+        if (input.referentialIds) {
+          const allowedReferentiels = maxReferentiels(ctx.user);
+          if (input.referentialIds.length > allowedReferentiels) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Votre plan limite l'audit à ${allowedReferentiels} référentiel(s). Passez au plan Pro pour en activer davantage.`,
+            });
+          }
         }
 
         await db.updateAudit(resolvedId, {
@@ -794,6 +828,10 @@ export const appRouter = router({
   // Audit Management (ton router existant)
   audit: auditRouter,
 
+  // Onboarding profile persistence (referentiels/rôle/marchés) — additive,
+  // frontend still works off localStorage until the frontend "raccord" lot.
+  onboarding: onboardingRouter,
+
   // ✅ Keep existing mount for compatibility (does not affect trpc.sites.*)
   site: siteRouter,
 
@@ -801,7 +839,8 @@ export const appRouter = router({
   // Reports
   // --------------------------------------------
   reports: router({
-    generate: protectedProcedure
+    // Report generation (PDF export) is Pro-only; reading/listing existing reports stays free.
+    generate: requireCapability("canExportReports")
       .input(
         z.object({
           auditId: z.number(),

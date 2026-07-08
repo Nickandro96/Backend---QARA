@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, requireCapability } from "./_core/trpc";
 
 /**
  * MDR Device Classification helper (EU MDR 2017/745 – Annex VIII rules)
@@ -670,7 +670,9 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
 }
 
 export const classificationRouter = router({
-  classify: protectedProcedure.input(AnswersSchema).mutation(async ({ input }) => {
-    return classifyAnswers(input);
-  }),
+  classify: requireCapability("canUseClassification")
+    .input(AnswersSchema)
+    .mutation(async ({ input }) => {
+      return classifyAnswers(input);
+    }),
 });

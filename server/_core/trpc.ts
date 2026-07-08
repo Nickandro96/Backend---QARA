@@ -5,6 +5,7 @@ import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 import { sdk } from "./sdk";
 import * as db from "../db";
+import { hasCapability, capabilityLabel, type Capability } from "../lib/plans";
 
 /**
  * Context
@@ -59,3 +60,20 @@ export const adminProcedure = t.procedure.use(async (opts) => {
   }
   return opts.next({ ctx: { ...opts.ctx, user: opts.ctx.user } });
 });
+
+/**
+ * Session + subscription-plan gate. Use in place of `protectedProcedure` for
+ * endpoints that back a paid-tier-only feature (see server/lib/plans.ts for
+ * the capability matrix). Admins always pass, regardless of stored tier.
+ */
+export function requireCapability(capability: Capability) {
+  return protectedProcedure.use(async (opts) => {
+    if (!hasCapability(opts.ctx.user, capability)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `Cette fonctionnalité requiert le plan Pro (${capabilityLabel(capability)}).`,
+      });
+    }
+    return opts.next(opts);
+  });
+}
