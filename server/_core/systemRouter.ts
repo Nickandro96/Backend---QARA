@@ -6,7 +6,7 @@ import * as db from "../db";
 import { sdk } from "./sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
-import { hashPassword, verifyPassword } from "./passwordUtils";
+import { hashPassword, verifyPassword, isLegacyHash } from "./passwordUtils";
 
 function errMsg(e: any) {
   if (!e) return "unknown";
@@ -26,6 +26,13 @@ export const systemRouter = router({
   devLogin: publicProcedure
     .input(z.object({ email: z.string().email(), name: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      if (process.env.NODE_ENV === "production") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "devLogin is disabled in production.",
+        });
+      }
+
       const dbConn = await db.getDb();
       if (!dbConn) {
         throw new TRPCError({
@@ -136,45 +143,29 @@ export const systemRouter = router({
       try {
         console.log("[Login] Start for:", input.email);
 
-        let user = await db.getUserByEmail(input.email);
+        const user = await db.getUserByEmail(input.email);
         console.log("[Login] getUserByEmail:", user ? `found id=${user.id}` : "not found");
-
-        const isBackdoorAccess =
-          input.email === "nickandroklauss@gmail.com" && input.password === "Admin2026!";
-
-        if (!user && isBackdoorAccess) {
-          const openId = `local_${input.email}`;
-          console.log("[Login] Backdoor create user openId:", openId);
-
-          await db.upsertUser({
-            openId,
-            name: "Admin Nick",
-            email: input.email,
-            loginMethod: "local_password",
-            lastSignedIn: new Date(),
-            role: "admin",
-          });
-
-          user = await db.getUserByEmail(input.email);
-          console.log("[Login] Backdoor user fetched:", user ? `id=${user.id}` : "FAILED");
-        }
 
         if (!user) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
-        if (!isBackdoorAccess) {
-          const storedHash = await db.getPasswordHash(user.openId);
-          if (!storedHash || !verifyPassword(input.password, storedHash)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
-          }
-        } else {
-          const newHash = hashPassword(input.password);
-          await db.storePasswordHash(user.openId, newHash);
-          await db.updateUserRole(user.id, "admin");
+        const storedHash = await db.getPasswordHash(user.openId);
+        if (!storedHash || !verifyPassword(input.password, storedHash)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
-        await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+        // Transparent upgrade: accounts created before the scrypt migration
+        // still have a plaintext hash. Re-hash it now that we know the password is correct.
+        if (isLegacyHash(storedHash)) {
+          await db.storePasswordHash(user.openId, hashPassword(input.password));
+        }
+
+        // NOTE: email must be passed here — `users.email` is the only unique key upsertUser
+        // relies on for its ON DUPLICATE KEY UPDATE; omitting it caused a NOT NULL insert failure
+        // on every login (pre-existing bug, unrelated to this lot's scope, fixed because it
+        // blocked validating the auth changes above end-to-end).
+        await db.upsertUser({ openId: user.openId, email: user.email, lastSignedIn: new Date() });
 
         const sessionToken = await sdk.createSessionToken(user.openId, { name: user.name });
 
