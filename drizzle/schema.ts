@@ -508,6 +508,28 @@ export const watchCompanyProfiles = mysqlTable(
 );
 
 /* =========================
+   ONBOARDING PROFILE (per-user)
+========================= */
+export const onboardingProfiles = mysqlTable(
+  "onboarding_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    referentiels: json("referentiels").notNull(),
+    economicRole: mysqlEnum("economicRole", ["fabricant", "mandataire", "importateur", "distributeur"]).notNull(),
+    markets: json("markets").notNull(),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    userUq: uniqueIndex("onboarding_profiles_user_uq").on(t.userId),
+  })
+);
+
+/* =========================
    RELATIONS
 ========================= */
 
