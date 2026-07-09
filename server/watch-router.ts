@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
+import { router, protectedProcedure, adminProcedure, requireCapability } from "./_core/trpc";
 import {
   getUpdatesCached,
   triggerRefresh,
@@ -20,7 +20,7 @@ const zCompanyProfile = z.object({
 });
 
 export const watchRouter = router({
-  updates: protectedProcedure
+  updates: requireCapability("canUseVeille")
     .input(
       z.object({
         limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -60,13 +60,13 @@ export const watchRouter = router({
       return { items: enrichedItems, meta, companyProfile: profile };
     }),
 
-  latest: protectedProcedure.query(async ({ ctx }) => {
+  latest: requireCapability("canUseVeille").query(async ({ ctx }) => {
     const { items, meta } = await getUpdatesCached({ limit: 20, offset: 0 });
     if (meta.stale && !meta.refreshInProgress) void triggerRefresh("page_open");
     return { items: items.slice(0, 10), meta };
   }),
 
-  critical: protectedProcedure.query(async ({ ctx }) => {
+  critical: requireCapability("canUseVeille").query(async ({ ctx }) => {
     const { items, meta } = await getUpdatesCached({ limit: 100, offset: 0 });
     if (meta.stale && !meta.refreshInProgress) void triggerRefresh("page_open");
     const critical = items.filter((i) => i.impactLevel === "Critical" || i.impactLevel === "High");
