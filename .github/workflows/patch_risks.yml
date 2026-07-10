@@ -1,48 +1,31 @@
-name: patch_risks
+name: patch_risks (retired)
+
+# Retired during the corpus fix lot: this workflow called
+# scripts/patch_risks_from_excel_generic.py, a file that never existed in
+# this repo (confirmed absent). Its original purpose — backfilling the
+# `risk` field after an import that failed to capture it — is now handled
+# directly by the corrected main importers
+# (scripts/import_questions_from_excel.py, scripts/import_iso_questions_from_excel.py),
+# which read "Risque en cas de NC" / "Risque" straight from the source Excel
+# on every additive upsert. For ISO specifically, the equivalent secondary
+# patch tools scripts/patch_iso_risks_from_excel.py and
+# scripts/patch_iso_risks_from_excel_v2.py already exist and remain
+# available if a risk-only backfill is ever needed again.
+#
+# Left as workflow_dispatch-only (never auto-triggered) and reduced to an
+# explicit failure so a manual run gets a clear message instead of a
+# confusing "file not found" — it never attempts a database connection.
 
 on:
   workflow_dispatch:
-    inputs:
-      excel_path:
-        description: "Path to Excel file in repo (ex: data/Questionnaires audits iso 9001.xlsx)"
-        required: true
-        default: "data/Questionnaires audits iso 9001.xlsx"
-      referential_id:
-        description: "Referential ID (1=MDR, 2=ISO9001, 3=ISO13485)"
-        required: true
-        default: "2"
-      dry_run:
-        description: "Dry-run (1=yes, 0=no)"
-        required: true
-        default: "1"
-      force_overwrite:
-        description: "Overwrite existing risk even if not null (1=yes, 0=no)"
-        required: true
-        default: "0"
 
 jobs:
-  patch:
+  retired:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
+      - name: Explain retirement
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas openpyxl mysql-connector-python
-
-      - name: Patch risks from Excel
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          python scripts/patch_risks_from_excel_generic.py \
-            --excel "${{ inputs.excel_path }}" \
-            --referential-id "${{ inputs.referential_id }}" \
-            --dry-run "${{ inputs.dry_run }}" \
-            --force-overwrite "${{ inputs.force_overwrite }}"
+          echo "::error::patch_risks.yml is retired — scripts/patch_risks_from_excel_generic.py never existed in this repo."
+          echo "Risk data now comes directly from the corrected main importers (import_questions_from_excel.py / import_iso_questions_from_excel.py)."
+          echo "For an ISO risk-only backfill, use scripts/patch_iso_risks_from_excel_v2.py instead."
+          exit 1

@@ -8,11 +8,15 @@ Import MDR questions from an Excel file into Railway MySQL.
 - Reads Excel with pandas + openpyxl
 - Connects to Railway MySQL using env vars (DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME) OR DATABASE_URL
 - Introspects actual DB schema (columns + types) for `processus` and `questions`
-- Full replace: deletes existing questions before importing
+- Additive, idempotent upsert by `questionKey` (unique key, see migration 0009):
+  inserts if absent, updates if present. NEVER deletes/truncates — running this
+  twice, or running the ISO/FDA importers before or after, never touches
+  another referential's questions.
 - Ensures processId is NEVER null (creates missing processes)
 - Ensures economicRole is NEVER null (defaults to "all" if DB NOT NULL)
 - Detects ENUM columns (criticality/questionType/...) and maps Excel values to allowed enum values
-- Avoids inserting columns that do not exist in DB
+- Avoids inserting columns that do not exist in DB (only writes `risk`; the
+  legacy `risks` column was dropped by migration 0015 and is never targeted)
 - Generates stable questionKey
 
 Expected Excel headers (French):
@@ -95,10 +99,53 @@ def safe_json_array(v):
     return json.dumps(arr, ensure_ascii=False)
 
 
-def gen_question_key(article: str, process_name: str, question_text: str) -> str:
-    base = f"{norm_str(article)}|{norm_str(process_name)}|{norm_str(question_text)}"
+def gen_question_key(article: str, process_name: str, question_text: str, economic_role: str = "") -> str:
+    # economic_role is included on purpose: this Excel has up to 3 rows per
+    # (article, process, question) — one per economic role (see
+    # extract_economic_role) — sharing the exact same question text. Without
+    # the role in the key, upserting by questionKey would silently collapse
+    # those 3 rows into 1 (confirmed by direct inspection: 135 of the 566
+    # distinct (article, process, question) combos have exactly 3 role
+    # variants each).
+    base = f"{norm_str(article)}|{norm_str(process_name)}|{norm_str(question_text)}|{norm_str(economic_role)}"
     h = hashlib.md5(base.encode("utf-8")).hexdigest()
     return f"q_{h}"
+
+
+ECONOMIC_ROLE_PREFIXES = {
+    "fabricant": "fabricant",
+    "importateur": "importateur",
+    "distributeur": "distributeur",
+    "mandataire": "mandataire",
+}
+
+
+def extract_economic_role(title: str, default: str) -> str:
+    """
+    This Excel encodes the economic role as a "[Fabricant]"/"[Importateur]"/
+    "[Distributeur]" prefix on the "Intitulé" column instead of a dedicated
+    column. Falls back to `default` when no recognized prefix is found.
+    """
+    m = re.match(r"^\s*\[([^\]]+)\]", norm_str(title))
+    if not m:
+        return default
+    return ECONOMIC_ROLE_PREFIXES.get(m.group(1).strip().lower(), default)
+
+
+def slugify(value: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower())
+    return s.strip("_") or "process"
+
+
+# Known drift between this Excel's "Processus concerné" wording and the 15
+# canonical process names seeded by migrations 0007/0010-0014 (confirmed by
+# direct comparison: 2 of the Excel's 14 distinct process names don't match
+# the canonical table verbatim). Mapped here instead of silently creating a
+# near-duplicate process row.
+PROCESS_NAME_ALIASES = {
+    "traçabilité & udi": "Traçabilité / UDI",
+    "it / données / cybersécurité (si applicable)": "IT / données / cybersécurité",
+}
 
 
 def parse_database_url(url: str):
@@ -248,6 +295,8 @@ def main():
         database=cfg["database"],
         connection_timeout=30,
         autocommit=False,
+        charset="utf8mb4",
+        use_unicode=True,
     )
     cursor = conn.cursor()
 
@@ -262,6 +311,7 @@ def main():
     process_id_col = pick_col(process_cols, "id")
     process_name_col = pick_col(process_cols, "name")
     process_created_col = pick_col(process_cols, "createdAt", "created_at")
+    process_slug_col = pick_col(process_cols, "slug")
 
     if not process_id_col or not process_name_col:
         die("❌ process table must have at least columns: id, name")
@@ -275,9 +325,14 @@ def main():
             continue
         process_map[norm_str(pname).lower()] = int(pid)
 
+    existing_slugs: set = set()
+    if process_slug_col:
+        cursor.execute(f"SELECT `{process_slug_col}` FROM `{PROCESS_TABLE}` WHERE `{process_slug_col}` IS NOT NULL")
+        existing_slugs = {row[0] for row in cursor.fetchall()}
+
     def get_or_create_process_id(process_name: str) -> int:
         pname = norm_str(process_name) or "Non défini"
-        key = pname.lower()
+        key = PROCESS_NAME_ALIASES.get(pname.lower(), pname).lower()
         if key in process_map:
             return process_map[key]
 
@@ -287,9 +342,23 @@ def main():
             log(f"🧪 DRY_RUN: Processus créé: '{pname}' -> id={fake_id}")
             return fake_id
 
+        log(f"⚠️  Processus inconnu des 15 canoniques, création d'un nouveau : '{pname}'")
+
         cols = [process_name_col]
         placeholders = ["%s"]
         params = [pname]
+
+        if process_slug_col:
+            base_slug = slugify(pname)
+            slug = base_slug
+            n = 2
+            while slug in existing_slugs:
+                slug = f"{base_slug}_{n}"
+                n += 1
+            existing_slugs.add(slug)
+            cols.append(process_slug_col)
+            placeholders.append("%s")
+            params.append(slug)
 
         if process_created_col in process_cols:
             # Some schemas use defaultNow; but NOW() is safe too
@@ -312,10 +381,7 @@ def main():
     if questiontype_enum:
         log(f"🧩 questionType ENUM détecté: {questiontype_enum}")
 
-    # Full replace
-    log("🧹 Suppression anciennes questions...")
-    if not DRY_RUN:
-        cursor.execute(f"DELETE FROM `{QUESTIONS_TABLE}`")
+    # Additive only: no purge. Rows are upserted by questionKey below.
 
     # Excel headers
     COL_PROCESS = "Processus concerné"
@@ -347,7 +413,8 @@ def main():
 
     if "questionKey" in questions_cols:
         def _qkey(r):
-            key = gen_question_key(r.get(COL_CLAUSE, ""), r.get(COL_PROCESS, ""), r.get(COL_QTEXT, ""))
+            role = extract_economic_role(r.get(COL_INTITULE, ""), DEFAULT_ECONOMIC_ROLE)
+            key = gen_question_key(r.get(COL_CLAUSE, ""), r.get(COL_PROCESS, ""), r.get(COL_QTEXT, ""), role)
             return key[:255]
         add_col("questionKey", "%s", _qkey)
 
@@ -381,11 +448,10 @@ def main():
             return raw[:50] if raw else None
         add_col("criticality", "%s", _crit)
 
-    excel_risk_extractor = lambda r: (norm_str(r.get(COL_RISK, "")) or None)
+    # Only `risk` is ever targeted: migration 0015 dropped the legacy `risks`
+    # column, current schema only has `risk` (singular).
     if "risk" in questions_cols:
-        add_col("risk", "%s", excel_risk_extractor)
-    if "risks" in questions_cols:
-        add_col("risks", "%s", excel_risk_extractor)
+        add_col("risk", "%s", lambda r: (norm_str(r.get(COL_RISK, "")) or None))
 
     if "interviewFunctions" in questions_cols:
         add_col("interviewFunctions", "%s", lambda r: safe_json_array(r.get(COL_FUNCS, "")))
@@ -393,11 +459,13 @@ def main():
     if "applicableProcesses" in questions_cols:
         add_col("applicableProcesses", "%s", lambda r: json.dumps([norm_str(r.get(COL_PROCESS, "")) or "Non défini"], ensure_ascii=False))
 
-    # economicRole (NOT NULL on your DB => must always be set)
+    # economicRole (NOT NULL on your DB => must always be set). Parsed from the
+    # "[Fabricant]"/"[Importateur]"/"[Distributeur]" prefix on Intitulé — see
+    # extract_economic_role. Falls back to DEFAULT_ECONOMIC_ROLE ("all") when
+    # a row has no recognized role prefix.
     if "economicRole" in questions_cols:
-        def _role(_r):
-            # you can later improve this by reading from Excel if you add a column
-            return DEFAULT_ECONOMIC_ROLE
+        def _role(r):
+            return extract_economic_role(r.get(COL_INTITULE, ""), DEFAULT_ECONOMIC_ROLE)
         add_col("economicRole", "%s", _role)
 
     if "displayOrder" in questions_cols:
@@ -412,12 +480,23 @@ def main():
     if not insert_cols:
         die("❌ No compatible columns found to insert into questions table.")
 
+    if "questionKey" not in insert_cols:
+        die("❌ questionKey column is required for an additive/idempotent upsert.")
+
+    # Upsert by questionKey (unique key, see migration 0009): never deletes,
+    # never touches rows outside this referential's questionKeys. Running
+    # this script twice, or after/before the ISO or FDA importers, is safe.
+    update_cols = [c for c in insert_cols if c not in ("questionKey", "createdAt")]
     cols_sql = ", ".join([f"`{c}`" for c in insert_cols])
     placeholders_sql = ", ".join(insert_placeholders)
-    insert_sql = f"INSERT INTO `{QUESTIONS_TABLE}` ({cols_sql}) VALUES ({placeholders_sql})"
-    log("🧾 SQL INSERT questions prêt.")
+    update_sql = ", ".join([f"`{c}` = VALUES(`{c}`)" for c in update_cols])
+    upsert_sql = (
+        f"INSERT INTO `{QUESTIONS_TABLE}` ({cols_sql}) VALUES ({placeholders_sql}) "
+        f"ON DUPLICATE KEY UPDATE {update_sql}"
+    )
+    log("🧾 SQL UPSERT (INSERT ... ON DUPLICATE KEY UPDATE) questions prêt.")
 
-    inserted = 0
+    processed = 0
     skipped = 0
 
     for idx, row in df.iterrows():
@@ -439,28 +518,28 @@ def main():
             params.append(ex(r))
 
         if DRY_RUN:
-            inserted += 1
+            processed += 1
             continue
 
         try:
-            cursor.execute(insert_sql, tuple(params))
-            inserted += 1
+            cursor.execute(upsert_sql, tuple(params))
+            processed += 1
         except Exception as e:
-            log(f"❌ Insert failed at Excel row={idx+2} (1-based with header). Error: {e}")
+            log(f"❌ Upsert failed at Excel row={idx+2} (1-based with header). Error: {e}")
             log(f"   Process='{norm_str(r.get(COL_PROCESS,''))}' Clause='{norm_str(r.get(COL_CLAUSE,''))}'")
             log(f"   Criticité Excel='{norm_str(r.get(COL_CRIT,''))}' -> mapped='{_crit(r) if 'criticality' in questions_cols else None}'")
             log(f"   Question='{qtext[:200]}'")
             conn.rollback()
             raise
 
-        if inserted % 200 == 0:
+        if processed % 200 == 0:
             conn.commit()
-            log(f"✅ {inserted} questions importées...")
+            log(f"✅ {processed} questions traitées (insert ou update)...")
 
     if not DRY_RUN:
         conn.commit()
 
-    log(f"✅ Import terminé. Inserted={inserted} Skipped(empty question)={skipped}")
+    log(f"✅ Import terminé. Processed(insert-or-update)={processed} Skipped(empty question)={skipped}")
     cursor.close()
     conn.close()
 

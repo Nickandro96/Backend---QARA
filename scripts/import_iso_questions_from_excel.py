@@ -3,13 +3,14 @@
 ISO questions importer (ISO 9001 / ISO 13485) for MySQL.
 
 Robust features:
-- header=2
-- purge per referential
+- header=0 (confirmed against both ISO 9001 and ISO 13485 source files)
+- additive, idempotent upsert by questionKey (insert if absent, update if
+  present) — never deletes/purges, never touches other referentials
 - auto-create missing processes
 - questionKey = q_ + md5(...)
 - supports process table with/without slug
 - supports economicRole NOT NULL (uses 'N/A')
-- ensures referentialId exists in referentials (avoids FK failure)
+- ensures referentialId exists in referentiels (avoids FK failure)
   and auto-fills createdAt/version if required.
 """
 
@@ -50,6 +51,15 @@ def getenv_int(name: str, default: int) -> int:
 def slugify(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
     return value.strip("-")
+
+
+# Same drift confirmed here as in the MDR importer: this Excel's "Processus
+# concerné" wording doesn't always match the 15 canonical process names
+# verbatim (e.g. "&" vs "/"). Mapped explicitly instead of silently creating
+# a near-duplicate process row.
+PROCESS_NAME_ALIASES = {
+    "traçabilité & udi": "Traçabilité / UDI",
+}
 
 
 def normalize_header(value: str) -> str:
@@ -127,13 +137,20 @@ def get_required_env() -> Tuple[str, int, bool, Dict[str, Any]]:
         "user": getenv_str("DB_USER", "root"),
         "password": getenv_str("DB_PASSWORD", ""),
         "database": getenv_str("DB_NAME", "qara"),
+        "charset": "utf8mb4",
+        "use_unicode": True,
     }
 
     return excel_path, referential_id, dry_run, db_config
 
 
 def build_sheet(path: str) -> pd.DataFrame:
-    return pd.read_excel(path, header=2)
+    # Confirmed by direct inspection of both ISO 9001 and ISO 13485 source
+    # files: the real header row is row 0. The previous `header=2` silently
+    # skipped the header and the first 2 data rows, then treated row 2's
+    # values as column names — every row was then skipped for "missing
+    # process/question" since no column actually matched the expected labels.
+    return pd.read_excel(path, header=0)
 
 
 def resolve_sheet_value(row: pd.Series, aliases: List[str]) -> Optional[str]:
@@ -270,6 +287,17 @@ def resolve_questions_columns(cur: MySQLCursorDict, db_name: str) -> Tuple[Dict[
     return ({k: v for k, v in columns.items() if v is not None}, meta)
 
 
+def resolve_referentiel_table(cur: MySQLCursorDict, db_name: str) -> str:
+    # Current schema (drizzle/schema.ts) names this table `referentiels`
+    # (French spelling). Some older scripts assumed `referentials`; check
+    # both so this works regardless of which one is actually present.
+    if table_exists(cur, db_name, "referentiels"):
+        return "referentiels"
+    if table_exists(cur, db_name, "referentials"):
+        return "referentials"
+    raise SystemExit("Table 'referentiels' (ou 'referentials') introuvable.")
+
+
 def ensure_referential_exists(
     *,
     cur: MySQLCursorDict,
@@ -277,10 +305,9 @@ def ensure_referential_exists(
     referential_id: int,
     dry_run: bool,
 ) -> None:
-    if not table_exists(cur, db_name, "referentials"):
-        raise SystemExit("Table 'referentials' introuvable (FK referentialId -> referentials.id).")
+    ref_table = resolve_referentiel_table(cur, db_name)
 
-    cur.execute("SELECT id FROM referentials WHERE id = %s", (referential_id,))
+    cur.execute(f"SELECT id FROM {quote_identifier(ref_table)} WHERE id = %s", (referential_id,))
     row = cur.fetchone()
     if row:
         return
@@ -289,7 +316,7 @@ def ensure_referential_exists(
     ref_code = "ISO9001" if referential_id == 2 else "ISO13485"
     ref_desc = "Imported by ISO Excel importer"
 
-    cols_info = resolve_table_columns(cur, db_name, "referentials")
+    cols_info = resolve_table_columns(cur, db_name, ref_table)
 
     cols_meta: Dict[str, Dict[str, str]] = {}
     cols: set[str] = set()
@@ -317,7 +344,7 @@ def ensure_referential_exists(
 
     # id
     if "id" not in cols_lower:
-        raise SystemExit("Table 'referentials' has no 'id' column. Cannot satisfy FK.")
+        raise SystemExit(f"Table '{ref_table}' has no 'id' column. Cannot satisfy FK.")
     insert_cols.append("id")
     insert_vals.append(referential_id)
 
@@ -362,7 +389,7 @@ def ensure_referential_exists(
             final_vals.append(v)
 
     placeholders = ", ".join(placeholders_parts)
-    sql = f"INSERT INTO referentials ({cols_sql}) VALUES ({placeholders})"
+    sql = f"INSERT INTO {quote_identifier(ref_table)} ({cols_sql}) VALUES ({placeholders})"
 
     try:
         cur.execute(sql, tuple(final_vals))
@@ -370,7 +397,7 @@ def ensure_referential_exists(
     except Exception as e:
         raise SystemExit(
             "Failed to create referential automatically. "
-            f"Please create row in 'referentials' with id={referential_id} manually. "
+            f"Please create row in '{ref_table}' with id={referential_id} manually. "
             f"Detected columns: {sorted(cols)}. Error: {e}"
         )
 
@@ -389,7 +416,8 @@ def ensure_process_id(
     process_name: str,
     dry_run: bool,
 ) -> int:
-    key = process_name.strip().lower()
+    resolved_name = PROCESS_NAME_ALIASES.get(process_name.strip().lower(), process_name)
+    key = resolved_name.strip().lower()
     existing = process_map.get(key)
     if existing is not None:
         return existing
@@ -400,15 +428,15 @@ def ensure_process_id(
         return deterministic
 
     if "slug" in process_columns:
-        slug = slugify(process_name)
+        slug = slugify(resolved_name)
         cur.execute(
             f"INSERT INTO {quote_identifier(process_table)}(name, slug) VALUES (%s, %s)",
-            (process_name, slug),
+            (resolved_name, slug),
         )
     else:
         cur.execute(
             f"INSERT INTO {quote_identifier(process_table)}(name) VALUES (%s)",
-            (process_name,),
+            (resolved_name,),
         )
 
     process_id = int(cur.lastrowid)
@@ -457,10 +485,9 @@ def main() -> None:
             economic_role_is_nullable = q_meta[economic_role_col]["is_nullable"]
         print(f"EconomicRole column: {economic_role_col} (nullable={economic_role_is_nullable})")
 
-        if not dry_run:
-            purge_sql = f"DELETE FROM questions WHERE {quote_identifier(q_cols['referential'])} = %s"
-            cur.execute(purge_sql, (referential_id,))
-            print(f"Purged existing questions for referential {referential_id}")
+        # Additive only: no purge. Rows are upserted by questionKey below, so
+        # re-running this import (or running MDR/FDA before or after) never
+        # deletes or touches another referential's questions.
 
         orders: defaultdict[Tuple[int, str], int] = defaultdict(int)
         inserted = 0
@@ -523,11 +550,13 @@ def main() -> None:
             if "criticality" in q_cols:
                 values[q_cols["criticality"]] = criticality
             if "risk" in q_cols:
-    # si la colonne DB ciblée est `risks` (plural), on stocke un JSON string ["..."]
-            if q_cols["risk"] == "risks":
-              values[q_cols["risk"]] = json.dumps([risk], ensure_ascii=False) if risk else None
-            else:
-              values[q_cols["risk"]] = risk
+                # Defensive: current schema only has `risk` (singular); the legacy
+                # `risks` (plural) column was dropped by migration 0015. Kept for
+                # safety in case this script ever runs against an older schema.
+                if q_cols["risk"] == "risks":
+                    values[q_cols["risk"]] = json.dumps([risk], ensure_ascii=False) if risk else None
+                else:
+                    values[q_cols["risk"]] = risk
             if "question_type" in q_cols:
                 values[q_cols["question_type"]] = question_type
             if "annexe" in q_cols:
@@ -541,9 +570,17 @@ def main() -> None:
 
             inserted += 1
             if not dry_run:
+                # Upsert by questionKey (unique key, migration 0009): insert if
+                # absent, update if present. Never deletes, never touches rows
+                # belonging to other referentials.
+                update_keys = [k for k in values.keys() if k != q_cols["question_key"]]
                 cols = ", ".join(quote_identifier(c) for c in values.keys())
                 placeholders = ", ".join(["%s"] * len(values))
-                sql = f"INSERT INTO questions ({cols}) VALUES ({placeholders})"
+                update_clause = ", ".join(f"{quote_identifier(c)} = VALUES({quote_identifier(c)})" for c in update_keys)
+                sql = (
+                    f"INSERT INTO questions ({cols}) VALUES ({placeholders}) "
+                    f"ON DUPLICATE KEY UPDATE {update_clause}"
+                )
                 cur.execute(sql, tuple(values.values()))
 
         if not dry_run:

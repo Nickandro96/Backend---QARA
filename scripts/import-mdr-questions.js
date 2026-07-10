@@ -1,4 +1,15 @@
 /* scripts/import-mdr-questions.js
+ *
+ * @deprecated — DO NOT USE. Replaced by `scripts/import_questions_from_excel.py`
+ * (the workflow actually wired up in .github/workflows/import-questions-from-excel.yml).
+ *
+ * This script is broken on the current schema (writes to a `risks` column
+ * that migration 0015_questions_unify_risk_drop_risks.sql dropped — every
+ * run fails outright) and, even if patched to remove that write, it does
+ * `TRUNCATE TABLE questions` unconditionally, wiping FDA/ISO questions too.
+ * Kept in the repo for history only; it refuses to run below rather than
+ * being silently deleted, so nobody can accidentally trigger it.
+ *
  * Import Excel -> MySQL table `questions`
  * - Keeps the schema (columns) as-is
  * - Replaces ALL rows in `questions`
@@ -7,6 +18,11 @@
  * Required env:
  * - DATABASE_URL (mysql://user:pass@host:port/db)
  */
+
+throw new Error(
+  "scripts/import-mdr-questions.js is deprecated and destructive (TRUNCATE questions + writes to a dropped `risks` column). " +
+  "Use `node scripts/import_questions_from_excel.py`-equivalent, i.e. `python3 scripts/import_questions_from_excel.py`, instead."
+);
 
 const path = require("path");
 const crypto = require("crypto");
