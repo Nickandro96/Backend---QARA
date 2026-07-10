@@ -456,3 +456,37 @@ Tous les workflows ci-dessus sont `workflow_dispatch` (declenchement manuel uniq
 1. **`iso-router.ts` `getQuestionsForAudit`** : erreur 500 reelle (`TypeError: Cannot convert undefined or null to object` dans `orderSelectedFields` de drizzle-orm, sur l'appel `db.select(questionSelect)`). Corpus ISO verifie sain (225/225 lignes), mais l'endpoint qui le sert est casse. A corriger dans une session dediee routeur ISO.
 2. **`scripts/apply-sql-migrations.ts`** : fragilite de conception — une erreur DDL "deja existant" sur la premiere instruction d'un fichier de migration fait annuler (rollback) et sauter tout le fichier, y compris les instructions DML substantielles qui suivent. Non confirme comme ayant reellement affecte la production (l'ordre normal de deploiement ne devrait pas declencher ce cas precis), mais verifie comme reproductible localement. Requete de verification fournie en Phase 3 partie 3 pour trancher. Si la production s'avere affectee (processus incomplets), un correctif additif dedie serait necessaire.
 3. Dettes deja connues du lot backend precedent (rate limiting authentification, bugs `audits.create` `auditType`/`type` et `audit_reports` desynchronise) : toujours non traitees, hors perimetre de ce lot corpus, aucune n'a bloque le test bout-en-bout MDR donc non corrigees ici conformement a la consigne.
+
+## Etape suivante — Nettoyage "base saine" + sequence de production complete (2026-07-10)
+
+Statut : procedure preparee, **rien execute contre la production**. En attente de l'utilisateur pour chaque etape (Railway Query / GitHub Actions).
+
+### Contexte
+
+L'utilisateur a constate l'etat reel de production (`SELECT referentialId, COUNT(*) FROM questions GROUP BY referentialId`) :
+referentialId 1:80, 2:72, 3:43, 4:74, 5:93, **6:67, 7:44** — total 473, avec deux referentiels parasites (6 et 7, dechets d'anciens imports rates) et des fragments partiels sur 1-5. Decision : nettoyer avant de recharger le corpus corrige.
+
+### Verification des risques avant nettoyage (fait par lecture directe du schema, pas suppose)
+
+- Aucune contrainte FK au niveau base entre `audit_responses`/`mdr_evidence_files`/`audits` et `questions`/`referentiels`/`processus` : confirme par lecture de `drizzle/schema.ts` (toutes ces colonnes croisees — `questionId`, `questionKey`, `referentialIds`, `processIds` — sont de simples `int`/`varchar`/`json`, aucune n'a de `.references(...)`). Consequence : les suppressions ne provoqueront aucune erreur de contrainte, mais pourraient orpheliner silencieusement de vraies donnees sans le signaler — d'ou la requete de pre-verification fournie a l'utilisateur (comptage `audit_responses`/`mdr_evidence_files`, recherche d'audits referencant les referentiels 6/7 via `JSON_CONTAINS`).
+- Le script MDR corrige inclut desormais le role economique dans le calcul de `questionKey` : meme sans vidage, les anciens `questionKey` MDR ne correspondront plus aux nouveaux de toute facon (changement de formule de hash, deja documente dans le correctif du bug de collision).
+- Confirmation du raisonnement de l'utilisateur sur les referentiels 1-5 : `scripts/apply-sql-migrations.ts` marque chaque migration comme appliquee par hash de contenu dans `_drizzle_migrations` et saute entierement le fichier des que ce hash est deja enregistre, peu importe si les lignes qu'il a inserees existent encore. Supprimer les referentiels 1-5 ne les ferait donc PAS recreer par un simple re-lancement des migrations existantes (0001/0017/0019 seraient ignorees, deja "vues" comme appliquees) — confirme exact, d'ou l'imperatif de les conserver.
+
+### Livrable 1 — Procedure de nettoyage (Railway -> Query)
+
+1. Sauvegarde : `CREATE TABLE {questions,referentiels,processus}_backup_20260710 AS SELECT * FROM ...` (les 3 tables), avec verification de comptage juste apres.
+2. `DELETE FROM questions;` (vidage total, tous referentiels confondus) — verification `SELECT COUNT(*) FROM questions` = 0.
+3. `DELETE FROM referentiels WHERE id IN (6, 7);` (jamais 1-5) — verification : exactement 5 lignes restantes, ids 1-5.
+4. `DELETE FROM processus WHERE id > 15;` — verification : exactement 15 lignes restantes.
+
+Confirme explicitement a l'utilisateur : ces 3 DELETE ne touchent que `questions` (entierement), `referentiels` (ids 6-7 seulement), `processus` (ids > 15 seulement) — aucune autre table (`users`, `audits`, `audit_responses`, `audit_reports`, `mdr_evidence_files`, `onboarding_profiles`, `sites`, `organisations`, etc.) n'est lue ni ecrite.
+
+### Livrable 2 — Sequence de production complete (confirmee, ordre de l'utilisateur correct)
+
+1. Merger `claude/qara-backend-corpus` -> `main` (PR, pas de force-push) — necessaire car `workflow_dispatch` s'execute par defaut depuis `main` si aucune branche n'est explicitement selectionnee dans l'UI Actions ; recommande plutot que le selecteur manuel de branche pour eviter une erreur d'inattention repetee sur 5 declenchements.
+2. Workflow **`DB Migrate (safe) & Baseline`** sur `main` — applique `0019` si pas deja fait (idempotent).
+3. Nettoyage base saine (Livrable 1 ci-dessus), dans Railway -> Query, place APRES la migration (les referentiels 1-5 doivent deja exister) et AVANT les imports.
+4. Imports dans l'ordre, chacun via son workflow GitHub Actions sur `main` : **`Import Questions from Excel (MDR)`**, puis **`Import ISO 9001 Questions (Excel -> MySQL)`** (dry_run=0), puis **`Import ISO 13485 Questions (Excel -> MySQL)`** (dry_run=0), puis **`Import FDA Questions Only`** (dry_run=0). Ce dernier reapplique aussi les migrations SQL en interne (sans effet, deja faites en etape 2).
+5. Verifications finales (Railway -> Query) : comptage par referentiel (attendu 826/225/225/30/193, total 1499), `processus_count` = 15, zero question orpheline (`processId`/`referentialId` sans parent) des deux cotes.
+
+Details complets (chaque requete SQL, nom exact de chaque workflow tel qu'affiche dans l'onglet Actions) donnes a l'utilisateur en reponse directe, non recopies integralement ici pour eviter la duplication — cette section sert de resume de decision et de traçabilite.
