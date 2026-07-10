@@ -490,3 +490,43 @@ Confirme explicitement a l'utilisateur : ces 3 DELETE ne touchent que `questions
 5. Verifications finales (Railway -> Query) : comptage par referentiel (attendu 826/225/225/30/193, total 1499), `processus_count` = 15, zero question orpheline (`processId`/`referentialId` sans parent) des deux cotes.
 
 Details complets (chaque requete SQL, nom exact de chaque workflow tel qu'affiche dans l'onglet Actions) donnes a l'utilisateur en reponse directe, non recopies integralement ici pour eviter la duplication — cette section sert de resume de decision et de traçabilite.
+
+## Etape suivante — Extension du nettoyage aux audits de test (2026-07-10)
+
+Statut : procedure preparee, rien execute contre la production.
+
+Contexte : pre-verification demandee precedemment executee par l'utilisateur — `audit_responses` = 114 (audits de test sans valeur), `mdr_evidence_files` = 0, aucun audit ne reference les referentiels 6/7. Decision : repartir de zero cote audits aussi.
+
+### Mapping confirme par lecture directe du schema (FK reelles, contrairement a questions/referentiels/processus qui n'en ont aucune)
+
+- `actions.findingId` -> `findings.id` : FK NOT NULL declaree (`.references()`).
+- `audit_responses.auditId` -> `audits.id` : FK NOT NULL declaree.
+- `findings.auditId` -> `audits.id` : FK declaree (nullable).
+- `resultats.auditId` -> `audits.id` : FK declaree (nullable).
+- `mdr_evidence_files.auditId` -> `audits.id` : FK NOT NULL declaree (0 ligne actuellement, incluse par rigueur).
+- `audit_reports.auditId` : **aucune FK declaree** (simple int), mais liee par valeur, incluse dans le nettoyage.
+- `audits` : racine.
+
+Ces `.references()` Drizzle emettent de vraies contraintes `ALTER TABLE ... FOREIGN KEY` a la creation du schema (confirme par les logs de push locaux de cette session) : l'ordre de suppression n'est donc pas ici une simple prudence mais une necessite — MySQL rejettera un DELETE sur `audits`/`findings` tant que des lignes enfants existent.
+
+Hors perimetre, non touchees (pas des enfants d'audits) : `fda_qualification_sessions/answers/results` (liees a `userId`, wizard de determination de voie FDA, pas la table `audits`) et `mdr_role_qualifications` (liee a `userId`/`siteId`). Signale a l'utilisateur, non incluses sauf demande explicite.
+
+### Procedure (Railway -> Query)
+
+Sauvegarde + precomptage des 7 tables, puis suppression dans l'ordre enfants -> parents :
+```
+DELETE FROM actions;
+DELETE FROM audit_responses;
+DELETE FROM findings;
+DELETE FROM resultats;
+DELETE FROM mdr_evidence_files;
+DELETE FROM audit_reports;
+DELETE FROM audits;
+```
+Verification : les 7 comptages a 0.
+
+Confirme explicitement : ne touche que ces 7 tables. `users`, `onboarding_profiles`, `sites`, `organisations` ne sont ni lues ni ecrites (et `sites`/`organisations` ne sont pas des enfants d'`audits` — c'est l'inverse, `audits.siteId` reference `sites.id`).
+
+### Integration sequence globale
+
+S'insere dans l'etape 3 (nettoyage) existante, avant ou apres le nettoyage corpus (questions/referentiels/processus) — l'ordre entre les deux groupes n'a pas d'importance, aucune table ne fait le pont entre `audits` et `questions`. Recommande de faire les audits en premier par habitude de prudence FK, mais sans consequence reelle si inverse.
