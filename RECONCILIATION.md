@@ -65,3 +65,24 @@ Bug préexistant, indépendant de tout ce que j'ai touché, dans la génération
 ### Ce qui est prêt à livrer
 
 Commit à venir sur `claude/qara-backend-assainissement-qitbxl` : `list`, `listAudits`, `getById`, `delete`, `get`, `getStats`, `getScore` (tous testés avec des données réelles), `dashboard.getSummary`/`getFunnel`/`getHeatmap` câblés (testés, ne crashent plus, mais champs de score à 0 pour la raison ci-dessus). **Non déployé, non mergé.**
+
+### Extension validée par l'utilisateur : correction de `getDashboardSummary`/`getKPIs`
+
+Suite à validation explicite ("oui"), la découverte bloquante n°1 ci-dessus a été corrigée, pas seulement documentée.
+
+**Refactor** : extrait `computeGenericAuditStats` (qui était dans `audit-router.ts`) vers un module partagé `server/audit-scoring.ts`, plus une variante `computeGenericAuditScoreSafe` (retourne `null` plutôt que de lever une erreur, pour ne pas faire planter tout un dashboard à cause d'un seul audit sans scope résolvable). `audit-router.ts` importe désormais depuis ce module au lieu de dupliquer la logique.
+
+**`server/db-dashboard-v2.ts` — `getDashboardSummary`** : remplace la lecture des colonnes inexistantes `a.score`/`a.conformityRate` (toujours `undefined`) par un calcul à la volée via `computeGenericAuditScoreSafe`, un par audit de l'utilisateur, moyenné. `averageAuditScore` et `globalConformityRate` utilisent désormais la même valeur calculée (le modèle ne distingue pas les deux, contrairement à l'ancien design qui ne les alimentait de toute façon jamais).
+
+**`server/routers.ts` — `getKPIs`** : découverte d'un second problème en testant — même après la correction ci-dessus, `getKPIs` mappait vers des noms de champs qui n'ont jamais existé (`stats?.globalScore`, `stats?.completionRate`, `stats?.okCount`...) alors que `getDashboardSummary` renvoie `averageAuditScore`, `auditsByStatus`, `findingsByType`. Corrigé pour lire les bons champs. **Ajout de `frameworkScores`** (score par référentiel, ex. `{"mdr": 80.6}`) — absent de `getKPIs` jusqu'ici ; le frontend (`client/src/pages/Dashboard.tsx`) l'attendait déjà avec un commentaire explicite `// TODO(data): pas d'endpoint backend de score par référentiel pour le moment.` — donc une lacune déjà documentée côté frontend, pas une invention de ma part. Résolution du référentiel vers la clé frontend (`mdr`, `ivdr`, `fda-qmsr`, `mdsap`, `iso-13485`, `iso-14971`, `iso-9001`) par **`code`** (table `referentiels`), jamais par ID en dur — mapping code→clé fixe (ce sont des codes stables, pas des IDs auto-increment fragiles).
+
+**Bug trouvé et corrigé en cours de route** : ma première version de `getFrameworkScores` utilisait `Array.isArray(audit.referentialIds)` — faux, car ce champ est renvoyé comme chaîne JSON (`"[6]"`), pas comme tableau natif. Corrigé en réutilisant `safeParseArray` (déjà exportée depuis `mdr-router.ts` pour cette Étape 2) au lieu de dupliquer une logique de parsing défensive.
+
+**Preuve réelle** (même audit id=1, 62 réponses, 47 compliant/15 non_compliant) :
+```
+AVANT : {"scoreGlobal":0,"progression":0,"conforme":0,"nonConforme":0,"nonConformitiesCount":0}
+APRÈS : {"scoreGlobal":80.6,"progression":0,"conforme":0,"nonConforme":0,"nonConformitiesCount":0,"frameworkScores":{"mdr":80.6}}
+```
+`progression`/`conforme`/`nonConforme`/`nonConformitiesCount` restent à 0 : légitime, ils dépendent de la table `findings` (fonctionnalité séparée, non alimentée par le flux de questions/réponses MDR) — pas un artefact du bug corrigé ici, hors périmètre de cette étape.
+
+**Conséquence pour l'Étape 4** : contrairement à ce qui était anticipé avant cette extension, re-tagger l'audit de production avec le bon `referentialId` **suffira désormais** à faire réapparaître le score sur la page `/dashboard` réelle (`scoreGlobal` + `frameworkScores.mdr`), en plus des vues par-audit déjà réparées.

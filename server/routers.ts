@@ -29,7 +29,9 @@ import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
 
 import { generateAuditReport } from "./report-generator";
-import { auditReports, sites as sitesTable } from "../drizzle/schema";
+import { auditReports, sites as sitesTable, referentiels, audits as auditsTable } from "../drizzle/schema";
+import { computeGenericAuditScoreSafe } from "./audit-scoring";
+import { safeParseArray } from "./mdr-router";
 
 import { storagePut as uploadToS3 } from "./storage";
 
@@ -47,6 +49,61 @@ const zIsoDate = z.preprocess((v) => {
 
 // "" / undefined -> null (critical for organisationId or optional strings)
 const emptyStringToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
+
+// Correspondance code référentiel (stable) -> clé attendue par le frontend
+// (client/src/pages/Dashboard.tsx, REFERENTIAL_DEFS/TRANSVERSE_DEFS). Ce sont
+// des identifiants de code, pas des IDs auto-increment — stable par design,
+// contrairement à referentialId qui ne doit jamais être codé en dur.
+const REFERENTIEL_CODE_TO_FRONTEND_KEY: Record<string, string> = {
+  MDR: "mdr",
+  IVDR: "ivdr",
+  FDA_QMSR: "fda-qmsr",
+  MDSAP: "mdsap",
+  ISO13485: "iso-13485",
+  ISO14971: "iso-14971",
+  ISO9001: "iso-9001",
+};
+
+/**
+ * Score moyen par référentiel (clé frontend), calculé à la volée à partir des
+ * audits de l'utilisateur — voir server/audit-scoring.ts pour le pourquoi
+ * (la table audits n'a pas de colonne score/conformityRate).
+ */
+async function getFrameworkScores(userId: number): Promise<Record<string, number>> {
+  const dbConn = await db.getDb();
+  if (!dbConn) return {};
+
+  const [userAudits, allReferentiels] = await Promise.all([
+    dbConn.select().from(auditsTable).where(eq(auditsTable.userId, userId)),
+    dbConn.select().from(referentiels),
+  ]);
+
+  const codeById = new Map(allReferentiels.map((r: any) => [r.id, r.code]));
+
+  const scoresByKey = new Map<string, number[]>();
+
+  for (const audit of userAudits) {
+    const refIds: number[] = safeParseArray((audit as any).referentialIds).map(Number);
+    const primaryRefId = refIds[0];
+    if (primaryRefId === undefined) continue;
+
+    const code = codeById.get(primaryRefId);
+    const key = code ? REFERENTIEL_CODE_TO_FRONTEND_KEY[code] : undefined;
+    if (!key) continue;
+
+    const score = await computeGenericAuditScoreSafe(dbConn, userId, (audit as any).id);
+    if (score === null) continue;
+
+    if (!scoresByKey.has(key)) scoresByKey.set(key, []);
+    scoresByKey.get(key)!.push(score);
+  }
+
+  const result: Record<string, number> = {};
+  for (const [key, scores] of scoresByKey.entries()) {
+    result[key] = Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10;
+  }
+  return result;
+}
 
 const optionalTrimmedStringOrNull = z.preprocess((v: unknown) => {
   if (v === "" || v === undefined || v === null) return null;
@@ -737,13 +794,36 @@ export const appRouter = router({
     getKPIs: protectedProcedure.query(async ({ ctx }) => {
       const stats: any = await dashboardV2.getDashboardStats(ctx.user.id, {});
 
+      // Frontend (client/src/pages/Dashboard.tsx) attend aussi frameworkScores,
+      // un score par référentiel (cartes "chaque référentiel" + normes
+      // transverses) — commenté "TODO(data): pas d'endpoint backend..." côté
+      // client jusqu'ici. Calculé ici à la volée par code de référentiel
+      // (jamais par ID en dur), même barème que audit.getScore.
+      const frameworkScores = await getFrameworkScores(ctx.user.id);
+
       // We return a stable shape even if dashboardV2 changes internally
       return {
-        scoreGlobal: stats?.globalScore ?? stats?.scoreGlobal ?? 0,
-        progression: stats?.completionRate ?? stats?.progression ?? 0,
-        conforme: stats?.okCount ?? stats?.conforme ?? 0,
-        nonConforme: stats?.nokCount ?? stats?.nonConforme ?? 0,
-        nonConformitiesCount: stats?.nokCount ?? stats?.nonConformitiesCount ?? 0,
+        scoreGlobal: stats?.averageAuditScore ?? stats?.globalScore ?? stats?.scoreGlobal ?? 0,
+        progression:
+          stats?.totalAudits > 0
+            ? Math.round(
+                (((stats?.auditsByStatus?.completed ?? 0) + (stats?.auditsByStatus?.closed ?? 0)) /
+                  stats.totalAudits) *
+                  1000
+              ) / 10
+            : (stats?.completionRate ?? stats?.progression ?? 0),
+        conforme: stats?.findingsByType?.positive ?? stats?.okCount ?? stats?.conforme ?? 0,
+        nonConforme:
+          (stats?.findingsByType?.nc_major ?? 0) + (stats?.findingsByType?.nc_minor ?? 0) ||
+          stats?.nokCount ||
+          stats?.nonConforme ||
+          0,
+        nonConformitiesCount:
+          (stats?.findingsByType?.nc_major ?? 0) + (stats?.findingsByType?.nc_minor ?? 0) ||
+          stats?.nokCount ||
+          stats?.nonConformitiesCount ||
+          0,
+        frameworkScores,
       };
     }),
 

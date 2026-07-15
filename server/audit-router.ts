@@ -1,84 +1,11 @@
 // Backend---QARA-main/server/audit-router.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
-import { audits, sites, auditResponses, questions } from "../drizzle/schema";
-import { getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
-
-/**
- * Score/stats identiques à mdr.getAuditDashboard (server/mdr-router.ts) et à
- * iso-router.ts (même barème) — dupliqué ici volontairement en une fonction
- * pure et courte plutôt que de réexporter tout getAuditDashboard, qui renvoie
- * aussi des champs propres à l'UI MDR (byCriticality, byProcess détaillés).
- * Réutilise en revanche telles quelles les fonctions de scoping
- * (getAuditContextInternal, fetchAuditScopedQuestions) qui portent la vraie
- * logique métier (rôle économique, onboarding multi-rôles, filtrage
- * processus) — voir docs/audit/12-onboarding.md.
- */
-const SCORE_MAP: Record<string, number> = {
-  compliant: 100,
-  partial: 60,
-  non_compliant: 20,
-  not_applicable: 100,
-  in_progress: 50,
-};
-
-async function computeGenericAuditStats(db: any, userId: number, auditId: number) {
-  const auditContext = await getAuditContextInternal(db, userId, auditId);
-
-  const questionRows = await fetchAuditScopedQuestions(db, {
-    auditId,
-    userId,
-    economicRole: auditContext.economicRole,
-    economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
-    situationTags: auditContext.situationTags,
-    processIds: auditContext.processIds,
-    referentialIds: auditContext.referentialIds,
-    select: { questionKey: (questions as any).questionKey },
-  });
-
-  const scopedKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey)));
-  const totalQuestions = scopedKeys.size;
-
-  const responseRows = await db
-    .select({
-      questionKey: (auditResponses as any).questionKey,
-      responseValue: (auditResponses as any).responseValue,
-    })
-    .from(auditResponses)
-    .where(and(eq((auditResponses as any).auditId, auditId), eq((auditResponses as any).userId, userId)));
-
-  const scopedResponses = (responseRows || []).filter((r: any) => scopedKeys.has(String(r.questionKey)));
-
-  const stats = {
-    totalQuestions,
-    answered: 0,
-    compliant: 0,
-    partial: 0,
-    non_compliant: 0,
-    not_applicable: 0,
-    in_progress: 0,
-  };
-
-  let scoreTotal = 0;
-  let scoreCount = 0;
-
-  for (const r of scopedResponses) {
-    const status = String(r.responseValue || "in_progress");
-    if (status in stats) {
-      (stats as any)[status] += 1;
-      if (status !== "in_progress") stats.answered += 1;
-    }
-    scoreTotal += SCORE_MAP[status] ?? 50;
-    scoreCount += 1;
-  }
-
-  const score = scoreCount > 0 ? Math.round((scoreTotal / scoreCount) * 10) / 10 : 0;
-
-  return { audit: auditContext.audit, stats, score };
-}
+import { audits, sites } from "../drizzle/schema";
+import { computeGenericAuditStats } from "./audit-scoring";
 
 export const auditRouter = router({
   /**

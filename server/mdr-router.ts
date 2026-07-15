@@ -89,7 +89,7 @@ function normalizeEconomicRole(v: any): string {
  * - supporte JSON array
  * - supporte le cas double-encodé: "\"[\"purchasing_suppliers\"]\""
  */
-function safeParseArray(v: any): any[] {
+export function safeParseArray(v: any): any[] {
   if (!v) return [];
   if (Array.isArray(v)) return v;
 

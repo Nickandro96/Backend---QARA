@@ -15,6 +15,7 @@ import {
   questions
 } from "../drizzle/schema";
 import { eq, and, sql, desc, gte, lte, inArray, or } from "drizzle-orm";
+import { computeGenericAuditScoreSafe } from "./audit-scoring";
 
 // Types pour les filtres
 export interface DashboardFilters {
@@ -109,21 +110,25 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
     closed: userAudits.filter(a => a.status === "closed").length
   };
   
-  // Calculate average score and conformity rate
-  const scoresAndRates = userAudits
-    .filter(a => a.score && a.conformityRate)
-    .map(a => ({
-      score: parseFloat(a.score!),
-      conformityRate: parseFloat(a.conformityRate!)
-    }));
-  
-  const averageAuditScore = scoresAndRates.length > 0
-    ? scoresAndRates.reduce((sum, s) => sum + s.score, 0) / scoresAndRates.length
+  // Calculate average score and conformity rate.
+  // NOTE: `audits` n'a pas de colonnes `score`/`conformityRate` (vérifié dans
+  // drizzle/schema.ts) — rien ne les écrit jamais pour MDR/ISO, donc l'ancien
+  // filtre `a.score && a.conformityRate` était toujours faux et ce bloc
+  // renvoyait systématiquement 0, quel que soit l'audit. Recalcul à la volée
+  // via le même barème que mdr.getAuditDashboard (server/audit-scoring.ts),
+  // scopé par référentiel/rôle — jamais d'ID en dur. Un seul score unifié
+  // sert ici pour les deux métriques (pas de distinction score/conformité
+  // séparée dans ce modèle, contrairement à l'ancien design jamais réellement
+  // alimenté).
+  const computedScores = (
+    await Promise.all(userAudits.map(a => computeGenericAuditScoreSafe(db, userId, a.id)))
+  ).filter((s): s is number => s !== null);
+
+  const averageAuditScore = computedScores.length > 0
+    ? computedScores.reduce((sum, s) => sum + s, 0) / computedScores.length
     : 0;
-  
-  const globalConformityRate = scoresAndRates.length > 0
-    ? scoresAndRates.reduce((sum, s) => sum + s.conformityRate, 0) / scoresAndRates.length
-    : 0;
+
+  const globalConformityRate = averageAuditScore;
   
   // Get findings for these audits
   const findingConditions = buildFindingFilters(filters);
