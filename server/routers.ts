@@ -7,7 +7,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router, requireCapability } from "./_core/trpc";
 
 import * as db from "./db";
 import * as dashboardV2 from "./db-dashboard-v2";
@@ -954,7 +954,10 @@ export const appRouter = router({
   // Reports
   // --------------------------------------------
   reports: router({
-    generate: protectedProcedure
+    // Front expects: trpc.reports.generate(...) - gaté client-side par
+    // hasCapability("canExportReports", ...) dans Reports.tsx. Jamais
+    // contrôlé côté serveur jusqu'ici (voir server/plans/capabilities.ts).
+    generate: requireCapability("canExportReports")
       .input(
         z.object({
           auditId: z.number(),

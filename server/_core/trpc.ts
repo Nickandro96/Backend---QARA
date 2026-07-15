@@ -5,6 +5,7 @@ import { parse as parseCookie } from "cookie";
 import { COOKIE_NAME } from "../../shared/const";
 import { sdk } from "./sdk";
 import * as db from "../db";
+import { hasCapability, type PlanCapabilities } from "../plans/capabilities";
 
 /**
  * Context
@@ -65,3 +66,21 @@ export const adminProcedure = t.procedure.use(async (opts) => {
   }
   return opts.next({ ctx: { ...opts.ctx, user: opts.ctx.user } });
 });
+
+/**
+ * Gating serveur des plans (classification/FDA/veille/export) — voir
+ * server/plans/capabilities.ts. Absent de qitbxl jusqu'ici : un compte
+ * Free pouvait appeler ces endpoints directement via l'API en contournant
+ * le gating visuel du frontend (client/src/lib/plans.ts).
+ */
+export function requireCapability(capability: keyof PlanCapabilities) {
+  return protectedProcedure.use(async (opts) => {
+    if (!hasCapability(capability, opts.ctx.user)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Fonctionnalité réservée aux plans payants.",
+      });
+    }
+    return opts.next({ ctx: opts.ctx });
+  });
+}

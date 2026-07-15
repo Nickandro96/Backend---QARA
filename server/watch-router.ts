@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
+import { router, protectedProcedure, adminProcedure, requireCapability } from "./_core/trpc";
 import {
   getUpdatesCached,
   triggerRefresh,
@@ -20,7 +20,11 @@ const zCompanyProfile = z.object({
 });
 
 export const watchRouter = router({
-  updates: protectedProcedure
+  // Front expects: trpc.watch.updates() (client/src/pages/WatchDashboard.tsx,
+  // gaté client-side par hasCapability("canUseVeille", ...) dans
+  // RegulatoryWatch.tsx) — endpoint de données principal de la fonctionnalité
+  // veille réglementaire, jamais contrôlé côté serveur jusqu'ici.
+  updates: requireCapability("canUseVeille")
     .input(
       z.object({
         limit: z.coerce.number().int().min(1).max(200).default(50),

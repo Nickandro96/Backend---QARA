@@ -191,3 +191,17 @@ profile.get      -> pas de passwordHash
 system.listUsers -> pas de passwordHash (testé avec un compte admin réel)
 ```
 Non-régression confirmée sur `audit.getScore`/`dashboard.getKPIs` (Étapes 2/3) après ce changement.
+
+### Gating serveur des plans — nouveau, réimplémenté dans le style qitbxl
+
+`server/plans/capabilities.ts` (nouveau) : matrice de capacités (`canUseClassification`/`canUseFDA`/`canUseVeille`/`canExportReports`), mêmes tiers et mêmes noms que le frontend déjà déployé (`client/src/lib/plans.ts`, bo77ju) pour rester cohérent avec le modèle de plans réellement en production — pas repris du lot sécurité de `main` (abandonné), juste aligné sur ce que le client attend déjà. `requireCapability(capability)` ajouté dans `server/_core/trpc.ts`, suivant exactement le même style que `protectedProcedure`/`adminProcedure` déjà en place (`t.procedure.use(...)`) — un admin passe toujours.
+
+Appliqué à :
+- `classification.classify` (`canUseClassification`)
+- `fda.saveQualification`, `fda.createAudit` (`canUseFDA`)
+- `watch.updates` (`canUseVeille`) — `watch.refresh` reste `adminProcedure`, déjà correctement restreint, pas un gating de plan à ajouter
+- `reports.generate` (`canExportReports`)
+
+**Découverte séparée, non traitée** : `FdaClassification.tsx` et `RegulatoryWatch.tsx`/`AlertPreferencesDialog.tsx` (frontend, tous deux réellement routés dans `App.tsx`, pas du code mort) appellent `trpc.fdaClassification.save` et `trpc.regulatory.getStats`/`getAlertPreferences`/`updateAlertPreferences` — **recherche exhaustive confirmée : ces noms n'existent nulle part côté qitbxl**. Différent du gating (on ne peut pas gater un endpoint qui n'existe pas) — plus proche du problème de l'Étape 2 (endpoints manquants), mais sur un périmètre de fonctionnalités différent (FDA classification spécifique, alertes de veille), jamais mentionné dans le plan de réconciliation initial. Signalé ici pour mémoire, pas corrigé — hors périmètre déclaré de cette étape, nécessiterait son propre lot si vous voulez le traiter.
+
+**Testé en local** : compte Free (`subscriptionTier=NULL`) → `FORBIDDEN` sur les 4 endpoints ; même compte passé `pro` → passe (réponse réelle de `classification.classify`, `watch.updates`) ; repassé `NULL` après test. Non-régression confirmée sur `audit.getScore`/`dashboard.getKPIs`/`auth.me` (toujours sans `passwordHash`) après ce changement.
