@@ -96,3 +96,80 @@ En vérifiant précisément comment chaque page frontend appelle ces endpoints (
 2. **`Reports.tsx` appelle `audit.getScore({}, ...)` — jamais avec `auditId`.** Ma première implémentation exigeait `auditId` obligatoire ; cet appel aurait échoué à chaque fois (erreur de validation zod). En creusant l'usage réel (`globalScore?.score`, `.conforme`, `.nok`, `.na` — Reports.tsx:95-107), cette page veut un **score global agrégé sur tous les audits**, pas le score d'un audit précis. `auditId` rendu optionnel : fourni → comportement par-audit existant ; omis → agrégation sur tous les audits de l'utilisateur, champs renommés exactement `conforme`/`nok`/`na` pour matcher cette page (pas les mêmes noms que `getStats`, qui garde `compliant`/`non_compliant`/`not_applicable`). Testé en GET sans paramètre (comme le fait réellement react-query) : `{"score":80.6,"conforme":47,"nok":15,"na":0}`.
 
 Ces deux corrections + les précédentes sont dans le même commit à venir sur `claude/qara-backend-assainissement-qitbxl`.
+
+## Étape 4 — Réparer l'audit existant en base (userId 2) — procédure préparée, non exécutée
+
+**Rien exécuté par moi contre `new-claude`.** La procédure ci-dessous a été testée mécaniquement en local (base `qara_qitbxl_local`) : bug reproduit (un audit forcé à `referentialIds:[1]`), backup, pré-vérification, UPDATE, post-vérification — puis confirmation que `dashboard.getKPIs` réaffiche bien `scoreGlobal:80.6`/`frameworkScores:{"mdr":80.6}` après réparation, exactement le résultat attendu en production une fois les Étapes 2+3 déployées.
+
+### Ordre de déploiement recommandé (avant d'exécuter cette étape)
+
+1. **Backend (Étape 2)** en premier, ou en même temps que le frontend — jamais après. Un backend à jour avec un ancien frontend est sans risque (l'ancien frontend continue d'envoyer `referentialIds:[1]`, les nouveaux endpoints répondent, juste avec un score à 0 pour ce référentiel tant que l'Étape 3 n'est pas là — pas pire qu'avant, pas de crash).
+2. **Frontend (Étape 3)** — un frontend corrigé qui appelle des endpoints pas encore déployés échouerait (404) : ne jamais déployer le frontend seul en premier.
+3. **Cette Étape 4 (réparation de la ligne en base) en dernier**, une fois 1 et 2 en production — sinon la ligne réparée ne sert à rien tant que l'ancien code du dashboard (colonnes inexistantes) tourne encore.
+
+### Étape 0 — Résoudre l'ID MDR réel sur `new-claude` (ne jamais assumer 3)
+
+```sql
+SELECT id, code, name FROM referentiels WHERE code = 'MDR';
+```
+Utilisez l'`id` retourné ici dans les requêtes suivantes — ne réutilisez pas le chiffre 3 du prompt sans l'avoir revérifié à cet instant précis (l'historique de cette mission a déjà montré des offsets différents entre environnements).
+
+### Étape A — Sauvegarde (obligatoire avant toute écriture)
+
+```sql
+CREATE TABLE IF NOT EXISTS audits_backup_20260715 LIKE audits;
+INSERT INTO audits_backup_20260715 SELECT * FROM audits;
+
+CREATE TABLE IF NOT EXISTS audit_responses_backup_20260715 LIKE audit_responses;
+INSERT INTO audit_responses_backup_20260715 SELECT * FROM audit_responses;
+
+SELECT COUNT(*) AS audits_backed_up FROM audits_backup_20260715;
+SELECT COUNT(*) AS responses_backed_up FROM audit_responses_backup_20260715;
+```
+
+### Étape B — Pré-vérification : identifier précisément le(s) audit(s) mal-tagué(s)
+
+```sql
+SELECT a.id, a.userId, a.name, a.status, a.referentialIds,
+       (SELECT COUNT(*) FROM audit_responses ar WHERE ar.auditId = a.id) AS nb_reponses
+FROM audits a
+WHERE a.userId = 2
+  AND JSON_CONTAINS(a.referentialIds, '1');
+```
+**Vérifiez avant de continuer** : cette requête doit retourner exactement la ou les lignes attendues (l'audit MDR à 59 réponses documenté). Si elle retourne autre chose (0 ligne, ou plusieurs lignes inattendues), **ne pas continuer** — revenir vers moi avec le résultat.
+
+### Étape C — La réparation (scoped, jamais un UPDATE non filtré)
+
+```sql
+UPDATE audits
+SET referentialIds = JSON_ARRAY((SELECT id FROM referentiels WHERE code = 'MDR'))
+WHERE userId = 2
+  AND JSON_CONTAINS(referentialIds, '1');
+```
+Le `WHERE` combine `userId = 2` et la présence de `1` dans le tableau — ne touche que la/les lignes identifiées à l'étape B, aucun autre audit ni aucun autre utilisateur.
+
+### Étape D — Post-vérification
+
+```sql
+-- Le référentiel doit maintenant être le bon ID (celui de l'Étape 0)
+SELECT id, userId, name, status, referentialIds FROM audits WHERE userId = 2;
+
+-- Les réponses de cet audit doivent être exactement les mêmes qu'avant (même nombre)
+SELECT COUNT(*) AS nb_reponses FROM audit_responses WHERE auditId = <id_trouvé_étape_B>;
+
+-- Confirmation d'innocuité : ces comptages doivent être identiques avant/après
+SELECT
+  (SELECT COUNT(*) FROM users) AS users,
+  (SELECT COUNT(*) FROM sites) AS sites,
+  (SELECT COUNT(*) FROM organisations) AS organisations;
+```
+
+Puis, dans l'application (une fois Étapes 2+3 déployées) : le dashboard doit réafficher le score MDR réel (~76% documenté, ou la valeur réellement calculée par `audit.getScore`/`dashboard.getKPIs` sur les 59 réponses de production — je ne peux pas garantir le chiffre exact à l'avance, seulement que le calcul se fera correctement une fois la ligne bien taguée).
+
+### Preuve que cette procédure fonctionne mécaniquement (test local, bug reproduit puis réparé)
+
+```
+AVANT réparation : referentialIds=[1]  → dashboard.getKPIs : {"scoreGlobal":0, "frameworkScores":{}}
+APRÈS réparation : referentialIds=[6]  → dashboard.getKPIs : {"scoreGlobal":80.6, "frameworkScores":{"mdr":80.6}}
+```
+(6 = ID local de MDR dans mon environnement de test ; sur `new-claude`, utilisez l'ID retourné par l'Étape 0.) `audit_responses` et les comptages `users`/`sites`/`organisations` confirmés inchangés après la réparation.
