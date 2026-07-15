@@ -287,7 +287,7 @@ async function buildApplicableProcessCandidates(db: any, selected: string[]) {
 }
 
 // Internal helper: get audit context WITHOUT calling tRPC endpoints
-async function getAuditContextInternal(db: any, userId: number, auditId: number) {
+export async function getAuditContextInternal(db: any, userId: number, auditId: number) {
   const [audit] = await db
     .select()
     .from(audits)
@@ -409,7 +409,7 @@ async function applyOnboardingScopeFilter(
  * - economicRole filter with safe fallback
  * - process filter (processId OR empty applicableProcesses OR JSON_CONTAINS candidates)
  */
-async function fetchAuditScopedQuestions(db: any, params: {
+export async function fetchAuditScopedQuestions(db: any, params: {
   auditId: number;
   userId: number;
   economicRole: string | null;

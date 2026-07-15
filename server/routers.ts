@@ -775,6 +775,66 @@ export const appRouter = router({
 
         return drill?.items ?? drill?.data ?? [];
       }),
+
+    // Front expects: trpc.dashboard.getSummary() (DashboardV2.tsx). La
+    // fonction existait déjà dans db-dashboard-v2.ts mais n'était jamais
+    // câblée dans le routeur — code mort côté serveur, appel cassé côté
+    // client (404) pour exactement le même symptôme que getFunnel/getHeatmap.
+    getSummary: protectedProcedure
+      .input(
+        z
+          .object({
+            period: z
+              .object({
+                start: zIsoDate,
+                end: zIsoDate,
+              })
+              .optional(),
+            siteId: z.number().int().positive().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        return await dashboardV2.getDashboardSummary(ctx.user.id, input);
+      }),
+
+    // Front expects: trpc.dashboard.getFunnel()
+    getFunnel: protectedProcedure
+      .input(
+        z
+          .object({
+            period: z
+              .object({
+                start: zIsoDate,
+                end: zIsoDate,
+              })
+              .optional(),
+            siteId: z.number().int().positive().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        return await dashboardV2.getDashboardFunnel(ctx.user.id, input);
+      }),
+
+    // Front expects: trpc.dashboard.getHeatmap()
+    getHeatmap: protectedProcedure
+      .input(
+        z
+          .object({
+            period: z
+              .object({
+                start: zIsoDate,
+                end: zIsoDate,
+              })
+              .optional(),
+            siteId: z.number().int().positive().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        return await dashboardV2.getDashboardHeatmap(ctx.user.id, input);
+      }),
   }),
 
   // Stripe payment router
