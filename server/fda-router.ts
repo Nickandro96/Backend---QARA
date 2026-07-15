@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, protectedProcedure, requireCapability } from "./_core/trpc";
 import { getDb, createAudit } from "./db";
 import {
   actions,
@@ -244,7 +244,7 @@ export const fdaRouter = router({
     return latest;
   }),
 
-  saveQualification: protectedProcedure
+  saveQualification: requireCapability("canUseFDA")
     .input(
       z.object({
         sessionName: z.string().optional(),
@@ -302,7 +302,7 @@ export const fdaRouter = router({
       };
     }),
 
-  createAudit: protectedProcedure
+  createAudit: requireCapability("canUseFDA")
     .input(
       z.object({
         name: z.string().min(2),
