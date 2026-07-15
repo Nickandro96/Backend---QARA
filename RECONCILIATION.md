@@ -86,3 +86,13 @@ APRÈS : {"scoreGlobal":80.6,"progression":0,"conforme":0,"nonConforme":0,"nonCo
 `progression`/`conforme`/`nonConforme`/`nonConformitiesCount` restent à 0 : légitime, ils dépendent de la table `findings` (fonctionnalité séparée, non alimentée par le flux de questions/réponses MDR) — pas un artefact du bug corrigé ici, hors périmètre de cette étape.
 
 **Conséquence pour l'Étape 4** : contrairement à ce qui était anticipé avant cette extension, re-tagger l'audit de production avec le bon `referentialId` **suffira désormais** à faire réapparaître le score sur la page `/dashboard` réelle (`scoreGlobal` + `frameworkScores.mdr`), en plus des vues par-audit déjà réparées.
+
+### Deux écarts de signature trouvés en préparant l'Étape 3 (lecture des vrais call sites frontend)
+
+En vérifiant précisément comment chaque page frontend appelle ces endpoints (pas seulement les noms, les paramètres exacts), deux écarts supplémentaires sont apparus — non détectés par l'analyse précédente (qui ne regardait que les noms de procédures) :
+
+1. **`AuditSelector.tsx` appelle `audit.list({ status, referentialId })`** — mon `list` n'acceptait que `status`/`siteId`. `referentialId` était silencieusement ignoré (zod sans `.strict()` ne rejette pas les clés inconnues), donc pas de crash mais un filtre inopérant : la sélection d'audit par référentiel ne filtrait rien. **Corrigé** : ajout du paramètre, filtré en mémoire sur `referentialIds` (JSON stocké en chaîne, via `safeParseArray`). Testé : `{referentialId:6}` → l'audit MDR ; `{referentialId:999}` → liste vide.
+
+2. **`Reports.tsx` appelle `audit.getScore({}, ...)` — jamais avec `auditId`.** Ma première implémentation exigeait `auditId` obligatoire ; cet appel aurait échoué à chaque fois (erreur de validation zod). En creusant l'usage réel (`globalScore?.score`, `.conforme`, `.nok`, `.na` — Reports.tsx:95-107), cette page veut un **score global agrégé sur tous les audits**, pas le score d'un audit précis. `auditId` rendu optionnel : fourni → comportement par-audit existant ; omis → agrégation sur tous les audits de l'utilisateur, champs renommés exactement `conforme`/`nok`/`na` pour matcher cette page (pas les mêmes noms que `getStats`, qui garde `compliant`/`non_compliant`/`not_applicable`). Testé en GET sans paramètre (comme le fait réellement react-query) : `{"score":80.6,"conforme":47,"nok":15,"na":0}`.
+
+Ces deux corrections + les précédentes sont dans le même commit à venir sur `claude/qara-backend-assainissement-qitbxl`.
