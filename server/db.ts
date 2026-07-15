@@ -324,7 +324,12 @@ export async function getUserProfile(userId: number) {
   if (!db) return undefined;
 
   const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  return result.length > 0 ? { ...result[0], userId: result[0].id } : undefined;
+  if (result.length === 0) return undefined;
+  // Renvoyé directement par profile.get (server/routers.ts) au client
+  // authentifié — ne jamais y laisser passwordHash (même faille que
+  // auth.me/ctx.user, un endpoint séparé qui l'exposait indépendamment).
+  const { passwordHash, ...safeUser } = result[0] as any;
+  return { ...safeUser, userId: result[0].id };
 }
 
 export async function updateUserProfile(
@@ -746,13 +751,18 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
 export async function listAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users).orderBy(desc(users.createdAt));
+  const rows = await db.select().from(users).orderBy(desc(users.createdAt));
+  // Renvoyé par system.listUsers (adminProcedure, server/_core/systemRouter.ts)
+  // à l'admin connecté — même règle que ctx.user/profile.get : jamais de
+  // passwordHash dans une réponse API, admin ou non.
+  return rows.map(({ passwordHash, ...safe }: any) => safe);
 }
 
 export async function listAllUserProfiles() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(users).orderBy(desc(users.createdAt));
+  const rows = await db.select().from(users).orderBy(desc(users.createdAt));
+  return rows.map(({ passwordHash, ...safe }: any) => safe);
 }
 
 export async function upsertUserProfile(

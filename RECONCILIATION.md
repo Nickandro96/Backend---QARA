@@ -173,3 +173,21 @@ AVANT réparation : referentialIds=[1]  → dashboard.getKPIs : {"scoreGlobal":0
 APRÈS réparation : referentialIds=[6]  → dashboard.getKPIs : {"scoreGlobal":80.6, "frameworkScores":{"mdr":80.6}}
 ```
 (6 = ID local de MDR dans mon environnement de test ; sur `new-claude`, utilisez l'ID retourné par l'Étape 0.) `audit_responses` et les comptages `users`/`sites`/`organisations` confirmés inchangés après la réparation.
+
+## Étape 5 — Sécurité sur qitbxl
+
+### Fuite `passwordHash` — corrigée à la racine, pas juste sur `auth.me`
+
+Corrigée dans `server/_core/trpc.ts` (`createContext`) : `passwordHash` est retiré de `ctx.user` dès sa construction, avant qu'aucun routeur ne puisse le lire ou le spreader. `auth.me` (`publicProcedure.query((opts) => opts.ctx.user)`) en hérite automatiquement.
+
+En creusant, **`profile.get` avait la même fuite indépendamment** (`db.getUserProfile` fait sa propre requête `select().from(users)`, pas via `ctx.user`) — corrigée séparément dans `server/db.ts`. Et **`system.listUsers` (endpoint admin) aussi** — même correction appliquée à `listAllUsers`/`listAllUserProfiles`. Trois endroits distincts, même faille, corrigés ensemble puisque le correctif est identique (destructurer `passwordHash` avant de retourner).
+
+Vérifié : aucun code du repo ne lit `ctx.user.passwordHash` ni n'appelle `getUserProfile`/`listAllUsers`/`listAllUserProfiles` en attendant ce champ — aucune régression possible par construction.
+
+**Testé en local** (compte promu admin temporairement pour le test, puis repassé `user`) :
+```
+auth.me          -> pas de passwordHash (rôle, email, etc. présents)
+profile.get      -> pas de passwordHash
+system.listUsers -> pas de passwordHash (testé avec un compte admin réel)
+```
+Non-régression confirmée sur `audit.getScore`/`dashboard.getKPIs` (Étapes 2/3) après ce changement.

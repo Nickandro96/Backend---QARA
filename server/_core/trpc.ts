@@ -30,7 +30,13 @@ export const createContext = async ({
         const openId = await sdk.verifySessionToken(token);
         if (openId) {
           const found = await db.getUserByOpenId(openId);
-          if (found) user = found;
+          // ctx.user est renvoyé tel quel par auth.me (publicProcedure.query
+          // ((opts) => opts.ctx.user), server/routers.ts) et lu par tout code
+          // qui spread ctx.user ailleurs — ne jamais y laisser passwordHash.
+          if (found) {
+            const { passwordHash, ...safeUser } = found as any;
+            user = safeUser;
+          }
         }
       }
     }
