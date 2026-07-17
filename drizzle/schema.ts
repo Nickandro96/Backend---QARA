@@ -710,6 +710,29 @@ export const mdrEvidenceFilesRelations = relations(mdrEvidenceFiles, ({ one }) =
 }));
 
 /* =========================
+   CONTACT MESSAGES
+   Frontend expects trpc.contact.submit/list/updateStatus
+   (client/src/pages/Contact.tsx, AdminContacts.tsx) — voir
+   INVENTAIRE-BUGS.md #6/#8, table absente jusqu'ici (formulaire public,
+   pas d'authentification requise pour soumettre).
+========================= */
+export const contact_messages = mysqlTable("contact_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").references(() => users.id),
+
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  company: varchar("company", { length: 255 }),
+  subject: varchar("subject", { length: 100 }).notNull(),
+  message: text("message").notNull(),
+
+  status: mysqlEnum("status", ["new", "read", "replied", "archived"]).default("new").notNull(),
+
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+/* =========================
    Aliases / Backward compatibility
 ========================= */
 export const referentials = referentiels;

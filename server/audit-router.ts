@@ -200,11 +200,12 @@ export const auditRouter = router({
         const { score, stats } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
         return {
           score,
-          totalQuestions: stats.totalQuestions,
+          total: stats.totalQuestions,
           answered: stats.answered,
           conforme: stats.compliant,
           nok: stats.non_compliant,
           na: stats.not_applicable,
+          progress: stats.totalQuestions > 0 ? Math.round((stats.answered / stats.totalQuestions) * 1000) / 10 : 0,
         };
       }
 
@@ -212,6 +213,8 @@ export const auditRouter = router({
       let conforme = 0;
       let nok = 0;
       let na = 0;
+      let total = 0;
+      let answered = 0;
       const scores: number[] = [];
 
       for (const audit of userAudits) {
@@ -222,6 +225,8 @@ export const auditRouter = router({
           conforme += stats.compliant;
           nok += stats.non_compliant;
           na += stats.not_applicable;
+          total += stats.totalQuestions;
+          answered += stats.answered;
         } catch {
           // audit sans scope résolvable (ex. brouillon jamais rattaché à un
           // référentiel) : exclu de l'agrégat plutôt que de faire échouer
@@ -230,6 +235,7 @@ export const auditRouter = router({
       }
 
       const score = scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
-      return { score, conforme, nok, na };
+      const progress = total > 0 ? Math.round((answered / total) * 1000) / 10 : 0;
+      return { score, conforme, nok, na, total, answered, progress };
     }),
 });

@@ -32,6 +32,8 @@ import { generateAuditReport } from "./report-generator";
 import { auditReports, sites as sitesTable, referentiels, audits as auditsTable } from "../drizzle/schema";
 import { computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
+import { findingsRouter, actionsRouter } from "./findings-router";
+import { contactRouter } from "./contact-router";
 
 import { storagePut as uploadToS3 } from "./storage";
 
@@ -950,6 +952,15 @@ export const appRouter = router({
   // Audit Management (ton router existant)
   audit: auditRouter,
 
+  // Front expects: trpc.findings.list / trpc.actions.list (AuditDetail.tsx)
+  // — voir INVENTAIRE-BUGS.md #4, namespaces absents jusqu'ici.
+  findings: findingsRouter,
+  actions: actionsRouter,
+
+  // Front expects: trpc.contact.submit/list/updateStatus (Contact.tsx,
+  // AdminContacts.tsx) — voir INVENTAIRE-BUGS.md #6/#8.
+  contact: contactRouter,
+
   // --------------------------------------------
   // Reports
   // --------------------------------------------
@@ -978,28 +989,31 @@ export const appRouter = router({
           const fileKey = `reports/${ctx.user.id}/${fileName}`;
           const { url: fileUrl } = await uploadToS3(fileKey, pdfBuffer, "application/pdf");
 
-          // Save report metadata to database
+          // Save report metadata to database.
+          // MySQL (contrairement à Postgres) n'a pas de .returning() sur
+          // drizzle - l'insert renvoie un ResultSetHeader avec insertId
+          // (voir INVENTAIRE-BUGS.md #3, même famille de bug que le crash
+          // processes/processus et le stub storagePut, tous les trois
+          // masqués par le même try/catch générique).
           const database = await db.getDb();
-          const [report] = await database
-            .insert(auditReports)
-            .values({
-              auditId: input.auditId,
-              userId: ctx.user.id,
-              reportType: input.reportType,
-              reportTitle: `Rapport d'audit #${input.auditId}`,
-              reportVersion: "1.0",
-              fileKey,
-              fileUrl,
-              fileSize: pdfBuffer.length,
-              fileFormat: "pdf",
-              generatedBy: ctx.user.id,
-              metadata: JSON.stringify({
-                includeGraphs: input.includeGraphs,
-                includeEvidence: input.includeEvidence,
-                includeActionPlan: input.includeActionPlan,
-              }),
-            })
-            .returning();
+          const insertResult: any = await database.insert(auditReports).values({
+            auditId: input.auditId,
+            userId: ctx.user.id,
+            reportType: input.reportType,
+            reportTitle: `Rapport d'audit #${input.auditId}`,
+            reportVersion: "1.0",
+            fileKey,
+            fileUrl,
+            fileSize: pdfBuffer.length,
+            fileFormat: "pdf",
+            generatedBy: ctx.user.id,
+            metadata: JSON.stringify({
+              includeGraphs: input.includeGraphs,
+              includeEvidence: input.includeEvidence,
+              includeActionPlan: input.includeActionPlan,
+            }),
+          });
+          const report = { id: insertResult?.[0]?.insertId ?? insertResult?.insertId };
 
           return {
             success: true,
