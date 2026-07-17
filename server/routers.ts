@@ -34,6 +34,7 @@ import { computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 import { findingsRouter, actionsRouter } from "./findings-router";
 import { contactRouter } from "./contact-router";
+import { documentsRouter } from "./documents-router";
 
 import { storagePut as uploadToS3 } from "./storage";
 
@@ -996,6 +997,11 @@ export const appRouter = router({
   // Front expects: trpc.contact.submit/list/updateStatus (Contact.tsx,
   // AdminContacts.tsx) — voir INVENTAIRE-BUGS.md #6/#8.
   contact: contactRouter,
+
+  // Front expects: trpc.documents.* (Documents.tsx) — voir
+  // INVENTAIRE-BUGS.md #7. Bibliothèque de documents vide (pas de contenu
+  // réglementaire fabriqué), IA réelle via ANTHROPIC_API_KEY si configurée.
+  documents: documentsRouter,
 
   // --------------------------------------------
   // Reports

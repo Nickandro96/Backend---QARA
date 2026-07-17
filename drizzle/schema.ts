@@ -733,6 +733,52 @@ export const contact_messages = mysqlTable("contact_messages", {
 });
 
 /* =========================
+   Documents obligatoires (bibliothèque de conformité documentaire)
+
+   trpc.documents.{getAll,getById,getStats,getUserStatus,updateStatus,
+   checkCoherence,explainDocument} (client/src/pages/Documents.tsx) — voir
+   INVENTAIRE-BUGS.md #7, namespace absent jusqu'ici. Tables créées vides :
+   aucun contenu réglementaire (nom/objectif/contenu minimum attendu des
+   documents obligatoires MDR/ISO) n'existe dans ce dépôt ni sur l'ancienne
+   branche `main` sous une forme réutilisable (schéma incompatible, mêmes
+   champs manquants) — à peupler via un import de contenu réel ultérieur,
+   comme le corpus de 473 questions (scripts/import-corpus.mjs), plutôt que
+   d'inventer du contenu de conformité.
+========================= */
+export const mandatoryDocuments = mysqlTable("mandatory_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  referentialId: int("referentialId").notNull().references(() => referentiels.id),
+  processId: int("processId").references(() => processus.id),
+
+  documentName: varchar("documentName", { length: 255 }).notNull(),
+  reference: varchar("reference", { length: 100 }),
+  role: varchar("role", { length: 50 }),
+  status: mysqlEnum("status", ["obligatoire", "conditionnel", "attendu"]).default("obligatoire").notNull(),
+
+  objective: text("objective"),
+  minimumContent: text("minimumContent"),
+  auditorExpectations: text("auditorExpectations"),
+  commonErrors: text("commonErrors"),
+
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export const userDocumentStatus = mysqlTable("user_document_status", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  documentId: int("documentId").notNull().references(() => mandatoryDocuments.id, { onDelete: "cascade" }),
+
+  status: mysqlEnum("status", ["manquant", "a_mettre_a_jour", "conforme"]).default("manquant").notNull(),
+  notes: text("notes"),
+  fileUrl: varchar("fileUrl", { length: 1000 }),
+
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+}, (table) => ({
+  userDocIdx: uniqueIndex("user_doc_idx").on(table.userId, table.documentId),
+}));
+
+/* =========================
    Aliases / Backward compatibility
 ========================= */
 export const referentials = referentiels;
