@@ -5,7 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
 import { audits, sites } from "../drizzle/schema";
-import { computeGenericAuditStats } from "./audit-scoring";
+import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 
 /**
@@ -20,6 +20,23 @@ import { safeParseArray } from "./mdr-router";
 function filterByReferentialId(rows: any[], referentialId?: number) {
   if (referentialId === undefined) return rows;
   return rows.filter((a: any) => safeParseArray(a.referentialIds).map(Number).includes(referentialId));
+}
+
+/**
+ * AuditsList.tsx/AuditHistory.tsx lisent `audit.auditType` (colonne réelle :
+ * `type`) et `audit.conformityRate` (n'existe pas dans le schéma `audits` —
+ * jamais écrit pour MDR/ISO, voir audit-scoring.ts). Enrichit chaque ligne
+ * avec les noms de champs attendus par ces pages, score recalculé à la volée
+ * via la même variante "safe" que le dashboard (null si audit sans réponse
+ * exploitable, plutôt que de faire échouer toute la liste).
+ */
+async function enrichWithDisplayFields(db: any, userId: number, rows: any[]) {
+  return Promise.all(
+    rows.map(async (audit: any) => {
+      const score = await computeGenericAuditScoreSafe(db, userId, audit.id);
+      return { ...audit, auditType: audit.type, conformityRate: score };
+    })
+  );
 }
 
 export const auditRouter = router({
@@ -110,8 +127,10 @@ export const auditRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
-      return filterByReferentialId(rows, input?.referentialId);
+      return enrichWithDisplayFields(db, ctx.user.id, filterByReferentialId(rows, input?.referentialId));
     }),
 
   listAudits: protectedProcedure
@@ -125,8 +144,10 @@ export const auditRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
-      return filterByReferentialId(rows, input?.referentialId);
+      return enrichWithDisplayFields(db, ctx.user.id, filterByReferentialId(rows, input?.referentialId));
     }),
 
   /**

@@ -67,6 +67,40 @@ const REFERENTIEL_CODE_TO_FRONTEND_KEY: Record<string, string> = {
 };
 
 /**
+ * Frontend expects: trpc.profile.get().activeReferentials (voir
+ * client/src/lib/onboarding.ts, hasActiveReferential/getActiveReferentials) —
+ * la table `users` n'a jamais eu ce champ, donc ProtectedRoute retombait
+ * systématiquement sur le localStorage client (INVENTAIRE-BUGS.md #11),
+ * renvoyant même les comptes ayant de vrais audits vers /onboarding dans un
+ * navigateur neuf. Dérivé ici des référentiels réellement utilisés par
+ * l'utilisateur (n'importe lequel de ses audits, pas seulement le référentiel
+ * "primaire" utilisé par getFrameworkScores), pas d'un flag d'achèvement
+ * séparé — un utilisateur avec un audit réel a de facto "terminé" l'onboarding.
+ */
+async function getActiveReferentialCodesForUser(userId: number): Promise<string[]> {
+  const dbConn = await db.getDb();
+  if (!dbConn) return [];
+
+  const [userAudits, allReferentiels] = await Promise.all([
+    dbConn.select({ referentialIds: auditsTable.referentialIds }).from(auditsTable).where(eq(auditsTable.userId, userId)),
+    dbConn.select().from(referentiels),
+  ]);
+
+  const codeById = new Map(allReferentiels.map((r: any) => [r.id, r.code]));
+  const keys = new Set<string>();
+
+  for (const audit of userAudits) {
+    for (const refId of safeParseArray((audit as any).referentialIds).map(Number)) {
+      const code = codeById.get(refId);
+      const key = code ? REFERENTIEL_CODE_TO_FRONTEND_KEY[code] : undefined;
+      if (key) keys.add(key);
+    }
+  }
+
+  return Array.from(keys);
+}
+
+/**
  * Score moyen par référentiel (clé frontend), calculé à la volée à partir des
  * audits de l'utilisateur — voir server/audit-scoring.ts pour le pourquoi
  * (la table audits n'a pas de colonne score/conformityRate).
@@ -141,7 +175,9 @@ export const appRouter = router({
 
   profile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserProfile(ctx.user.id);
+      const profile = await db.getUserProfile(ctx.user.id);
+      const activeReferentials = await getActiveReferentialCodesForUser(ctx.user.id);
+      return { ...profile, activeReferentials };
     }),
 
     update: protectedProcedure
