@@ -140,6 +140,11 @@ export const auditRouter = router({
           status: z.enum(["draft", "planned", "in_progress", "completed", "closed", "cancelled"]).optional(),
           siteId: z.number().int().positive().optional(),
           referentialId: z.number().int().positive().optional(),
+          // AuditsList.tsx envoie ce champ (barre de recherche) depuis le
+          // début, mais il n'était jamais déclaré ici : zod (non-strict)
+          // le supprimait silencieusement, la recherche ne filtrait donc
+          // jamais rien (trouvé pendant CORRECTIONS.md LOT 2).
+          search: z.string().optional(),
         })
         .optional()
     )
@@ -147,7 +152,10 @@ export const auditRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
-      return enrichWithDisplayFields(db, ctx.user.id, filterByReferentialId(rows, input?.referentialId));
+      const scoped = filterByReferentialId(rows, input?.referentialId);
+      const search = input?.search?.trim().toLowerCase();
+      const searched = search ? scoped.filter((a: any) => String(a.name ?? "").toLowerCase().includes(search)) : scoped;
+      return enrichWithDisplayFields(db, ctx.user.id, searched);
     }),
 
   /**
