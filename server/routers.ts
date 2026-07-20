@@ -32,6 +32,9 @@ import { generateAuditReport } from "./report-generator";
 import { auditReports, sites as sitesTable, referentiels, audits as auditsTable } from "../drizzle/schema";
 import { computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
+import { findingsRouter, actionsRouter } from "./findings-router";
+import { contactRouter } from "./contact-router";
+import { documentsRouter } from "./documents-router";
 
 import { storagePut as uploadToS3 } from "./storage";
 
@@ -63,6 +66,40 @@ const REFERENTIEL_CODE_TO_FRONTEND_KEY: Record<string, string> = {
   ISO14971: "iso-14971",
   ISO9001: "iso-9001",
 };
+
+/**
+ * Frontend expects: trpc.profile.get().activeReferentials (voir
+ * client/src/lib/onboarding.ts, hasActiveReferential/getActiveReferentials) —
+ * la table `users` n'a jamais eu ce champ, donc ProtectedRoute retombait
+ * systématiquement sur le localStorage client (INVENTAIRE-BUGS.md #11),
+ * renvoyant même les comptes ayant de vrais audits vers /onboarding dans un
+ * navigateur neuf. Dérivé ici des référentiels réellement utilisés par
+ * l'utilisateur (n'importe lequel de ses audits, pas seulement le référentiel
+ * "primaire" utilisé par getFrameworkScores), pas d'un flag d'achèvement
+ * séparé — un utilisateur avec un audit réel a de facto "terminé" l'onboarding.
+ */
+async function getActiveReferentialCodesForUser(userId: number): Promise<string[]> {
+  const dbConn = await db.getDb();
+  if (!dbConn) return [];
+
+  const [userAudits, allReferentiels] = await Promise.all([
+    dbConn.select({ referentialIds: auditsTable.referentialIds }).from(auditsTable).where(eq(auditsTable.userId, userId)),
+    dbConn.select().from(referentiels),
+  ]);
+
+  const codeById = new Map(allReferentiels.map((r: any) => [r.id, r.code]));
+  const keys = new Set<string>();
+
+  for (const audit of userAudits) {
+    for (const refId of safeParseArray((audit as any).referentialIds).map(Number)) {
+      const code = codeById.get(refId);
+      const key = code ? REFERENTIEL_CODE_TO_FRONTEND_KEY[code] : undefined;
+      if (key) keys.add(key);
+    }
+  }
+
+  return Array.from(keys);
+}
 
 /**
  * Score moyen par référentiel (clé frontend), calculé à la volée à partir des
@@ -139,7 +176,9 @@ export const appRouter = router({
 
   profile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserProfile(ctx.user.id);
+      const profile = await db.getUserProfile(ctx.user.id);
+      const activeReferentials = await getActiveReferentialCodesForUser(ctx.user.id);
+      return { ...profile, activeReferentials };
     }),
 
     update: protectedProcedure
@@ -950,6 +989,20 @@ export const appRouter = router({
   // Audit Management (ton router existant)
   audit: auditRouter,
 
+  // Front expects: trpc.findings.list / trpc.actions.list (AuditDetail.tsx)
+  // — voir INVENTAIRE-BUGS.md #4, namespaces absents jusqu'ici.
+  findings: findingsRouter,
+  actions: actionsRouter,
+
+  // Front expects: trpc.contact.submit/list/updateStatus (Contact.tsx,
+  // AdminContacts.tsx) — voir INVENTAIRE-BUGS.md #6/#8.
+  contact: contactRouter,
+
+  // Front expects: trpc.documents.* (Documents.tsx) — voir
+  // INVENTAIRE-BUGS.md #7. Bibliothèque de documents vide (pas de contenu
+  // réglementaire fabriqué), IA réelle via ANTHROPIC_API_KEY si configurée.
+  documents: documentsRouter,
+
   // --------------------------------------------
   // Reports
   // --------------------------------------------
@@ -978,28 +1031,31 @@ export const appRouter = router({
           const fileKey = `reports/${ctx.user.id}/${fileName}`;
           const { url: fileUrl } = await uploadToS3(fileKey, pdfBuffer, "application/pdf");
 
-          // Save report metadata to database
+          // Save report metadata to database.
+          // MySQL (contrairement à Postgres) n'a pas de .returning() sur
+          // drizzle - l'insert renvoie un ResultSetHeader avec insertId
+          // (voir INVENTAIRE-BUGS.md #3, même famille de bug que le crash
+          // processes/processus et le stub storagePut, tous les trois
+          // masqués par le même try/catch générique).
           const database = await db.getDb();
-          const [report] = await database
-            .insert(auditReports)
-            .values({
-              auditId: input.auditId,
-              userId: ctx.user.id,
-              reportType: input.reportType,
-              reportTitle: `Rapport d'audit #${input.auditId}`,
-              reportVersion: "1.0",
-              fileKey,
-              fileUrl,
-              fileSize: pdfBuffer.length,
-              fileFormat: "pdf",
-              generatedBy: ctx.user.id,
-              metadata: JSON.stringify({
-                includeGraphs: input.includeGraphs,
-                includeEvidence: input.includeEvidence,
-                includeActionPlan: input.includeActionPlan,
-              }),
-            })
-            .returning();
+          const insertResult: any = await database.insert(auditReports).values({
+            auditId: input.auditId,
+            userId: ctx.user.id,
+            reportType: input.reportType,
+            reportTitle: `Rapport d'audit #${input.auditId}`,
+            reportVersion: "1.0",
+            fileKey,
+            fileUrl,
+            fileSize: pdfBuffer.length,
+            fileFormat: "pdf",
+            generatedBy: ctx.user.id,
+            metadata: JSON.stringify({
+              includeGraphs: input.includeGraphs,
+              includeEvidence: input.includeEvidence,
+              includeActionPlan: input.includeActionPlan,
+            }),
+          });
+          const report = { id: insertResult?.[0]?.insertId ?? insertResult?.insertId };
 
           return {
             success: true,

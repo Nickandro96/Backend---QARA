@@ -349,7 +349,7 @@ function generateCoverPage(doc: PDFKit.PDFDocument, data: AuditData, options: Re
 // ============================================================================
 
 function generateContextSection(doc: PDFKit.PDFDocument, data: AuditData, options: ReportOptions) {
-  const { audit, site, processes } = data;
+  const { audit, site, processus: processes } = data;
 
   doc.fontSize(18).font("Helvetica-Bold").text("1. CONTEXTE & PÉRIMÈTRE");
   doc.moveDown(1);

@@ -11,6 +11,7 @@ import {
   isoQualifications,
   questions,
   processus,
+  referentiels,
   sites,
 } from "../drizzle/schema";
 
@@ -23,6 +24,14 @@ import {
  * - Maintenir la page "ISO Qualification" existante
  */
 
+/**
+ * ⚠️ CAUSE RACINE (voir CORRECTIONS.md, LOT 1) : ce tableau contenait
+ * autrefois `referentialId: 2`/`referentialId: 3` en dur — un ID de
+ * référentiel n'est PAS stable entre environnements (production ≠ local),
+ * seul `referentiels.code` l'est. `referentialId` n'est donc plus une
+ * constante ici : il est résolu dynamiquement en base par `resolveReferentialId`
+ * ci-dessous, à chaque usage.
+ */
 const ISO_STANDARDS = [
   {
     code: "9001" as const,
@@ -30,7 +39,6 @@ const ISO_STANDARDS = [
     name: "ISO 9001:2015",
     label: "ISO 9001",
     description: "Systèmes de management de la qualité - Exigences générales",
-    referentialId: 2,
   },
   {
     code: "13485" as const,
@@ -38,14 +46,32 @@ const ISO_STANDARDS = [
     name: "ISO 13485:2016",
     label: "ISO 13485",
     description: "Dispositifs médicaux - Systèmes de management de la qualité",
-    referentialId: 3,
   },
 ];
 
-function referentialIdFromStandard(input: "9001" | "13485" | "ISO9001" | "ISO13485"): number {
+function normalizeIsoCode(input: "9001" | "13485" | "ISO9001" | "ISO13485"): "ISO9001" | "ISO13485" {
   const s = String(input);
-  if (s === "9001" || s === "ISO9001") return 2;
-  return 3;
+  return s === "13485" || s === "ISO13485" ? "ISO13485" : "ISO9001";
+}
+
+/**
+ * Résout l'ID réel du référentiel ISO9001/ISO13485 par son `code`
+ * (`referentiels.code`), jamais par un ID numérique en dur — un même code
+ * peut correspondre à un ID différent entre l'environnement local et la
+ * production (voir CORRECTIONS.md, LOT 1, cause racine des bugs
+ * d'audits mal tagués).
+ */
+async function resolveReferentialId(db: any, input: "9001" | "13485" | "ISO9001" | "ISO13485"): Promise<number> {
+  const code = normalizeIsoCode(input);
+  const [row] = await db
+    .select({ id: (referentiels as any).id })
+    .from(referentiels)
+    .where(eq((referentiels as any).code, code))
+    .limit(1);
+  if (!row) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Référentiel ${code} introuvable en base` });
+  }
+  return Number((row as any).id);
 }
 
 /**
@@ -251,7 +277,18 @@ export const isoRouter = router({
   // ---------------------------------------------------------------------------
   // Standards & lookup
   // ---------------------------------------------------------------------------
-  getStandards: publicProcedure.query(() => ISO_STANDARDS),
+  getStandards: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return ISO_STANDARDS.map((s) => ({ ...s, referentialId: null as number | null }));
+
+    const rows = await db
+      .select({ id: (referentiels as any).id, code: (referentiels as any).code })
+      .from(referentiels)
+      .where(inArray((referentiels as any).code, ["ISO9001", "ISO13485"]));
+    const idByCode = new Map(rows.map((r: any) => [r.code, Number(r.id)]));
+
+    return ISO_STANDARDS.map((s) => ({ ...s, referentialId: idByCode.get(s.standardCode) ?? null }));
+  }),
 
   getProcesses: protectedProcedure.query(async () => {
     const db = await getDb();
@@ -363,7 +400,7 @@ export const isoRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      const referentialId = referentialIdFromStandard(input.standard);
+      const referentialId = await resolveReferentialId(db, input.standard);
 
       const rawProcessIds = (input.processes ?? []).map((p) => String(p).trim()).filter(Boolean);
       const candidates = await buildProcessCandidates(db, rawProcessIds);
@@ -591,7 +628,7 @@ createOrUpdateAuditDraft: protectedProcedure
   )
   .mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    const referentialId = referentialIdFromStandard(input.standardCode);
+    const referentialId = await resolveReferentialId(db, input.standardCode);
 
     const inputProcessIdsRaw = Array.isArray(input.processIds) ? input.processIds : [];
     const inputHasSelection = inputProcessIdsRaw.length > 0;
@@ -791,14 +828,30 @@ createOrUpdateAuditDraft: protectedProcedure
 
   /**
    * List ISO audits for current user (used by review dashboard).
-   * Filters audits whose referentialIds contain ISO 9001 (2) or ISO 13485 (3).
+   * Filters audits whose referentialIds contain ISO 9001 ou ISO 13485.
+   *
+   * ⚠️ CAUSE RACINE (CORRECTIONS.md, LOT 1) : ce filtre comparait
+   * `refs.includes(2) || refs.includes(3)` en dur. Si les IDs réels de
+   * ISO9001/ISO13485 en production diffèrent de 2/3 (ce qui est le cas
+   * connu — voir CORRECTIONS.md), ce filtre exclut TOUS les audits ISO
+   * réels et `listAudits` renvoie toujours un tableau vide : symptôme
+   * exact de "les audits ne s'affichent pas" pour un utilisateur ISO.
+   * Résolu dynamiquement par code, jamais par ID en dur.
    */
   listAudits: protectedProcedure.query(async ({ ctx }) => {
     try {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const [iso9001Id, iso13485Id] = await Promise.all([
+        resolveReferentialId(db, "ISO9001"),
+        resolveReferentialId(db, "ISO13485"),
+      ]);
+
       const all = await listAuditsByUserId(ctx.user.id);
       const auditsIso = (all || []).filter((a: any) => {
-        const refs = safeJsonArray<any>((a as any).referentialIds);
-        return refs.includes(2) || refs.includes(3);
+        const refs = safeJsonArray<any>((a as any).referentialIds).map(Number);
+        return refs.includes(iso9001Id) || refs.includes(iso13485Id);
       });
       return { audits: auditsIso };
     } catch (e: any) {

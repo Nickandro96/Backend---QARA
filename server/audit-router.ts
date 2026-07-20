@@ -5,7 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
 import { audits, sites } from "../drizzle/schema";
-import { computeGenericAuditStats } from "./audit-scoring";
+import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 
 /**
@@ -20,6 +20,23 @@ import { safeParseArray } from "./mdr-router";
 function filterByReferentialId(rows: any[], referentialId?: number) {
   if (referentialId === undefined) return rows;
   return rows.filter((a: any) => safeParseArray(a.referentialIds).map(Number).includes(referentialId));
+}
+
+/**
+ * AuditsList.tsx/AuditHistory.tsx lisent `audit.auditType` (colonne réelle :
+ * `type`) et `audit.conformityRate` (n'existe pas dans le schéma `audits` —
+ * jamais écrit pour MDR/ISO, voir audit-scoring.ts). Enrichit chaque ligne
+ * avec les noms de champs attendus par ces pages, score recalculé à la volée
+ * via la même variante "safe" que le dashboard (null si audit sans réponse
+ * exploitable, plutôt que de faire échouer toute la liste).
+ */
+async function enrichWithDisplayFields(db: any, userId: number, rows: any[]) {
+  return Promise.all(
+    rows.map(async (audit: any) => {
+      const score = await computeGenericAuditScoreSafe(db, userId, audit.id);
+      return { ...audit, auditType: audit.type, conformityRate: score };
+    })
+  );
 }
 
 export const auditRouter = router({
@@ -110,8 +127,10 @@ export const auditRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
-      return filterByReferentialId(rows, input?.referentialId);
+      return enrichWithDisplayFields(db, ctx.user.id, filterByReferentialId(rows, input?.referentialId));
     }),
 
   listAudits: protectedProcedure
@@ -121,12 +140,22 @@ export const auditRouter = router({
           status: z.enum(["draft", "planned", "in_progress", "completed", "closed", "cancelled"]).optional(),
           siteId: z.number().int().positive().optional(),
           referentialId: z.number().int().positive().optional(),
+          // AuditsList.tsx envoie ce champ (barre de recherche) depuis le
+          // début, mais il n'était jamais déclaré ici : zod (non-strict)
+          // le supprimait silencieusement, la recherche ne filtrait donc
+          // jamais rien (trouvé pendant CORRECTIONS.md LOT 2).
+          search: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
-      return filterByReferentialId(rows, input?.referentialId);
+      const scoped = filterByReferentialId(rows, input?.referentialId);
+      const search = input?.search?.trim().toLowerCase();
+      const searched = search ? scoped.filter((a: any) => String(a.name ?? "").toLowerCase().includes(search)) : scoped;
+      return enrichWithDisplayFields(db, ctx.user.id, searched);
     }),
 
   /**
@@ -200,11 +229,12 @@ export const auditRouter = router({
         const { score, stats } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
         return {
           score,
-          totalQuestions: stats.totalQuestions,
+          total: stats.totalQuestions,
           answered: stats.answered,
           conforme: stats.compliant,
           nok: stats.non_compliant,
           na: stats.not_applicable,
+          progress: stats.totalQuestions > 0 ? Math.round((stats.answered / stats.totalQuestions) * 1000) / 10 : 0,
         };
       }
 
@@ -212,6 +242,8 @@ export const auditRouter = router({
       let conforme = 0;
       let nok = 0;
       let na = 0;
+      let total = 0;
+      let answered = 0;
       const scores: number[] = [];
 
       for (const audit of userAudits) {
@@ -222,6 +254,8 @@ export const auditRouter = router({
           conforme += stats.compliant;
           nok += stats.non_compliant;
           na += stats.not_applicable;
+          total += stats.totalQuestions;
+          answered += stats.answered;
         } catch {
           // audit sans scope résolvable (ex. brouillon jamais rattaché à un
           // référentiel) : exclu de l'agrégat plutôt que de faire échouer
@@ -230,6 +264,7 @@ export const auditRouter = router({
       }
 
       const score = scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
-      return { score, conforme, nok, na };
+      const progress = total > 0 ? Math.round((answered / total) * 1000) / 10 : 0;
+      return { score, conforme, nok, na, total, answered, progress };
     }),
 });
