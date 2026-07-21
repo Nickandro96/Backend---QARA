@@ -30,11 +30,28 @@ function filterByReferentialId(rows: any[], referentialId?: number) {
  * via la même variante "safe" que le dashboard (null si audit sans réponse
  * exploitable, plutôt que de faire échouer toute la liste).
  */
+/**
+ * AuditsList.tsx lit `audit.siteName`, absent de `getAudits()` (ligne brute
+ * `audits`, pas de jointure) — affichait "Non spécifié" pour des audits
+ * ayant pourtant un site réel (même famille de bug que BUG 2 sur
+ * /audits/:id, trouvée dans le balayage CORRECTIONS.md LOT 5).
+ */
 async function enrichWithDisplayFields(db: any, userId: number, rows: any[]) {
+  const siteIds = Array.from(new Set(rows.map((a: any) => a.siteId).filter(Boolean)));
+  const siteRows = siteIds.length > 0
+    ? await db.select({ id: sites.id, name: sites.name }).from(sites).where(inArray(sites.id, siteIds))
+    : [];
+  const siteNameById = new Map(siteRows.map((s: any) => [s.id, s.name]));
+
   return Promise.all(
     rows.map(async (audit: any) => {
       const score = await computeGenericAuditScoreSafe(db, userId, audit.id);
-      return { ...audit, auditType: audit.type, conformityRate: score };
+      return {
+        ...audit,
+        auditType: audit.type,
+        conformityRate: score,
+        siteName: audit.siteId ? siteNameById.get(audit.siteId) ?? null : null,
+      };
     })
   );
 }
