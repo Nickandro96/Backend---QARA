@@ -1,10 +1,10 @@
 // Backend---QARA-main/server/audit-router.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
-import { audits, sites } from "../drizzle/schema";
+import { audits, sites, referentiels } from "../drizzle/schema";
 import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 
@@ -159,14 +159,39 @@ export const auditRouter = router({
     }),
 
   /**
-   * Frontend expects: trpc.audit.getById({ id }) (AuditDetail.tsx)
+   * Frontend expects: trpc.audit.getById({ id }) (AuditDetail.tsx) — enrichi
+   * avec siteName/referentialNames/auditors, absents de la ligne brute
+   * `audits` (CORRECTIONS.md LOT 5, BUG 2 : la page affichait "Non
+   * spécifié" pour ces trois champs car ils n'existaient nulle part dans
+   * la réponse, pas parce que les données étaient réellement manquantes en
+   * base). Référentiels résolus par `code`, jamais par ID en dur.
    */
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
       const audit = await getAuditById(input.id, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
-      return audit;
+
+      const [site] = (audit as any).siteId
+        ? await db.select({ name: sites.name }).from(sites).where(eq(sites.id, (audit as any).siteId)).limit(1)
+        : [null];
+
+      const refIds = safeParseArray((audit as any).referentialIds).map(Number).filter((n: number) => Number.isFinite(n));
+      let referentialNames: string | null = null;
+      if (refIds.length > 0) {
+        const refs = await db.select({ name: referentiels.name }).from(referentiels).where(inArray(referentiels.id, refIds));
+        referentialNames = refs.map((r: any) => r.name).filter(Boolean).join(", ") || null;
+      }
+
+      return {
+        ...audit,
+        siteName: (site as any)?.name ?? null,
+        referentialNames,
+        auditors: (audit as any).auditorName ?? null,
+      };
     }),
 
   /**

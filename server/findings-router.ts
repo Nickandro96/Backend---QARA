@@ -47,9 +47,22 @@ export const findingsRouter = router({
         closed: "Closed",
       };
 
+      // `severity` est écrit en anglais (critical/high/medium/low, voir
+      // fda-router.ts CRITICALITY_WEIGHTS) mais AuditDetail.tsx comparait
+      // `criticality === 'Critique'/'Majeure'/'Mineure'/'Observation'`
+      // (français) sans jamais rien mapper — les compteurs "NC Critiques"/
+      // "NC Majeures" affichaient donc toujours 0, quelle que soit la
+      // vraie sévérité (CORRECTIONS.md LOT 5, trouvé en corrigeant BUG 1/2).
+      const CRITICALITY_MAP: Record<string, string> = {
+        critical: "Critique",
+        high: "Majeure",
+        medium: "Mineure",
+        low: "Observation",
+      };
+
       return rows.map((f: any) => ({
         ...f,
-        criticality: f.severity,
+        criticality: CRITICALITY_MAP[String(f.severity ?? "").toLowerCase()] ?? f.severity,
         processName: null,
         status: STATUS_MAP[f.status] ?? f.status,
       }));
