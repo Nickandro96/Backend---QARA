@@ -104,4 +104,52 @@ export const actionsRouter = router({
         status: STATUS_MAP[a.status] ?? a.status,
       }));
     }),
+
+  /**
+   * Frontend expects: trpc.actions.listMine() (ActionDashboard.tsx, page
+   * "Plan d'action") — vue agrégée sur TOUS les audits de l'utilisateur,
+   * contrairement à `list` qui est scopé à un seul audit. Remplace la page
+   * "Plan d'action" qui montait jusqu'ici une ancienne page d'accueil avec
+   * des données entièrement inventées (72%, "3 écarts critiques", etc. —
+   * voir CORRECTIONS.md LOT 5, BUG 3).
+   */
+  listMine: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const myAudits = await db
+      .select({ id: audits.id, name: audits.name })
+      .from(audits)
+      .where(eq(audits.userId, ctx.user.id));
+    if (myAudits.length === 0) return [];
+    const auditNameById = new Map(myAudits.map((a: any) => [a.id, a.name]));
+
+    const myFindings = await db
+      .select({ id: findings.id, auditId: findings.auditId })
+      .from(findings)
+      .where(inArray(findings.auditId, myAudits.map((a: any) => a.id)));
+    if (myFindings.length === 0) return [];
+    const auditIdByFindingId = new Map(myFindings.map((f: any) => [f.id, f.auditId]));
+
+    const rows = await db
+      .select()
+      .from(actions)
+      .where(inArray(actions.findingId, myFindings.map((f: any) => f.id)));
+
+    const STATUS_MAP: Record<string, string> = {
+      in_progress: "InProgress",
+      closed: "Completed",
+    };
+
+    return rows.map((a: any) => {
+      const auditId = auditIdByFindingId.get(a.findingId) ?? null;
+      return {
+        ...a,
+        title: a.actionCode || a.description?.slice(0, 60) || `Action #${a.id}`,
+        status: STATUS_MAP[a.status] ?? a.status,
+        auditId,
+        auditName: auditId ? auditNameById.get(auditId) ?? null : null,
+      };
+    });
+  }),
 });
