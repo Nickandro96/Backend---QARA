@@ -29,6 +29,10 @@ import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
 
 import { generateAuditReport } from "./report-generator";
+import { assembleReportData } from "./report/reportData";
+import { renderReportPdf } from "./report/pdfRenderer";
+import { renderReportWord } from "./report/wordRenderer";
+import { renderReportExcel } from "./report/excelRenderer";
 import {
   auditReports,
   sites as sitesTable,
@@ -993,6 +997,66 @@ export const appRouter = router({
           console.error("[Reports] Generate error:", error);
           throw new Error(`Failed to generate report: ${error.message}`);
         }
+      }),
+
+    /**
+     * Tâche D — nouveau générateur (PDF/Word/Excel, bilingue), consomme
+     * l'objet ReportData assemblé une seule fois (reportData.ts) pour
+     * garantir des chiffres identiques entre les trois formats. Séparé de
+     * `generate` (l'ancien générateur PDF seul) plutôt que de le remplacer
+     * en place — même logique de dépréciation progressive que Reports.tsx/
+     * exportUtils.ts (D.0) : l'ancien chemin reste disponible en repli tant
+     * que le nouveau n'est pas validé en production.
+     */
+    generateV2: requireCapability("canExportReports")
+      .input(
+        z.object({
+          auditId: z.number(),
+          format: z.enum(["pdf", "word", "excel"]),
+          language: z.enum(["fr", "en"]).default("fr"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const reportData = await assembleReportData(input.auditId, ctx.user.id, input.language);
+
+        let buffer: Buffer;
+        let mimeType: string;
+        let extension: string;
+        if (input.format === "pdf") {
+          buffer = await renderReportPdf(reportData);
+          mimeType = "application/pdf";
+          extension = "pdf";
+        } else if (input.format === "word") {
+          buffer = await renderReportWord(reportData);
+          mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          extension = "docx";
+        } else {
+          buffer = await renderReportExcel(reportData);
+          mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+          extension = "xlsx";
+        }
+
+        const fileName = `audit-report-${input.auditId}-${input.language}-${Date.now()}.${extension}`;
+        const fileKey = `reports/${ctx.user.id}/${fileName}`;
+        const { url: fileUrl } = await uploadToS3(fileKey, buffer, mimeType);
+
+        const database = await db.getDb();
+        const insertResult: any = await database.insert(auditReports).values({
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          reportUrl: fileUrl,
+          reference: reportData.reportReference,
+          version: reportData.reportVersion,
+          status: "draft",
+          language: input.language,
+        });
+
+        return {
+          success: true,
+          reportId: insertResult?.[0]?.insertId ?? insertResult?.insertId,
+          fileUrl,
+          fileName,
+        };
       }),
 
     list: protectedProcedure
