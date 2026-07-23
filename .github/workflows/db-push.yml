@@ -100,41 +100,14 @@ jobs:
           NODE
 
       # ✅ Apply raw SQL migrations in drizzle/migrations/*.sql
+      # Seule source de vérité pour les migrations (voir CORRECTIONS.md,
+      # incident du 2026-07-23 : deux bases distinctes ciblées par deux
+      # mécanismes concurrents étaient la cause racine, pas deux migrateurs
+      # sur une même base). L'étape "Ensure Drizzle journal exists then
+      # migrate" a été retirée : elle recréait un journal drizzle-kit vide
+      # à chaque run (drizzle/meta/_journal.json avec entries: []), donc
+      # `drizzle-kit migrate` ne voyait jamais rien à appliquer — un no-op
+      # par construction depuis toujours, qui donnait l'illusion trompeuse
+      # qu'un second mécanisme de migration tournait ici.
       - name: Apply SQL migrations from drizzle/migrations
         run: pnpm exec tsx scripts/apply-sql-migrations.ts
-
-      # ✅ Ensure Drizzle journal exists then migrate (single-step, safe)
-      - name: Ensure Drizzle journal exists then migrate (single-step, safe)
-        run: |
-          set -euxo pipefail
-
-          echo "CWD=$(pwd)"
-          ls -la
-
-          JOURNAL='{"version":"5","dialect":"mysql","entries":[]}'
-
-          for d in \
-            "meta" \
-            "drizzle/meta" \
-            "drizzle/migrations/meta" \
-            "migrations/meta"
-          do
-            mkdir -p "$d"
-            if [ ! -f "$d/_journal.json" ]; then
-              echo "$JOURNAL" > "$d/_journal.json"
-            fi
-          done
-
-          mkdir -p drizzle/migrations
-          mkdir -p migrations
-
-          echo "== meta =="
-          ls -la meta || true
-          echo "== drizzle/meta =="
-          ls -la drizzle/meta || true
-          echo "== drizzle/migrations/meta =="
-          ls -la drizzle/migrations/meta || true
-          echo "== migrations/meta =="
-          ls -la migrations/meta || true
-
-          pnpm exec drizzle-kit migrate --config=drizzle.config.ts
