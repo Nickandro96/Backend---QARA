@@ -16,7 +16,7 @@ import { getDb } from "./db";
 import { audits, findings, actions, auditResponses, questions, referentials, processus, sites, evidenceFiles, users } from "../drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { generateRadarChart, generateHistogramChart, generateHeatmapChart, generateTimelineChart } from './report-charts';
-import { computeGenericAuditStats } from "./audit-scoring";
+import { computeGenericAuditStats, mapSeverityToFindingType } from "./audit-scoring";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -153,18 +153,11 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     .from(findings)
     .where(eq(findings.auditId, auditId));
 
-  const FINDING_TYPE_BY_SEVERITY: Record<string, string> = {
-    critical: "nc_major",
-    high: "nc_major",
-    medium: "nc_minor",
-    low: "observation",
-  };
-
   const auditFindings = rawFindings.map((f: any) => ({
     ...f,
     title: f.title || `Constat #${f.id}`,
     description: f.description || "Non renseigné",
-    findingType: FINDING_TYPE_BY_SEVERITY[String(f.severity ?? "").toLowerCase()] ?? "ofi",
+    findingType: mapSeverityToFindingType(f.severity),
     findingCode: `FIND-${String(f.id).padStart(4, "0")}`,
     clause: null,
     criticality: f.severity ?? "N/A",

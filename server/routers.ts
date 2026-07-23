@@ -688,147 +688,17 @@ export const appRouter = router({
   }),
 
   // --------------------------------------------
-  // Dashboard (fix dates JSON)
+  // Dashboard — uniquement les deux procédures réellement appelées par
+  // client/src/pages/Dashboard.tsx (le tableau de bord réel, routé sur
+  // /dashboard). Les autres procédures qui existaient ici (getStats direct,
+  // getTimeseries, getRadar direct, getDrilldown direct, getScoring,
+  // getSuggestions, getScoreTrend, getProcessProgress, getSummary, getFunnel,
+  // getHeatmap) n'étaient appelées que par DashboardV2.tsx/DashboardExecutive.tsx
+  // /DrilldownModal.tsx — trois composants jamais routés (voir App.tsx) et
+  // supprimés (Tâche C, CORRECTIONS.md). Supprimées avec eux plutôt que
+  // laissées en code mort.
   // --------------------------------------------
   dashboard: router({
-    getStats: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardStats(ctx.user.id, input);
-      }),
-
-    getTimeseries: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardTimeseries(ctx.user.id, input);
-      }),
-
-    getRadar: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-            auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardRadar(ctx.user.id, input);
-      }),
-
-    getDrilldown: protectedProcedure
-      .input(
-        z.object({
-          type: z.enum(["findings", "actions", "audits"]),
-          filters: z
-            .object({
-              processId: z.number().optional(),
-              findingType: z.string().optional(),
-              criticality: z.string().optional(),
-              status: z.string().optional(),
-              siteId: z.number().int().positive().optional(),
-            })
-            .optional(),
-          pagination: z.object({
-            page: z.number(),
-            pageSize: z.number(),
-          }),
-          sort: z.object({
-            field: z.string(),
-            order: z.enum(["asc", "desc"]),
-          }),
-        })
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardDrilldown(
-          ctx.user.id,
-          input.type,
-          input.filters || {},
-          input.pagination,
-          input.sort
-        );
-      }),
-
-    getScoring: protectedProcedure
-      .input(
-        z
-          .object({
-            market: z.enum(["eu", "us", "all"]).optional(),
-            referentialIds: z.array(z.number()).optional(),
-            economicRole: z.enum(["fabricant", "importateur", "distributeur", "all"]).optional(),
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-            auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
-            criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardScoring(ctx.user.id, input);
-      }),
-
-    getSuggestions: protectedProcedure
-      .input(
-        z
-          .object({
-            market: z.enum(["eu", "us", "all"]).optional(),
-            referentialIds: z.array(z.number()).optional(),
-            economicRole: z.enum(["fabricant", "importateur", "distributeur", "all"]).optional(),
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-            auditStatus: z.enum(["draft", "in_progress", "completed", "closed", "all"]).optional(),
-            criticality: z.enum(["critical", "high", "medium", "low", "all"]).optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardStats(ctx.user.id, input);
-      }),
-
-    // ==========================================================
-    // ✅ COMPATIBILITY LAYER (for legacy /dashboard frontend calls)
-    // ==========================================================
-
     // Front expects: trpc.dashboard.getKPIs()
     getKPIs: protectedProcedure.query(async ({ ctx }) => {
       const stats: any = await dashboardV2.getDashboardStats(ctx.user.id, {});
@@ -866,20 +736,6 @@ export const appRouter = router({
       };
     }),
 
-    // Front expects: trpc.dashboard.getScoreTrend()
-    getScoreTrend: protectedProcedure.query(async ({ ctx }) => {
-      // If V2 already returns a timeseries array, we forward it.
-      // If it returns an object, we still forward (frontend should adapt).
-      return await dashboardV2.getDashboardTimeseries(ctx.user.id, {});
-    }),
-
-    // Front expects: trpc.dashboard.getProcessProgress()
-    getProcessProgress: protectedProcedure.query(async ({ ctx }) => {
-      const radar: any = await dashboardV2.getDashboardRadar(ctx.user.id, {});
-      // If V2 provides process progress, return it; else fallback to empty.
-      return radar?.processProgress ?? radar?.processes ?? radar?.items ?? [];
-    }),
-
     // Front expects: trpc.dashboard.getRecentFindings({ limit })
     getRecentFindings: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(50).default(5) }))
@@ -895,65 +751,6 @@ export const appRouter = router({
         return drill?.items ?? drill?.data ?? [];
       }),
 
-    // Front expects: trpc.dashboard.getSummary() (DashboardV2.tsx). La
-    // fonction existait déjà dans db-dashboard-v2.ts mais n'était jamais
-    // câblée dans le routeur — code mort côté serveur, appel cassé côté
-    // client (404) pour exactement le même symptôme que getFunnel/getHeatmap.
-    getSummary: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardSummary(ctx.user.id, input);
-      }),
-
-    // Front expects: trpc.dashboard.getFunnel()
-    getFunnel: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardFunnel(ctx.user.id, input);
-      }),
-
-    // Front expects: trpc.dashboard.getHeatmap()
-    getHeatmap: protectedProcedure
-      .input(
-        z
-          .object({
-            period: z
-              .object({
-                start: zIsoDate,
-                end: zIsoDate,
-              })
-              .optional(),
-            siteId: z.number().int().positive().optional(),
-          })
-          .optional()
-      )
-      .query(async ({ ctx, input }) => {
-        return await dashboardV2.getDashboardHeatmap(ctx.user.id, input);
-      }),
   }),
 
   // Stripe payment router

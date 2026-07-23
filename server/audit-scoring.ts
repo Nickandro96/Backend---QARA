@@ -22,6 +22,23 @@ export const SCORE_MAP: Record<string, number> = {
   in_progress: 50,
 };
 
+/**
+ * `findings.severity` (colonne réelle) → type de constat.
+ * `findings` n'a pas de colonne `findingType`/`criticality` (vérifié dans
+ * drizzle/schema.ts) — cette dérivation est partagée entre report-generator.ts
+ * et db-dashboard-v2.ts pour éviter deux mappings divergents.
+ */
+export const FINDING_TYPE_BY_SEVERITY: Record<string, string> = {
+  critical: "nc_major",
+  high: "nc_major",
+  medium: "nc_minor",
+  low: "observation",
+};
+
+export function mapSeverityToFindingType(severity: string | null | undefined): string {
+  return FINDING_TYPE_BY_SEVERITY[String(severity ?? "").toLowerCase()] ?? "ofi";
+}
+
 export async function computeGenericAuditStats(db: any, userId: number, auditId: number) {
   const auditContext = await getAuditContextInternal(db, userId, auditId);
 
