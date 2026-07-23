@@ -16,6 +16,7 @@ import { getDb } from "./db";
 import { audits, findings, actions, auditResponses, questions, referentials, processus, sites, evidenceFiles, users } from "../drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { generateRadarChart, generateHistogramChart, generateHeatmapChart, generateTimelineChart } from './report-charts';
+import { computeGenericAuditStats } from "./audit-scoring";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -41,6 +42,11 @@ export interface AuditData {
   referentials: any[];
   processus: any[];
   auditor: any | null;
+  // Score/stats officiels de l'audit, calculés par computeGenericAuditStats
+  // (server/audit-scoring.ts) — même fonction que le dashboard/audit.getScore
+  // — pour que le taux de conformité affiché dans le rapport corresponde
+  // toujours à celui affiché ailleurs dans l'app (CORRECTIONS.md LOT 4).
+  scoring: { stats: any; score: number };
 }
 
 export interface ReportMetadata {
@@ -103,6 +109,23 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     : null;
 
   // Fetch responses with questions
+  //
+  // ⚠️ CAUSE RACINE (CORRECTIONS.md LOT 4, D.0) : deux bugs distincts trouvés
+  // ici avant toute construction, sur demande explicite de l'utilisateur.
+  // 1. La jointure se faisait sur `auditResponses.questionId = questions.id`,
+  //    mais `questionId` n'est JAMAIS renseigné pour les audits MDR/ISO (seul
+  //    `saveResponse` côté FDA le fait) — vérifié en direct sur des données
+  //    réelles (`questionId` NULL sur les 62 réponses d'un audit MDR réel).
+  //    La jointure ne matchait donc jamais rien pour l'immense majorité des
+  //    audits, laissant le rapport afficher "N/A" partout malgré des
+  //    réponses réelles en base. Corrigé : jointure sur `questionKey`,
+  //    seule colonne universellement renseignée (MDR/ISO/FDA), et
+  //    effectivement remplie à 100% sur les 473 questions du corpus réel.
+  // 2. Le filtre ne portait que sur `userId`, jamais sur `auditId` — un
+  //    utilisateur ayant plusieurs audits (cas courant) voyait les réponses
+  //    de TOUS ses audits mélangées dans un seul rapport. Corrigé : filtre
+  //    sur `auditId` (scope réel du rapport demandé), `userId` gardé en
+  //    garde-fou de propriété.
   const responses = await db
     .select({
       response: auditResponses,
@@ -111,30 +134,80 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
       process: processus,
     })
     .from(auditResponses)
-    .leftJoin(questions, eq(auditResponses.questionId, questions.id))
+    .leftJoin(questions, eq(auditResponses.questionKey, questions.questionKey))
     .leftJoin(referentials, eq(questions.referentialId, referentials.id))
     .leftJoin(processus, eq(questions.processId, processus.id))
-    .where(eq(auditResponses.userId, audit.userId));
+    .where(and(eq(auditResponses.auditId, auditId), eq(auditResponses.userId, audit.userId)));
 
   // Fetch findings
-  const auditFindings = await db
+  //
+  // `findings` n'a ni `findingType`, ni `findingCode`, ni `clause`, ni
+  // `criticality` (voir drizzle/schema.ts : id/userId/auditId/title/
+  // description/severity/status uniquement) — generateFindingsSection lisait
+  // ces quatre champs inexistants ; `criticality` en particulier n'avait
+  // aucun fallback et s'affichait littéralement comme le texte "undefined"
+  // dans le PDF (masqué jusqu'ici par les bugs de jointure précédents).
+  // `findingType` dérivé de la sévérité réelle plutôt qu'inventé.
+  const rawFindings = await db
     .select()
     .from(findings)
     .where(eq(findings.auditId, auditId));
 
+  const FINDING_TYPE_BY_SEVERITY: Record<string, string> = {
+    critical: "nc_major",
+    high: "nc_major",
+    medium: "nc_minor",
+    low: "observation",
+  };
+
+  const auditFindings = rawFindings.map((f: any) => ({
+    ...f,
+    title: f.title || `Constat #${f.id}`,
+    description: f.description || "Non renseigné",
+    findingType: FINDING_TYPE_BY_SEVERITY[String(f.severity ?? "").toLowerCase()] ?? "ofi",
+    findingCode: `FIND-${String(f.id).padStart(4, "0")}`,
+    clause: null,
+    criticality: f.severity ?? "N/A",
+  }));
+
   // Fetch actions
   const findingIds = auditFindings.map((f) => f.id);
-  const auditActions = findingIds.length > 0
+  const severityByFindingId = new Map(auditFindings.map((f) => [f.id, f.severity]));
+  const rawActions = findingIds.length > 0
     ? await db.select().from(actions).where(inArray(actions.findingId, findingIds))
     : [];
+  // `actions` n'a ni `title`, ni `responsibleName`, ni `priority` (voir
+  // drizzle/schema.ts : actionCode/description/responsible/status
+  // uniquement) — generateActionPlanSection lisait ces trois champs
+  // inexistants, crashait sur `action.title.substring` dès qu'une vraie
+  // action existait (masqué jusqu'ici par les deux bugs de jointure
+  // précédents qui empêchaient ce code d'être atteint). Alias posés ici ;
+  // priorité dérivée de la sévérité réelle du constat d'origine plutôt
+  // qu'inventée.
+  const auditActions = rawActions.map((a: any) => ({
+    ...a,
+    title: a.actionCode || a.description?.slice(0, 60) || `Action #${a.id}`,
+    responsibleName: a.responsible,
+    priority: severityByFindingId.get(a.findingId) ?? "medium",
+  }));
 
   // Fetch evidence files
-  const questionIds = responses.map((r) => r.question?.id).filter(Boolean) as number[];
-  const evidence = questionIds.length > 0
+  //
+  // Même défaut que la jointure des réponses ci-dessus : `mdr_evidence_files`
+  // n'a pas de colonne `questionId` du tout (voir drizzle/schema.ts) — seul
+  // `questionKey` existe. `evidenceFiles.questionId` évaluait donc à
+  // `undefined` côté drizzle, générant un SQL invalide ("and  in (...)",
+  // colonne manquante avant IN) qui faisait planter reports.generate dès
+  // qu'il y avait des réponses à traiter (masqué jusqu'ici par le bug de
+  // jointure ci-dessus qui empêchait ce code d'être jamais atteint avec des
+  // questionIds non vides). Corrigé : scope sur questionKey + auditId.
+  const questionKeys = responses.map((r) => r.question?.questionKey).filter(Boolean) as string[];
+  const evidence = questionKeys.length > 0
     ? await db.select().from(evidenceFiles).where(
         and(
           eq(evidenceFiles.userId, audit.userId),
-          inArray(evidenceFiles.questionId, questionIds)
+          eq(evidenceFiles.auditId, auditId),
+          inArray(evidenceFiles.questionKey, questionKeys)
         )
       )
     : [];
@@ -156,6 +229,13 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     ? await db.select().from(processus).where(inArray(processus.id, processIds))
     : [];
 
+  // Réutilise le même calcul de score que le dashboard/audit.getScore
+  // (scopé par référentiel/rôle/processus, pondéré par SCORE_MAP) plutôt que
+  // de recalculer un taux de conformité "brut" différent à partir de
+  // `responses` — les deux affichaient des pourcentages différents pour le
+  // même audit avant ce correctif (75.8% vs 80.6%), source de confusion.
+  const { stats, score } = await computeGenericAuditStats(db, audit.userId, auditId);
+
   return {
     audit,
     site,
@@ -166,6 +246,7 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     referentials: auditReferentials,
     processus: auditProcesses,
     auditor,
+    scoring: { stats, score },
   };
 }
 
@@ -174,11 +255,23 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
 // ============================================================================
 
 function calculateReportMetadata(data: AuditData): ReportMetadata {
-  const totalQuestions = data.responses.length;
-  const answeredQuestions = data.responses.filter((r) => r.response.status !== "na").length;
-  
-  const conformeCount = data.responses.filter((r) => r.response.status === "conforme").length;
-  const conformityRate = answeredQuestions > 0 ? (conformeCount / answeredQuestions) * 100 : 0;
+  // ⚠️ CAUSE RACINE (CORRECTIONS.md LOT 4) : cette fonction lisait
+  // `r.response.status` (colonne inexistante — la vraie colonne est
+  // `responseValue`, voir drizzle/schema.ts `audit_responses`) et comparait
+  // à des valeurs françaises ("conforme"/"na") alors que les vraies valeurs
+  // sont en anglais (compliant/non_compliant/partial/not_applicable/
+  // in_progress, même vocabulaire que audit-scoring.ts SCORE_MAP). Résultat
+  // : conformeCount toujours 0, "Taux de conformité global : 0.0%" affiché
+  // systématiquement malgré des réponses réelles à 80%+ de conformité.
+  //
+  // totalQuestions/answeredQuestions/conformityRate viennent maintenant de
+  // `data.scoring` (computeGenericAuditStats, le même calcul que le
+  // dashboard) plutôt que d'un recalcul local — élimine l'écart constaté
+  // entre le rapport (75.8%, simple % de "compliant") et le dashboard
+  // (80.6%, moyenne pondérée SCORE_MAP) pour le même audit.
+  const totalQuestions = data.scoring.stats.totalQuestions;
+  const answeredQuestions = data.scoring.stats.answered;
+  const conformityRate = data.scoring.score;
 
   const ncMajor = data.findings.filter((f) => f.findingType === "nc_major").length;
   const ncMinor = data.findings.filter((f) => f.findingType === "nc_minor").length;
@@ -188,7 +281,7 @@ function calculateReportMetadata(data: AuditData): ReportMetadata {
   const totalActions = data.actions.length;
   const now = new Date();
   const actionsOverdue = data.actions.filter(
-    (a) => a.status !== "completed" && a.dueDate && new Date(a.dueDate) < now
+    (a) => a.status !== "closed" && a.dueDate && new Date(a.dueDate) < now
   ).length;
 
   // Top risks by process
@@ -320,7 +413,7 @@ function generateCoverPage(doc: PDFKit.PDFDocument, data: AuditData, options: Re
   // Audit details
   const details = [
     { label: "Organisation / Site", value: site?.name || "N/A" },
-    { label: "Type d'audit", value: audit.auditType || "N/A" },
+    { label: "Type d'audit", value: audit.type || "N/A" },
     { label: "Date de début", value: audit.startDate ? new Date(audit.startDate).toLocaleDateString("fr-FR") : "N/A" },
     { label: "Date de fin", value: audit.endDate ? new Date(audit.endDate).toLocaleDateString("fr-FR") : "N/A" },
     { label: "Auditeur(s)", value: audit.auditorName || "N/A" },
@@ -363,7 +456,7 @@ function generateContextSection(doc: PDFKit.PDFDocument, data: AuditData, option
 
   // Type
   doc.fontSize(14).font("Helvetica-Bold").text("Type d'audit");
-  doc.fontSize(11).font("Helvetica").text(audit.auditType || "N/A");
+  doc.fontSize(11).font("Helvetica").text(audit.type || "N/A");
   doc.moveDown(0.5);
 
   // Organizational scope
@@ -395,20 +488,59 @@ function generateContextSection(doc: PDFKit.PDFDocument, data: AuditData, option
 // SECTION 3: REGULATORY PROFILE
 // ============================================================================
 
+const MARKET_LABELS: Record<string, string> = {
+  EU: "Union Européenne (UE)",
+  US: "États-Unis (FDA)",
+  CA: "Canada",
+  BR: "Brésil",
+  AU: "Australie",
+  JP: "Japon",
+};
+
+const ECONOMIC_ROLE_LABELS: Record<string, string> = {
+  fabricant: "Fabricant de dispositifs médicaux",
+  importateur: "Importateur",
+  distributeur: "Distributeur",
+  mandataire: "Mandataire (EU Authorized Representative)",
+  manufacturer_us: "Manufacturer (US)",
+  specification_developer: "Specification Developer",
+  contract_manufacturer: "Contract Manufacturer",
+  initial_importer: "Initial Importer (US)",
+};
+
 function generateRegulatoryProfileSection(doc: PDFKit.PDFDocument, data: AuditData, options: ReportOptions) {
-  const { referentials } = data;
+  const { referentials, audit } = data;
 
   doc.fontSize(18).font("Helvetica-Bold").text("2. PROFIL RÉGLEMENTAIRE");
   doc.moveDown(1);
 
+  // Marché cible et rôle réglementaire : lus directement sur l'audit
+  // (economicRole/economicRoles/markets, voir drizzle/schema.ts) — ce bloc
+  // affichait jusqu'ici deux chaînes en dur ("Union Européenne (UE) /
+  // États-Unis (FDA)" et "Fabricant de dispositifs médicaux") pour TOUS les
+  // audits sans exception, quel que soit le rôle/marché réel de
+  // l'utilisateur — violation directe de la règle "aucune donnée inventée"
+  // (CORRECTIONS.md LOT 4).
+  const markets: string[] = audit.markets ? JSON.parse(audit.markets) : [];
+  const marketLabel = markets.length > 0
+    ? markets.map((m: string) => MARKET_LABELS[m] ?? m).join(" / ")
+    : "Non renseigné";
+
+  const economicRoles: string[] = audit.economicRoles
+    ? JSON.parse(audit.economicRoles)
+    : audit.economicRole ? [audit.economicRole] : [];
+  const roleLabel = economicRoles.length > 0
+    ? economicRoles.map((r: string) => ECONOMIC_ROLE_LABELS[r] ?? r).join(", ")
+    : "Non renseigné";
+
   // Market
   doc.fontSize(14).font("Helvetica-Bold").text("Marché cible");
-  doc.fontSize(11).font("Helvetica").text("Union Européenne (UE) / États-Unis (FDA)");
+  doc.fontSize(11).font("Helvetica").text(marketLabel);
   doc.moveDown(0.5);
 
   // Role
   doc.fontSize(14).font("Helvetica-Bold").text("Rôle(s) réglementaire(s)");
-  doc.fontSize(11).font("Helvetica").text("Fabricant de dispositifs médicaux");
+  doc.fontSize(11).font("Helvetica").text(roleLabel);
   doc.moveDown(0.5);
 
   // Applicable referentials
@@ -591,7 +723,11 @@ function generateDetailedResultsSection(doc: PDFKit.PDFDocument, data: AuditData
     responses.slice(0, 20).forEach((r) => {
       const processName = r.process?.name || "N/A";
       const questionText = r.question?.questionText?.substring(0, 80) + "..." || "N/A";
-      const status = r.response.status === "conforme" ? "✓ OK" : r.response.status === "nok" ? "✗ NOK" : "N/A";
+      const status =
+        r.response.responseValue === "compliant" ? "✓ OK" :
+        r.response.responseValue === "non_compliant" ? "✗ NOK" :
+        r.response.responseValue === "partial" ? "△ Partiel" :
+        r.response.responseValue === "not_applicable" ? "N/A" : "Non répondu";
       const criticality = r.question?.criticality || "N/A";
 
       if (currentY > 700) {
