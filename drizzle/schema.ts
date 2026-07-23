@@ -102,9 +102,34 @@ export const organisations = mysqlTable("organisations", {
   postalCode: varchar("postalCode", { length: 30 }),
   country: varchar("country", { length: 120 }),
 
+  // Profil réglementaire (Tâche D.7, migration 0027) — tous facultatifs,
+  // "Non renseigné" dans le rapport si absents plutôt qu'une valeur inventée.
+  srn: varchar("srn", { length: 50 }),
+  logoUrl: varchar("logoUrl", { length: 2048 }),
+  prrcName: varchar("prrcName", { length: 255 }),
+  prrcQualification: varchar("prrcQualification", { length: 255 }),
+  notifiedBodyName: varchar("notifiedBodyName", { length: 255 }),
+  notifiedBodyNumber: varchar("notifiedBodyNumber", { length: 50 }),
+
   userId: int("userId")
     .notNull()
     .references(() => users.id),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+/* =========================
+   ORGANISATION CERTIFICATES (migration 0027, Tâche D.7)
+========================= */
+export const organisationCertificates = mysqlTable("organisation_certificates", {
+  id: int("id").autoincrement().primaryKey(),
+  organisationId: int("organisationId")
+    .notNull()
+    .references(() => organisations.id),
+  referentialCode: varchar("referentialCode", { length: 50 }),
+  certificateNumber: varchar("certificateNumber", { length: 100 }),
+  issueDate: timestamp("issueDate"),
+  expiryDate: timestamp("expiryDate"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
@@ -211,6 +236,17 @@ export const audits = mysqlTable("audits", {
   siteLocation: varchar("siteLocation", { length: 255 }),
   auditorName: varchar("auditorName", { length: 255 }),
   auditorEmail: varchar("auditorEmail", { length: 255 }),
+
+  // Champs manquants pour un rapport conforme ISO 19011/17021-1/MDR Annexe IX
+  // (Tâche D.7, migration 0027) — facultatifs, section éditable post-création
+  // sur AuditDetail. `auditorName`/`auditorEmail` restent le repli mono-
+  // auditeur historique ; `auditTeam` porte l'équipe complète si renseignée.
+  auditNature: varchar("auditNature", { length: 50 }), // interne / fournisseur / blanc / revue_conformite
+  auditTeam: json("auditTeam"), // [{ name, role, email }]
+  auditeesRepresentatives: json("auditeesRepresentatives"), // [{ name, function }]
+  scopeExclusions: text("scopeExclusions"), // exclusions de périmètre + justification
+  plannedAgenda: json("plannedAgenda"), // [{ date, activity }] prévu
+  actualAgenda: json("actualAgenda"), // [{ date, activity }] réalisé
 
   startDate: timestamp("startDate"),
   endDate: timestamp("endDate"),
@@ -399,6 +435,13 @@ export const capa_actions = mysqlTable(
     preuveEfficacite: text("preuveEfficacite"),
     resultatEfficacite: mysqlEnum("resultatEfficacite", ["efficace", "inefficace"]),
 
+    // Section 5/6 du rapport (migration 0027, Tâche D.7) — facultatifs.
+    // `mdsapGrade`/`mdsapEscalation` uniquement pertinents quand le
+    // référentiel de l'audit est MDSAP (matrice AU P0002, grade 1-5).
+    rootCauseMethod: varchar("rootCauseMethod", { length: 50 }), // 5_pourquoi / ishikawa / autre
+    mdsapGrade: int("mdsapGrade"),
+    mdsapEscalation: text("mdsapEscalation"),
+
     referentielsImpactes: json("referentielsImpactes"),
 
     createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -543,6 +586,14 @@ export const auditReports = mysqlTable("audit_reports", {
   userId: int("userId").notNull(),
   auditId: int("auditId").notNull(),
   reportUrl: varchar("reportUrl", { length: 2048 }),
+
+  // Page de garde / exigences de forme D.2-D.3 (migration 0027, Tâche D.7).
+  reference: varchar("reference", { length: 50 }),
+  version: int("version").notNull().default(1),
+  status: mysqlEnum("status", ["draft", "final"]).notNull().default("draft"),
+  distributionList: text("distributionList"),
+  language: varchar("language", { length: 5 }).notNull().default("fr"),
+
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

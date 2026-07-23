@@ -40,6 +40,9 @@ function toCapaAction(row: typeof capa_actions.$inferSelect): CapaAction {
       : null,
     preuveEfficacite: row.preuveEfficacite,
     resultatEfficacite: row.resultatEfficacite as CapaAction["resultatEfficacite"],
+    rootCauseMethod: (row as any).rootCauseMethod ?? null,
+    mdsapGrade: (row as any).mdsapGrade ?? null,
+    mdsapEscalation: (row as any).mdsapEscalation ?? null,
     referentielsImpactes: safeJsonParse<CapaReferentielImpacte[]>(row.referentielsImpactes, []),
     priorite: 0, // recalculé après tri, voir sortByPriority ci-dessous
     createdAt: row.createdAt.toISOString(),
@@ -186,6 +189,11 @@ export const capaRouter = router({
         preuveRealisation: z.string().optional(),
         dateVerificationEfficacite: z.string().datetime().nullish(),
         preuveEfficacite: z.string().optional(),
+        // Section 5/6 du rapport (Tâche D.7, migration 0027) — facultatifs.
+        // mdsapGrade/mdsapEscalation uniquement pertinents pour un audit MDSAP.
+        rootCauseMethod: z.enum(["5_pourquoi", "ishikawa", "autre"]).optional(),
+        mdsapGrade: z.number().int().min(1).max(5).optional(),
+        mdsapEscalation: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {

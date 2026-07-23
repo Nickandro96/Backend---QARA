@@ -29,7 +29,14 @@ import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
 
 import { generateAuditReport } from "./report-generator";
-import { auditReports, sites as sitesTable, referentiels, audits as auditsTable } from "../drizzle/schema";
+import {
+  auditReports,
+  sites as sitesTable,
+  referentiels,
+  audits as auditsTable,
+  organisations as organisationsTable,
+  organisationCertificates,
+} from "../drizzle/schema";
 import { computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 import { findingsRouter, actionsRouter } from "./findings-router";
@@ -342,6 +349,128 @@ export const appRouter = router({
           userId: ctx.user.id,
         });
       }),
+
+    /**
+     * Bloc « Profil réglementaire » (Tâche D.7, migration 0027, validé par
+     * l'utilisateur le 2026-07-23) : SRN, PRRC, organisme notifié. Tous
+     * facultatifs — "Non renseigné" dans le rapport si absents.
+     */
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().min(2).optional(),
+          legalEntityType: z.string().optional(),
+          siret: z.string().optional(),
+          addressLine1: z.string().optional(),
+          addressLine2: z.string().optional(),
+          city: z.string().optional(),
+          postalCode: z.string().optional(),
+          country: z.string().optional(),
+          srn: z.string().optional(),
+          logoUrl: z.string().optional(),
+          prrcName: z.string().optional(),
+          prrcQualification: z.string().optional(),
+          notifiedBodyName: z.string().optional(),
+          notifiedBodyNumber: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const database = await db.getDb();
+        if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+        const org = await db.getOrganisationByIdAndUserId(input.id, ctx.user.id);
+        if (!org) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation non trouvée" });
+
+        const { id, ...fields } = input;
+        const patch: Record<string, any> = {};
+        for (const [key, value] of Object.entries(fields)) {
+          if (value !== undefined) patch[key] = value;
+        }
+        if (Object.keys(patch).length === 0) return { success: true };
+
+        await database
+          .update(organisationsTable)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(and(eq(organisationsTable.id, input.id), eq(organisationsTable.userId, ctx.user.id)));
+        return { success: true };
+      }),
+
+    certificates: router({
+      list: protectedProcedure
+        .input(z.object({ organisationId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          const database = await db.getDb();
+          if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+          const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
+          if (!org) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation non trouvée" });
+
+          const rows = await database
+            .select()
+            .from(organisationCertificates)
+            .where(eq(organisationCertificates.organisationId, input.organisationId))
+            .orderBy(desc(organisationCertificates.createdAt));
+          return { certificates: rows };
+        }),
+
+      upsert: protectedProcedure
+        .input(
+          z.object({
+            id: z.number().optional(),
+            organisationId: z.number(),
+            referentialCode: z.string().optional(),
+            certificateNumber: z.string().optional(),
+            issueDate: z.string().optional(),
+            expiryDate: z.string().optional(),
+          })
+        )
+        .mutation(async ({ ctx, input }) => {
+          const database = await db.getDb();
+          if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+          const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
+          if (!org) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation non trouvée" });
+
+          const values = {
+            organisationId: input.organisationId,
+            referentialCode: input.referentialCode ?? null,
+            certificateNumber: input.certificateNumber ?? null,
+            issueDate: input.issueDate ? new Date(input.issueDate) : null,
+            expiryDate: input.expiryDate ? new Date(input.expiryDate) : null,
+          };
+
+          if (input.id) {
+            await database
+              .update(organisationCertificates)
+              .set({ ...values, updatedAt: new Date() })
+              .where(
+                and(eq(organisationCertificates.id, input.id), eq(organisationCertificates.organisationId, input.organisationId))
+              );
+            return { id: input.id };
+          }
+
+          const result: any = await database.insert(organisationCertificates).values(values);
+          return { id: result?.[0]?.insertId ?? result?.insertId ?? null };
+        }),
+
+      delete: protectedProcedure
+        .input(z.object({ id: z.number(), organisationId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          const database = await db.getDb();
+          if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+          const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
+          if (!org) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation non trouvée" });
+
+          await database
+            .delete(organisationCertificates)
+            .where(
+              and(eq(organisationCertificates.id, input.id), eq(organisationCertificates.organisationId, input.organisationId))
+            );
+          return { success: true };
+        }),
+    }),
   }),
 
   referentials: router({

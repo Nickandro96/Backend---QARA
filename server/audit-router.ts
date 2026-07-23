@@ -212,6 +212,49 @@ export const auditRouter = router({
     }),
 
   /**
+   * Champs manquants pour un rapport conforme ISO 19011/17021-1/MDR Annexe IX
+   * (Tâche D.7, migration 0027, validé par l'utilisateur le 2026-07-23).
+   * Tous facultatifs, éditables à tout moment depuis la fiche d'audit
+   * (AuditDetail.tsx) — n'allonge pas le parcours de création. Un champ non
+   * renseigné reste `null` ; le rapport affiche alors "Non renseigné",
+   * jamais de valeur par défaut inventée.
+   */
+  updateReportFields: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        auditNature: z.enum(["interne", "fournisseur", "blanc", "revue_conformite"]).optional(),
+        auditTeam: z
+          .array(z.object({ name: z.string(), role: z.string(), email: z.string().optional() }))
+          .optional(),
+        auditeesRepresentatives: z
+          .array(z.object({ name: z.string(), function: z.string().optional() }))
+          .optional(),
+        scopeExclusions: z.string().optional(),
+        plannedAgenda: z.array(z.object({ date: z.string(), activity: z.string() })).optional(),
+        actualAgenda: z.array(z.object({ date: z.string(), activity: z.string() })).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const audit = await getAuditById(input.id, ctx.user.id);
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
+
+      const { id, ...fields } = input;
+      const patch: Record<string, any> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) patch[key] = value;
+      }
+
+      if (Object.keys(patch).length === 0) return { success: true };
+
+      await db.update(audits).set({ ...patch, updatedAt: new Date() }).where(eq(audits.id, input.id));
+      return { success: true };
+    }),
+
+  /**
    * Frontend expects: trpc.audit.delete({ id }) (AuditHistory.tsx). Vérifie
    * la propriété avant suppression (db.deleteAudit ne filtre pas par
    * userId — voir server/db.ts).

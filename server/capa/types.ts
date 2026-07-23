@@ -42,6 +42,9 @@ export interface CapaAction {
   dateVerificationEfficacite: string | null;
   preuveEfficacite: string | null;
   resultatEfficacite: ResultatEfficacite | null;
+  rootCauseMethod: string | null;
+  mdsapGrade: number | null;
+  mdsapEscalation: string | null;
   referentielsImpactes: CapaReferentielImpacte[];
   priorite: number;
   createdAt: string;
