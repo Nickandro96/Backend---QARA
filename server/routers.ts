@@ -1032,28 +1032,28 @@ export const appRouter = router({
           const { url: fileUrl } = await uploadToS3(fileKey, pdfBuffer, "application/pdf");
 
           // Save report metadata to database.
-          // MySQL (contrairement à Postgres) n'a pas de .returning() sur
-          // drizzle - l'insert renvoie un ResultSetHeader avec insertId
-          // (voir INVENTAIRE-BUGS.md #3, même famille de bug que le crash
-          // processes/processus et le stub storagePut, tous les trois
-          // masqués par le même try/catch générique).
+          //
+          // ⚠️ CAUSE RACINE (CORRECTIONS.md, audit des colonnes fantômes) :
+          // cet insert visait reportType/reportTitle/reportVersion/fileKey/
+          // fileFormat/generatedBy/metadata — aucune de ces colonnes n'existe
+          // sur `audit_reports` (5 colonnes réelles seulement : id/userId/
+          // auditId/reportUrl/createdAt, voir drizzle/schema.ts). Drizzle
+          // ignore silencieusement les clés qui ne correspondent à aucune
+          // colonne définie — aucune erreur, mais `reportUrl` (la seule
+          // colonne qui compte : l'URL du fichier réel) n'était JAMAIS
+          // renseigné. Vérifié en direct : les 6 rapports générés
+          // pendant les tests de cette session ont tous `reportUrl = NULL`
+          // en base, rendant l'historique (/reports/history) inutilisable
+          // — impossible de retélécharger un rapport déjà généré.
+          // Corrigé a minima ici (insert sur les seules colonnes réelles) ;
+          // une vraie table d'historique multi-format (PDF/Word/Excel,
+          // langue, type) nécessite une migration additive, proposée
+          // séparément pour D.5.
           const database = await db.getDb();
           const insertResult: any = await database.insert(auditReports).values({
             auditId: input.auditId,
             userId: ctx.user.id,
-            reportType: input.reportType,
-            reportTitle: `Rapport d'audit #${input.auditId}`,
-            reportVersion: "1.0",
-            fileKey,
-            fileUrl,
-            fileSize: pdfBuffer.length,
-            fileFormat: "pdf",
-            generatedBy: ctx.user.id,
-            metadata: JSON.stringify({
-              includeGraphs: input.includeGraphs,
-              includeEvidence: input.includeEvidence,
-              includeActionPlan: input.includeActionPlan,
-            }),
+            reportUrl: fileUrl,
           });
           const report = { id: insertResult?.[0]?.insertId ?? insertResult?.insertId };
 
@@ -1088,7 +1088,7 @@ export const appRouter = router({
           .select()
           .from(auditReports)
           .where(and(...conditions))
-          .orderBy(auditReports.generatedAt)
+          .orderBy(desc(auditReports.createdAt))
           .limit(input.limit);
 
         return reports;
