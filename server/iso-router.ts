@@ -14,6 +14,7 @@ import {
   referentiels,
   sites,
 } from "../drizzle/schema";
+import { resolveProcessDbIds } from "./shared/processResolution";
 
 /**
  * ISO Router
@@ -182,96 +183,11 @@ function normalizeRisksValue(v: any): any {
   return v;
 }
 
-function isNumericString(v: string) {
-  return /^\d+$/.test(v);
-}
-
-/**
- * Mapping slugs UI (MDR-like) -> libellés utilisés dans applicableProcesses ISO
- * (d'après tes captures: applicableProcesses contient "Gouvernance")
- */
-const PROCESS_SLUG_TO_ISO_LABELS: Record<string, string[]> = {
-  gov_strat: ["Gouvernance", "Gouvernance & stratégie réglementaire", "Gouvernance & stratégie"],
-  ra: ["RA", "Affaires réglementaires", "Affaires réglementaires (RA)"],
-  qms: ["QMS", "SMQ", "Système de management qualité", "Système de management qualité (QMS)", "Qualité"],
-  risk_mgmt: ["Risques", "Gestion des risques", "Gestion des risques (ISO 14971)"],
-  design_dev: ["Conception", "Conception & développement", "Développement"],
-  purchasing_suppliers: ["Achats", "Fournisseurs", "Achats & fournisseurs"],
-  production_sub: ["Production", "Sous-traitance", "Production & sous-traitance"],
-  traceability_udi: ["Traçabilité", "UDI", "Traçabilité / UDI"],
-  pms_pmcf: ["PMS", "PMCF", "PMS / PMCF"],
-  vigilance_incidents: ["Vigilance", "Incidents", "Vigilance & incidents"],
-  distribution_logistics: ["Distribution", "Logistique", "Distribution & logistique"],
-  importation: ["Importation"],
-  tech_doc: ["Documentation", "Documentation technique"],
-  audits_conformity: ["Audits", "Conformité", "Audits & conformité"],
-  it_data_cybersecurity: ["IT", "Données", "Cybersécurité", "IT / données / cybersécurité"],
-};
-
-/**
- * Construit une liste de candidats de matching pour les filtres JSON_CONTAINS.
- * - inclut toujours la valeur brute (slug / id / nom)
- * - ajoute les labels ISO équivalents quand on détecte un slug connu
- * - si ID DB => ajoute name + lowercase (+ code/slug si dispo)
- */
-async function buildProcessCandidates(db: any, processIds: Array<string | number>) {
-  if (!processIds?.length) return [] as string[];
-
-  const out: string[] = [];
-
-  const rawStrings = processIds
-    .map((p) => (p == null ? "" : String(p).trim()))
-    .filter(Boolean);
-
-  for (const s of rawStrings) {
-    out.push(s);
-    out.push(s.toLowerCase());
-
-    const mapped = PROCESS_SLUG_TO_ISO_LABELS[s];
-    if (mapped?.length) {
-      for (const m of mapped) {
-        out.push(m);
-        out.push(m.toLowerCase());
-      }
-    }
-  }
-
-  const numericIds = rawStrings
-    .map((p) => Number(p))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  if (numericIds.length) {
-    const rows = await db
-      .select({
-        id: processus.id,
-        name: (processus as any).name,
-        // @ts-ignore optional cols
-        code: (processus as any).code,
-        // @ts-ignore optional cols
-        slug: (processus as any).slug,
-      })
-      .from(processus)
-      .where(inArray(processus.id, numericIds));
-
-    for (const p of rows) {
-      if (p?.id != null) out.push(String(p.id));
-      if ((p as any)?.name) {
-        out.push(String((p as any).name));
-        out.push(String((p as any).name).toLowerCase());
-      }
-      if ((p as any)?.code) {
-        out.push(String((p as any).code));
-        out.push(String((p as any).code).toLowerCase());
-      }
-      if ((p as any)?.slug) {
-        out.push(String((p as any).slug));
-        out.push(String((p as any).slug).toLowerCase());
-      }
-    }
-  }
-
-  return Array.from(new Set(out)).filter(Boolean);
-}
+// ✅ Résolution processus : voir server/shared/processResolution.ts
+// (buildProcessCandidates/PROCESS_SLUG_TO_ISO_LABELS supprimés — ils
+// matchaient applicableProcesses comme si elle contenait des noms de
+// processus, alors qu'elle stocke des rôles économiques. resolveProcessDbIds
+// filtre désormais sur questions.processId, la colonne fiable.)
 
 export const isoRouter = router({
   // ---------------------------------------------------------------------------
@@ -403,7 +319,7 @@ export const isoRouter = router({
       const referentialId = await resolveReferentialId(db, input.standard);
 
       const rawProcessIds = (input.processes ?? []).map((p) => String(p).trim()).filter(Boolean);
-      const candidates = await buildProcessCandidates(db, rawProcessIds);
+      const processDbIds = await resolveProcessDbIds(db, rawProcessIds);
 
       const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
 
@@ -411,37 +327,13 @@ export const isoRouter = router({
         whereParts.push(or(isNull((questions as any).economicRole), eq((questions as any).economicRole, input.economicRole)));
       }
 
-      const numericProcessIds = rawProcessIds
-        .map((p) => Number(p))
-        .filter((n) => Number.isFinite(n) && n > 0);
-
-      const hasAnyProcessFilter = numericProcessIds.length > 0 || candidates.length > 0;
-
-      if (hasAnyProcessFilter) {
-        const orParts: any[] = [];
-
-        if (numericProcessIds.length > 0) {
-          orParts.push(
-            sql`${(questions as any).processId} in (${sql.join(
-              numericProcessIds.map((n: number) => sql`${n}`),
-              sql`, `
-            )})`
-          );
-        }
-
-        if (candidates.length > 0) {
-          const conds = candidates.map((cand) => {
-            const s = String(cand);
-            if (isNumericString(s)) {
-              const n = Number(s);
-              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
-            }
-            return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, JSON_QUOTE(${s}))`;
-          });
-          orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-        }
-
-        whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+      if (processDbIds.length > 0) {
+        whereParts.push(
+          sql`${(questions as any).processId} in (${sql.join(
+            processDbIds.map((n: number) => sql`${n}`),
+            sql`, `
+          )})`
+        );
       }
 
       const rows = await db
@@ -722,44 +614,20 @@ createOrUpdateAuditDraft: protectedProcedure
       const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
       if (!referentialId) throw new Error("Référentiel ISO manquant sur l'audit");
 
-      const candidates = await buildProcessCandidates(db, selectedProcessesRaw);
-
-      const selectedDbIds = selectedProcessesRaw
-        .map((p: any) => (typeof p === "number" ? p : Number(p)))
-        .filter((n: number) => Number.isFinite(n) && n > 0);
+      const processDbIds = await resolveProcessDbIds(
+        db,
+        selectedProcessesRaw.map((p: any) => String(p))
+      );
 
       const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
 
-      const hasProcessSelection =
-        selectedProcessesRaw.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
-
-      if (hasProcessSelection) {
-        const orParts: any[] = [];
-
-        if (selectedDbIds.length > 0) {
-          orParts.push(
-            sql`${(questions as any).processId} in (${sql.join(
-              selectedDbIds.map((n: number) => sql`${n}`),
-              sql`, `
-            )})`
-          );
-        }
-
-        if (candidates.length > 0) {
-          const conds = candidates.map((cand) => {
-            const s = String(cand);
-            // ✅ JSON_CONTAINS(NULL, ...) => NULL. COALESCE to [] to avoid edge cases.
-            const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
-            if (isNumericString(s)) {
-              const n = Number(s);
-              return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
-            }
-            return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
-          });
-          orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-        }
-
-        if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+      if (processDbIds.length > 0) {
+        whereParts.push(
+          sql`${(questions as any).processId} in (${sql.join(
+            processDbIds.map((n: number) => sql`${n}`),
+            sql`, `
+          )})`
+        );
       }
 
       const questionSelect = {
@@ -802,9 +670,7 @@ createOrUpdateAuditDraft: protectedProcedure
       console.log(
         `[ISO] getQuestionsForAudit audit=${(audit as any).id} processIds=${JSON.stringify(
           selectedProcessesRaw
-        )} selectedDbIds=${JSON.stringify(selectedDbIds)} candidates=${JSON.stringify(
-          candidates
-        )} referentials=${JSON.stringify(referentialIds)}`
+        )} processDbIds=${JSON.stringify(processDbIds)} referentials=${JSON.stringify(referentialIds)}`
       );
       console.log(`[ISO] DB filtered questions count: ${rows.length}`);
 
@@ -904,37 +770,17 @@ createOrUpdateAuditDraft: protectedProcedure
         const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
         if (!referentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Référentiel ISO manquant sur l'audit" });
 
-        const candidates = await buildProcessCandidates(db, processIds);
-        const selectedDbIds = processIds
-          .map((p: any) => (typeof p === "number" ? p : Number(p)))
-          .filter((n: number) => Number.isFinite(n) && n > 0);
+        const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
         const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
 
-        const hasProcessSelection = processIds.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
-        if (hasProcessSelection) {
-          const orParts: any[] = [];
-          if (selectedDbIds.length > 0) {
-            orParts.push(
-              sql`${(questions as any).processId} in (${sql.join(
-                selectedDbIds.map((n: number) => sql`${n}`),
-                sql`, `
-              )})`
-            );
-          }
-          if (candidates.length > 0) {
-            const conds = candidates.map((cand) => {
-              const s = String(cand);
-              const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
-              if (isNumericString(s)) {
-                const n = Number(s);
-                return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
-              }
-              return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
-            });
-            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-          }
-          if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        if (processDbIds.length > 0) {
+          whereParts.push(
+            sql`${(questions as any).processId} in (${sql.join(
+              processDbIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )})`
+          );
         }
 
         const questionRows: any[] = (await db
@@ -1135,37 +981,17 @@ createOrUpdateAuditDraft: protectedProcedure
         const referentialId = referentialIds?.[0] ? Number(referentialIds[0]) : null;
         if (!referentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Référentiel ISO manquant sur l'audit" });
 
-        const candidates = await buildProcessCandidates(db, processIds);
-        const selectedDbIds = processIds
-          .map((p: any) => (typeof p === "number" ? p : Number(p)))
-          .filter((n: number) => Number.isFinite(n) && n > 0);
+        const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
         const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
 
-        const hasProcessSelection = processIds.length > 0 && (selectedDbIds.length > 0 || candidates.length > 0);
-        if (hasProcessSelection) {
-          const orParts: any[] = [];
-          if (selectedDbIds.length > 0) {
-            orParts.push(
-              sql`${(questions as any).processId} in (${sql.join(
-                selectedDbIds.map((n: number) => sql`${n}`),
-                sql`, `
-              )})`
-            );
-          }
-          if (candidates.length > 0) {
-            const conds = candidates.map((cand) => {
-              const s = String(cand);
-              const ap = sql`COALESCE(${(questions as any).applicableProcesses}, '[]')`;
-              if (isNumericString(s)) {
-                const n = Number(s);
-                return sql`JSON_CONTAINS(${ap}, CAST(${n} AS JSON))`;
-              }
-              return sql`JSON_CONTAINS(${ap}, JSON_QUOTE(${s}))`;
-            });
-            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-          }
-          if (orParts.length) whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
+        if (processDbIds.length > 0) {
+          whereParts.push(
+            sql`${(questions as any).processId} in (${sql.join(
+              processDbIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )})`
+          );
         }
 
         const hasRisksColumn = await hasColumn("questions", "risks");
