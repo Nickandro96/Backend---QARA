@@ -310,6 +310,11 @@ export const questions = mysqlTable("questions", {
   // voir server/onboarding/scopeEngine.ts et docs/audit/12-onboarding.md.
   roleReglementaire: json("roleReglementaire"),
   situationTags: json("situationTags"),
+
+  // Préserve la valeur brute d'economicRole avant normalisation (migration
+  // 0028) — audit/rollback ligne par ligne sans restaurer la sauvegarde
+  // complète. Voir CORRECTIONS.md (table de correspondance des rôles).
+  economicRoleSource: varchar("economicRoleSource", { length: 255 }),
 });
 
 /* =========================

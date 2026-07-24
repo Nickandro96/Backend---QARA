@@ -13,16 +13,16 @@ test("normalizeEconomicRole : mappe les libellés bruts vérifiés en base vers 
   assert.deepEqual(normalizeEconomicRole("finished device manufacturer"), ["fabricant"]);
   assert.deepEqual(normalizeEconomicRole("fabricant IVD"), ["fabricant"]);
   assert.deepEqual(normalizeEconomicRole("fabricant participant MDSAP"), ["fabricant"]);
-  assert.deepEqual(normalizeEconomicRole("organisme DM"), ["fabricant"]);
-  assert.deepEqual(normalizeEconomicRole("organisme"), ["fabricant"]);
+  assert.deepEqual(normalizeEconomicRole("assembleur"), ["fabricant"]);
+  assert.deepEqual(normalizeEconomicRole("U.S. agent"), ["fabricant"]);
   assert.deepEqual(normalizeEconomicRole("mandataire"), ["mandataire"]);
-  assert.deepEqual(normalizeEconomicRole("U.S. agent"), ["mandataire"]);
   assert.deepEqual(normalizeEconomicRole("importateur"), ["importateur"]);
   assert.deepEqual(normalizeEconomicRole("distributeur"), ["distributeur"]);
 });
 
-test("normalizeEconomicRole : assembleur et direction ne sont pas des rôles (générique)", () => {
-  assert.deepEqual(normalizeEconomicRole("assembleur"), []);
+test("normalizeEconomicRole : organisme/organisme DM/direction ne sont pas des rôles (générique — ISO audite l'organisme, pas l'opérateur)", () => {
+  assert.deepEqual(normalizeEconomicRole("organisme DM"), []);
+  assert.deepEqual(normalizeEconomicRole("organisme"), []);
   assert.deepEqual(normalizeEconomicRole("direction"), []);
 });
 
@@ -80,10 +80,23 @@ test("matchesScope : question à situation particulière exclue tant que la case
   assert.equal(matchesScope(question, scope({ situationTags: ["assemblage"] })), true);
 });
 
-test("matchesScope : ISO13485 (organisme DM -> fabricant) visible pour fabricant, pas pour un pur distributeur", () => {
-  const isoQuestion = { roleReglementaire: ["fabricant"], situationTags: [] };
+test("matchesScope : ISO13485 (organisme DM -> générique) visible pour fabricant ET pour un pur distributeur", () => {
+  // ISO13485 §1 couvre les organisations impliquées à toute étape du cycle de
+  // vie (y compris stockage/distribution) : "organisme DM" n'est pas un rôle,
+  // la question reste visible quel que soit le rôle économique sélectionné.
+  const isoQuestion = { roleReglementaire: normalizeEconomicRole("organisme DM"), situationTags: [] };
   assert.equal(matchesScope(isoQuestion, scope({ economicRoles: ["fabricant"] })), true);
-  assert.equal(matchesScope(isoQuestion, scope({ economicRoles: ["distributeur"] })), false);
+  assert.equal(matchesScope(isoQuestion, scope({ economicRoles: ["distributeur"] })), true);
+});
+
+test("matchesScope : MDR assembleur (-> fabricant + tag assemblage) visible pour fabricant si la case est cochée, jamais pour un pur distributeur", () => {
+  const mdrQuestion = {
+    roleReglementaire: normalizeEconomicRole("assembleur"),
+    situationTags: situationFromEconomicRole("assembleur"),
+  };
+  assert.equal(matchesScope(mdrQuestion, scope({ economicRoles: ["fabricant"], situationTags: ["assemblage"] })), true);
+  assert.equal(matchesScope(mdrQuestion, scope({ economicRoles: ["fabricant"], situationTags: [] })), false);
+  assert.equal(matchesScope(mdrQuestion, scope({ economicRoles: ["distributeur"], situationTags: ["assemblage"] })), false);
 });
 
 test("validateScopeCompletion : au moins un référentiel et un rôle requis", () => {
