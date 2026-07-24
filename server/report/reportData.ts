@@ -31,6 +31,7 @@ import {
 } from "../../drizzle/schema";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildScoringResult } from "../scoring/scoringEngine";
+import { computeGenericAuditStats } from "../audit-scoring";
 import { buildAuditReport } from "./reportBuilder";
 import { DEFAULT_SCORING_CONFIG } from "../scoring/types";
 import type { Ecart } from "../scoring/types";
@@ -196,6 +197,33 @@ function buildGapStatement(ecart: Ecart): string {
   return `Réponse « ${ecart.responseValue} » — NC typiques : ${nc}`;
 }
 
+/**
+ * Verdict recalculé sur le score dashboard (dashboardStats.score), pas sur
+ * scoringResult.global.score (scoringEngine.ts) — mêmes seuils que
+ * DEFAULT_SCORING_CONFIG mais appliqués à la valeur réellement affichée en
+ * tête de rapport, pour éviter un verdict incohérent avec le score affiché
+ * juste au-dessus (voir note sur dashboardStats plus bas).
+ */
+function computeVerdictPhrase(score: number, ecartsCritiques: number, lang: ReportLanguage): string {
+  const phrases = {
+    pret: {
+      fr: "Le périmètre audité est prêt pour un audit externe : aucun écart bloquant, score de conformité au-dessus du seuil cible.",
+      en: "The audited scope is ready for an external audit: no blocking gap, conformity score above the target threshold.",
+    },
+    pret_avec_reserves: {
+      fr: "Le périmètre audité est prêt sous réserve de traiter les écarts en cours avant un audit externe : le score est acceptable mais des écarts majeurs subsistent.",
+      en: "The audited scope is ready subject to addressing ongoing gaps before an external audit: the score is acceptable but major gaps remain.",
+    },
+    pas_pret: {
+      fr: "Le périmètre audité n'est pas prêt pour un audit externe : au moins un écart critique bloquant ou un score en dessous du seuil minimal doit être corrigé.",
+      en: "The audited scope is not ready for an external audit: at least one blocking critical gap or a score below the minimum threshold must be corrected.",
+    },
+  };
+  if (ecartsCritiques === 0 && score >= DEFAULT_SCORING_CONFIG.seuilConforme) return phrases.pret[lang];
+  if (score >= DEFAULT_SCORING_CONFIG.seuilConformeAvecReserves) return phrases.pret_avec_reserves[lang];
+  return phrases.pas_pret[lang];
+}
+
 const GRAVITE_JUSTIFICATION: Record<string, string> = {
   majeur: "Écart classé majeur : absence de preuve, rupture de traçabilité, ou impact potentiel patient/réglementaire non maîtrisé.",
   mineur: "Écart classé mineur : dossier ponctuellement incomplet mais décision justifiée et impact maîtrisé.",
@@ -293,6 +321,19 @@ export async function assembleReportData(
   }));
 
   const referentialCodes = Array.from(new Set(scoringQuestions.map((q) => q.referentialCode)));
+
+  // Score global affiché en page de garde/section 3 : DOIT être identique à
+  // celui du dashboard (computeGenericAuditStats, audit-scoring.ts — moyenne
+  // simple par SCORE_MAP), pas au score de scoringEngine.ts (pondéré par
+  // criticité, poids critical=4/high=3/medium=2/low=1 — moteur distinct
+  // utilisé pour la génération CAPA et le détail par processus/écarts).
+  // Trouvé en vérifiant le contenu réel (audit id=1) : 68.0% (scoringEngine)
+  // contre 80.6% (dashboard) pour le même audit — deux moteurs de score
+  // parallèles existent dans le code, jamais réconciliés jusqu'ici. Corrigé
+  // ici pour le chiffre affiché en tête de rapport ; le détail par processus/
+  // la gradation des écarts restent pondérés par criticité (finalité
+  // différente : priorisation CAPA, pas un second "score global").
+  const dashboardStats = await computeGenericAuditStats(db, userId, auditId);
 
   const built = buildAuditReport({
     meta: {
@@ -463,7 +504,7 @@ export async function assembleReportData(
       expiryDate: c.expiryDate ? c.expiryDate.toISOString() : null,
     })),
 
-    globalScore: built.syntheseExecutive.scoreGlobal,
+    globalScore: dashboardStats.score,
     breakdown: {
       compliant: rawResponses.filter((r) => r.responseValue === "compliant").length,
       partial: rawResponses.filter((r) => r.responseValue === "partial").length,
@@ -475,7 +516,7 @@ export async function assembleReportData(
       mineur: built.syntheseExecutive.ecarts.mineurs,
       observation: built.syntheseExecutive.ecarts.observations,
     },
-    verdictPhrase: built.syntheseExecutive.verdictPhrase,
+    verdictPhrase: computeVerdictPhrase(dashboardStats.score, built.syntheseExecutive.ecartsCritiques, language),
     previousAudit,
 
     processResults,
