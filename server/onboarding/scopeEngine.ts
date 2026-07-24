@@ -20,30 +20,55 @@ export interface ScopeSelection {
 }
 
 /**
- * Mapping des libellés bruts `questions.economicRole` (corpus réel, vérifié
- * en base — voir docs/audit/12-onboarding.md) vers les 4 rôles canoniques.
- * `assembleur` et `direction` ne sont PAS des rôles (spec Partie 1, §Étape B)
- * — ils sont traités comme génériques (roleReglementaire vide) et/ou comme
- * situation particulière (voir SITUATION_FROM_ECONOMIC_ROLE ci-dessous).
+ * Mapping des libellés bruts `questions.economicRole` vers les 4 rôles
+ * canoniques — aligné sur la table de correspondance validée ligne par
+ * ligne (voir CORRECTIONS.md) et sur la normalisation réellement appliquée
+ * aux données par scripts/normalize-economic-roles.mjs. Ce mapping ne fait
+ * pas autorité par lui-même : c'est la table validée qui prime, celui-ci la
+ * reflète pour que le mécanisme dormant (roleReglementaire/situationTags)
+ * partage le même vocabulaire que economicRole le jour où il est activé.
+ *
+ * `organisme`/`organisme dm` : PAS un rôle — ISO13485/ISO9001 auditent
+ * l'organisme, pas l'opérateur économique (ISO13485 §1 couvre explicitement
+ * les organisations impliquées à toute étape du cycle de vie, y compris
+ * stockage/distribution ; ISO9001 s'applique à toute organisation sans
+ * distinction de rôle). Générique (roleReglementaire vide = universel).
+ *
+ * `direction` : générique, aucun rôle identifiable (question ISO9001 clause
+ * 5, non rattachée à un opérateur économique).
+ *
+ * `assembleur` : rôle fabricant + situation "assemblage" — Art. 22(3) MDR
+ * soumet explicitement l'assembleur aux obligations du fabricant pour le
+ * système/nécessaire mis sur le marché sous son nom. Contrairement à
+ * `organisme`/`direction`, ce n'est PAS générique : le tag préserve la
+ * nuance Art. 22 pour l'activation future du mécanisme dormant.
+ *
+ * `u.s. agent` : rôle fabricant, PAS mandataire. Le U.S. Agent (21 CFR
+ * 807.40) est un canal de communication avec la FDA ; le mandataire
+ * (Art. 11 MDR) porte des obligations de fond et une responsabilité
+ * juridique conjointe — les confondre serait une approximation
+ * réglementaire. Les 2 questions du corpus portant ce libellé sont
+ * rédigées du point de vue du fabricant (conformité de son propre dossier
+ * Registration & Listing), d'où le rattachement à fabricant.
  */
 export const ROLE_FROM_ECONOMIC_ROLE: Record<string, RoleReglementaire[]> = {
   fabricant: ["fabricant"],
   "finished device manufacturer": ["fabricant"],
   "fabricant ivd": ["fabricant"],
   "fabricant participant mdsap": ["fabricant"],
-  "organisme dm": ["fabricant"],
-  organisme: ["fabricant"],
+  assembleur: ["fabricant"],
+  "u.s. agent": ["fabricant"],
   mandataire: ["mandataire"],
-  "u.s. agent": ["mandataire"],
-  "foreign establishment": ["mandataire"],
   importateur: ["importateur"],
   "initial importer": ["importateur"],
   distributeur: ["distributeur"],
   "distributeur selon rôle": ["distributeur"],
   "distributeur si applicable": ["distributeur"],
+  // "organisme"/"organisme dm"/"direction" : absents volontairement — liste
+  // de rôles vide = générique/universel (voir justification ci-dessus).
 };
 
-/** `economicRole` bruts qui dénotent une situation particulière plutôt qu'un rôle. */
+/** `economicRole` bruts qui dénotent une situation particulière EN PLUS d'un rôle (non exclusif). */
 export const SITUATION_FROM_ECONOMIC_ROLE: Record<string, SituationTag[]> = {
   assembleur: ["assemblage"],
 };
