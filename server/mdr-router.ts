@@ -11,10 +11,9 @@ import {
   auditResponses,
 } from "../drizzle/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
 import { matchesScope, type RoleReglementaire, type SituationTag } from "./onboarding/scopeEngine";
+import { resolveProcessDbIds } from "./shared/processResolution";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
@@ -39,33 +38,6 @@ const MDR_PROCESSES = [
 const generateQuestionKey = (question: any): string => {
   const keyString = `${question.article || ""}-${question.processId || ""}-${question.questionText || ""}`;
   return `q_${crypto.createHash("md5").update(keyString).digest("hex")}`;
-};
-
-// Helper to load questions from JSON file (fallback only)
-const loadQuestionsFromJson = (): any[] => {
-  const possiblePaths = [
-    path.join(process.cwd(), "server", "all-questions-data.json"),
-    path.join(process.cwd(), "dist", "server", "all-questions-data.json"),
-  ];
-
-  for (const jsonPath of possiblePaths) {
-    if (fs.existsSync(jsonPath)) {
-      try {
-        const rawData = fs.readFileSync(jsonPath, "utf-8");
-        const qs = JSON.parse(rawData);
-        console.log(`[MDR] total questions loaded from JSON: ${qs.length} from ${jsonPath}`);
-        return (qs || []).map((q: any, idx: number) => ({
-          ...q,
-          questionKey: q.questionKey || generateQuestionKey(q),
-          id: q.id || idx + 1,
-        }));
-      } catch (e) {
-        console.error(`[MDR] Error loading MDR questions from JSON file ${jsonPath}:`, e);
-      }
-    }
-  }
-  console.warn("[MDR] all-questions-data.json NOT FOUND in any path.");
-  return [];
 };
 
 function isNumericString(v: any) {
@@ -183,53 +155,9 @@ function normalizeAuditForFrontend(audit: any) {
   };
 }
 
-/**
- * ✅ RÉSOUDRE les process sélectionnés en IDs DB (processus.id)
- * - entrée: slugs (distribution_logistics) et/ou IDs numériques (string)
- * - sortie: array number[] (IDs DB)
- */
-async function resolveProcessDbIds(db: any, selected: string[]): Promise<number[]> {
-  const sel = (selected || []).map((x) => String(x)).filter(Boolean);
-  if (sel.length === 0) return [];
-
-  // 1) IDs numériques directement fournis
-  const numericIds = sel.filter((x) => isNumericString(x)).map((x) => Number(x));
-
-  // 2) slugs -> names (via MDR_PROCESSES)
-  const slugs = sel.filter((x) => !isNumericString(x) && x !== "all");
-  const names = slugs
-    .map((slug) => MDR_PROCESSES.find((p) => p.id === slug)?.name)
-    .filter(Boolean) as string[];
-
-  let dbIds: number[] = [...numericIds];
-
-  // 3) names -> ids via DB (processus)
-  if (names.length > 0) {
-    try {
-      // ⚠️ IMPORTANT: select UNIQUEMENT id/name pour éviter l'erreur updatedAt manquant
-      const rows = await db
-        .select({
-          id: (processus as any).id,
-          name: (processus as any).name,
-        })
-        .from(processus)
-        .where(
-          sql`${(processus as any).name} in (${sql.join(
-            names.map((n) => sql`${n}`),
-            sql`, `
-          )})`
-        );
-
-      dbIds.push(...(rows || []).map((r: any) => Number(r.id)));
-    } catch (e) {
-      console.warn("[MDR] resolveProcessDbIds failed (names->ids):", e);
-    }
-  }
-
-  // dedupe + keep finite
-  dbIds = Array.from(new Set(dbIds)).filter((n) => Number.isFinite(n));
-  return dbIds;
-}
+// ✅ resolveProcessDbIds : extrait vers server/shared/processResolution.ts
+// (module partagé, consommé aussi par iso-router.ts et les futurs référentiels
+// — voir CORRECTIONS.md). Import ci-dessous, comportement inchangé.
 
 /**
  * ✅ Build process candidates matching questions.applicableProcesses
@@ -341,17 +269,6 @@ export async function getAuditContextInternal(db: any, userId: number, auditId: 
     processIds,
     referentialIds,
   };
-}
-
-async function loadQuestionsFromDb(db: any) {
-  try {
-    const rows = await db.select().from(questions);
-    console.log("[MDR] total questions loaded from DB:", rows.length);
-    return rows;
-  } catch (e) {
-    console.warn("[MDR] Unable to load questions from DB table `questions`:", e);
-    return [];
-  }
 }
 
 /**
@@ -1651,98 +1568,18 @@ export const mdrRouter = router({
           },
         };
       } catch (e: any) {
-        console.warn("[MDR] DB filtering failed, fallback to JSON. Error:", e?.message ?? e);
-      }
-
-      // ---- Fallback ----
-      let allQuestions = await loadQuestionsFromDb(db);
-      if (allQuestions.length === 0) allQuestions = loadQuestionsFromJson();
-
-      if (allQuestions.length === 0) {
-        console.warn("[MDR] No questions found in DB or JSON file.");
-        return {
-          questions: [] as any[],
-          meta: { auditId, total: 0, filteredByDb: false },
-        };
-      }
-
-      let filtered = allQuestions;
-
-      // role filter
-      if (economicRole && economicRole !== "all") {
-        filtered = filtered.filter((q: any) => {
-          if (!q.economicRole) return true;
-          const v = String(q.economicRole).toLowerCase().trim();
-          const r = String(economicRole).toLowerCase().trim();
-          if (v === r) return true;
-          if (v === "distributor" && r === "distributeur") return true;
-          if (v === "importer" && r === "importateur") return true;
-          if (v === "manufacturer" && r === "fabricant") return true;
-          if ((v === "authorized representative" || v === "authorised representative" || v === "ar") && r === "mandataire") return true;
-          return false;
+        // ✅ Ancien repli en mémoire (DB non filtrée ou JSON statique) supprimé :
+        // il refaisait le même filtrage "applicableProcesses comme des noms de
+        // processus" que le bug corrigé côté ISO (voir CORRECTIONS.md — module
+        // partagé server/shared/processResolution.ts). Un résultat masqué par
+        // un filtrage silencieusement dégradé serait pire qu'une erreur
+        // explicite : on remonte l'échec plutôt que de servir des questions
+        // potentiellement hors périmètre.
+        console.error("[MDR] getQuestionsForAudit DB filtering failed:", e?.message ?? e);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Impossible de charger les questions de l'audit (échec de la requête filtrée).",
         });
       }
-
-      if (referentialIds && referentialIds.length > 0) {
-        filtered = filtered.filter((q: any) => {
-          if (!q.referentialId) return true;
-          return referentialIds.includes(Number(q.referentialId));
-        });
-      }
-
-      // process filter fallback: OR logic too
-      if (processDbIds.length > 0 || processCandidates.length > 0) {
-        const wanted = processCandidates.map((x) => String(x).toLowerCase());
-        filtered = filtered.filter((q: any) => {
-          const pidOk =
-            processDbIds.length > 0 &&
-            q.processId !== null &&
-            q.processId !== undefined &&
-            processDbIds.includes(Number(q.processId));
-
-          const ap = safeParseArray(q.applicableProcesses).map((p: any) => String(p).toLowerCase());
-          const apOk =
-            !q.applicableProcesses ||
-            ap.length === 0 ||
-            (wanted.length > 0 && wanted.some((w) => ap.includes(w)));
-
-          return pidOk || apOk;
-        });
-      }
-
-      const out = filtered.map((q: any) => ({
-        id: q.id,
-        questionKey: q.questionKey || generateQuestionKey(q),
-        questionText: q.questionText,
-        questionType: q.questionType ?? null,
-        article: q.article,
-        annexe: q.annexe,
-        title: q.title,
-        expectedEvidence: q.expectedEvidence ?? null,
-        criticality: q.criticality ?? null,
-        risk: (q as any).risk ?? null,
-        risks: normalizeRisksValue((q as any).risks ?? (q as any).risk ?? null),
-        interviewFunctions: safeParseArray(q.interviewFunctions),
-        economicRole: q.economicRole ?? null,
-        applicableProcesses: safeParseArray(q.applicableProcesses),
-        referentialId: q.referentialId ?? null,
-        processId: q.processId ?? null,
-        displayOrder: q.displayOrder ?? null,
-      }));
-
-      // ✅ Standard return shape for frontend (wizard expects { questions })
-      return {
-        questions: out,
-        meta: {
-          auditId,
-          economicRole,
-          selectedProcessIds: normalizedProcessIds,
-          processDbIds,
-          processCandidates,
-          referentialIds: referentialIds || [],
-          total: out.length,
-          filteredByDb: false,
-        },
-      };
     }),
 });
