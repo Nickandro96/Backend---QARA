@@ -113,7 +113,10 @@ export const auditRouter = router({
         referentialIds: z.array(z.number()).default([]),
         siteId: z.number().int().positive().optional(),
         economicRole: z.string().optional(),
-        processIds: z.array(z.number()).optional(),
+        // z.union: accepte les ids numériques ET les slugs canoniques
+        // (ex. "gov_strat") — resolveProcessDbIds (server/shared/processResolution.ts)
+        // résout les deux formats à la lecture, comme pour MDR/ISO.
+        processIds: z.array(z.union([z.number(), z.string()])).optional(),
         auditorName: z.string().optional(),
         auditorEmail: z.string().optional(),
         startDate: z.string().optional(),
