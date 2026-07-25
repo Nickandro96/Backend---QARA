@@ -374,22 +374,15 @@ export async function fetchAuditScopedQuestions(db: any, params: {
         .from(questions)
         .orderBy((questions as any).displayOrder, (questions as any).id);
 
-  // Fallback: if role-specific filter yields nothing, retry without role filter.
-  if (rows.length === 0 && economicRoleClause) {
-    const wherePartsNoRole = whereParts.filter((p) => p !== economicRoleClause);
-    const finalWhereNoRole = wherePartsNoRole.length > 0 ? and(...wherePartsNoRole) : undefined;
-
-    rows = finalWhereNoRole
-      ? await db
-          .select(select)
-          .from(questions)
-          .where(finalWhereNoRole)
-          .orderBy((questions as any).displayOrder, (questions as any).id)
-      : await db
-          .select(select)
-          .from(questions)
-          .orderBy((questions as any).displayOrder, (questions as any).id);
-  }
+  // ✅ Repli "retry sans rôle si 0 résultat" retiré : un 0 correctement
+  // calculé (rôle légitime sans contenu dans ce référentiel — ex. IVDR,
+  // MDSAP, FDA_QMSR, ISO14971, tous mono-rôle "fabricant" au corpus
+  // actuel) est un vrai zéro, pas une erreur à masquer. Le silence sur ce
+  // repli servait TOUTES les questions du référentiel à n'importe quel
+  // rôle dès que son propre rôle n'y avait aucun contenu — sur-service
+  // découvert en testant l'étape D sur IVDR (voir CORRECTIONS.md). Aucun
+  // effet sur MDR : ses 4 rôles ont chacun ≥1 question dédiée (74/1/3/2),
+  // ce repli ne s'y déclenchait donc jamais.
 
   // Onboarding scope (multi-rôles) : filtre JS post-requête sur
   // roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
@@ -1380,24 +1373,8 @@ export const mdrRouter = router({
               .from(questions)
               .orderBy((questions as any).displayOrder, (questions as any).id);
 
-        // Fallback: if role-specific filter yields nothing, retry without role filter.
-        if (rows.length === 0 && economicRoleClause) {
-          const wherePartsNoRole = whereParts.filter((p) => p !== economicRoleClause);
-          const finalWhereNoRole = wherePartsNoRole.length > 0 ? and(...wherePartsNoRole) : undefined;
-
-          rows = finalWhereNoRole
-            ? await db
-                .select(questionSelect)
-                .from(questions)
-                .where(finalWhereNoRole)
-                .orderBy((questions as any).displayOrder, (questions as any).id)
-            : await db
-                .select(questionSelect)
-                .from(questions)
-                .orderBy((questions as any).displayOrder, (questions as any).id);
-
-          console.log(`[MDR] role-filter returned 0 → fallback without role filter (role=${economicRole}) => ${rows.length}`);
-        }
+        // ✅ Repli "retry sans rôle si 0" retiré — voir fetchAuditScopedQuestions
+        // ci-dessus pour la justification complète (sur-service découvert sur IVDR).
 
         // Onboarding scope (multi-rôles) : filtre JS post-requête sur
         // roleReglementaire/situationTags normalisés — voir docs/audit/12-onboarding.md.
