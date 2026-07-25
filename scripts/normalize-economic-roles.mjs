@@ -22,7 +22,9 @@
  *   fabricant IVD                  -> fabricant
  *   fabricant participant MDSAP    -> fabricant
  *   assembleur                     -> fabricant + situationTags: ["assemblage"] (Art. 22(3) MDR)
- *   U.S. agent                     -> fabricant (questions Registration & Listing, point de vue fabricant)
+ *   U.S. agent                     -> fabricant + situationTags: ["acces_marche_us"] (21 CFR 807.40 —
+ *                                      questions rédigées du point de vue du fabricant étranger qui
+ *                                      doit désigner l'agent, jamais du distributeur/importateur)
  *   mandataire                     -> mandataire (inchangé)
  *   importateur                    -> importateur (inchangé)
  *   distributeur                   -> distributeur (inchangé)
@@ -38,7 +40,7 @@ const MAPPING = {
   "fabricant IVD": { role: "fabricant" },
   "fabricant participant MDSAP": { role: "fabricant" },
   assembleur: { role: "fabricant", situationTags: ["assemblage"] },
-  "U.S. agent": { role: "fabricant" },
+  "U.S. agent": { role: "fabricant", situationTags: ["acces_marche_us"] },
   mandataire: { role: "mandataire" },
   importateur: { role: "importateur" },
   distributeur: { role: "distributeur" },

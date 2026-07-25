@@ -1,12 +1,26 @@
 // Backend---QARA-main/server/audit-router.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
-import { audits, sites, referentiels } from "../drizzle/schema";
+import { audits, sites, referentiels, questions, auditResponses } from "../drizzle/schema";
 import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
-import { safeParseArray } from "./mdr-router";
+import { safeParseArray, getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
+
+const ResponseValueEnum = z.enum([
+  "compliant",
+  "non_compliant",
+  "not_applicable",
+  "partial",
+  "in_progress",
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+]);
 
 /**
  * Filtre en mémoire par referentialId : AuditSelector.tsx (frontend) passe
@@ -351,5 +365,130 @@ export const auditRouter = router({
       const score = scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
       const progress = total > 0 ? Math.round((answered / total) * 1000) / 10 : 0;
       return { score, conforme, nok, na, total, answered, progress };
+    }),
+
+  /**
+   * Étape C (routeur d'audit générique — voir CORRECTIONS.md) : équivalent
+   * référentiel-agnostique de mdr.getQuestionsForAudit/iso.getQuestionsForAudit.
+   * Réutilise fetchAuditScopedQuestions (déjà générique : referentialIds,
+   * economicRole, processIds viennent de l'audit lui-même, jamais d'un
+   * référentiel en dur) — même mécanique que celle qui alimente déjà
+   * computeGenericAuditStats pour le score. Sert IVDR/MDSAP (aucun routeur
+   * dédié aujourd'hui) et, à terme, tous les référentiels via le futur
+   * wizard unique. N'affecte pas les routeurs mdr/iso/fda existants.
+   */
+  getQuestionsForAudit: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+      const rows = await fetchAuditScopedQuestions(db, {
+        auditId: input.auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: {
+          id: (questions as any).id,
+          referentialId: (questions as any).referentialId,
+          processId: (questions as any).processId,
+          questionKey: (questions as any).questionKey,
+          article: (questions as any).article,
+          annexe: (questions as any).annexe,
+          title: (questions as any).title,
+          economicRole: (questions as any).economicRole,
+          questionType: (questions as any).questionType,
+          questionText: (questions as any).questionText,
+          expectedEvidence: (questions as any).expectedEvidence,
+          criticality: (questions as any).criticality,
+          risk: (questions as any).risk,
+          interviewFunctions: (questions as any).interviewFunctions,
+          actionPlan: (questions as any).actionPlan,
+          aiPrompt: (questions as any).aiPrompt,
+          displayOrder: (questions as any).displayOrder,
+        },
+      });
+
+      return { count: (rows || []).length, questions: rows || [] };
+    }),
+
+  /**
+   * Étape C : équivalent référentiel-agnostique de mdr.saveResponse/
+   * iso.saveResponse — la logique y était déjà identique d'un routeur à
+   * l'autre (audit_responses n'a jamais été spécifique à un référentiel),
+   * seule la duplication changeait. N'affecte pas les routeurs mdr/iso existants.
+   */
+  saveResponse: protectedProcedure
+    .input(
+      z.object({
+        auditId: z.number(),
+        questionKey: z.string().min(1),
+        responseValue: ResponseValueEnum,
+        responseComment: z.string().optional().nullable(),
+        note: z.string().optional().nullable(),
+        role: z.string().optional().nullable(),
+        processId: z.string().optional().nullable(),
+        evidenceFiles: z.array(z.string()).optional().default([]),
+        answeredBy: z.union([z.number(), z.string()]).optional().nullable(),
+        answeredAt: z.string().optional().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+
+      const now = new Date();
+      const normalizedProcessId =
+        input.processId && /^[0-9]+$/.test(input.processId) ? Number(input.processId) : null;
+      const normalizedAnsweredBy =
+        input.answeredBy === null || input.answeredBy === undefined || input.answeredBy === ""
+          ? ctx.user.id
+          : Number(input.answeredBy);
+
+      const parsedAnsweredAt = input.answeredAt ? new Date(input.answeredAt) : null;
+      const normalizedAnsweredAt =
+        parsedAnsweredAt && !Number.isNaN(parsedAnsweredAt.getTime()) ? parsedAnsweredAt : now;
+
+      const values: any = {
+        auditId: input.auditId,
+        questionKey: input.questionKey,
+        responseValue: input.responseValue,
+        responseComment: input.responseComment ?? "",
+        note: input.note ?? "",
+        evidenceFiles: input.evidenceFiles ?? [],
+        role: input.role ?? null,
+        processId: normalizedProcessId,
+        answeredBy: Number.isFinite(normalizedAnsweredBy) ? normalizedAnsweredBy : ctx.user.id,
+        answeredAt: normalizedAnsweredAt,
+        updatedAt: now,
+        userId: ctx.user.id,
+      };
+
+      const whereExpr = and(
+        eq((auditResponses as any).auditId, input.auditId),
+        eq((auditResponses as any).questionKey, input.questionKey),
+        eq((auditResponses as any).userId, ctx.user.id)
+      );
+
+      const [existing] = await db
+        .select({ id: (auditResponses as any).id })
+        .from(auditResponses)
+        .where(whereExpr)
+        .limit(1);
+
+      if (existing?.id) {
+        await db.update(auditResponses).set(values).where(eq((auditResponses as any).id, existing.id));
+        return { success: true, mode: "updated" as const };
+      }
+
+      await db.insert(auditResponses).values({ ...values, createdAt: now });
+      return { success: true, mode: "created" as const };
     }),
 });

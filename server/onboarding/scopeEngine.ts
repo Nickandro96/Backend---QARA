@@ -9,7 +9,7 @@
  */
 
 export type RoleReglementaire = "fabricant" | "mandataire" | "importateur" | "distributeur";
-export type SituationTag = "reconditionnement" | "assemblage";
+export type SituationTag = "reconditionnement" | "assemblage" | "acces_marche_us";
 export type Market = "EU" | "US" | "CA" | "BR" | "AU" | "JP";
 
 export interface ScopeSelection {
@@ -47,9 +47,12 @@ export interface ScopeSelection {
  * 807.40) est un canal de communication avec la FDA ; le mandataire
  * (Art. 11 MDR) porte des obligations de fond et une responsabilité
  * juridique conjointe — les confondre serait une approximation
- * réglementaire. Les 2 questions du corpus portant ce libellé sont
- * rédigées du point de vue du fabricant (conformité de son propre dossier
- * Registration & Listing), d'où le rattachement à fabricant.
+ * réglementaire. Les 2 questions du corpus ("le fabricant étranger a-t-il
+ * désigné un U.S. Agent unique", "disposez-vous d'un établissement
+ * enregistré FDA et d'un U.S. Agent") sont rédigées du point de vue de
+ * celui qui doit désigner l'agent — le fabricant étranger accédant au
+ * marché US — d'où fabricant, jamais NULL (éviterait un sur-service vers
+ * distributeur/importateur, qui n'ont pas cette obligation).
  */
 export const ROLE_FROM_ECONOMIC_ROLE: Record<string, RoleReglementaire[]> = {
   fabricant: ["fabricant"],
@@ -71,6 +74,7 @@ export const ROLE_FROM_ECONOMIC_ROLE: Record<string, RoleReglementaire[]> = {
 /** `economicRole` bruts qui dénotent une situation particulière EN PLUS d'un rôle (non exclusif). */
 export const SITUATION_FROM_ECONOMIC_ROLE: Record<string, SituationTag[]> = {
   assembleur: ["assemblage"],
+  "u.s. agent": ["acces_marche_us"],
 };
 
 /** Normalise un `economicRole` brut en rôles réglementaires canoniques (peut être vide = générique). */

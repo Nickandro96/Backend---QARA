@@ -159,60 +159,10 @@ function normalizeAuditForFrontend(audit: any) {
 // (module partagé, consommé aussi par iso-router.ts et les futurs référentiels
 // — voir CORRECTIONS.md). Import ci-dessous, comportement inchangé.
 
-/**
- * ✅ Build process candidates matching questions.applicableProcesses
- * - tokens + canonical names
- * - numeric ids -> DB processus.name
- */
-async function buildApplicableProcessCandidates(db: any, selected: string[]) {
-  if (!selected || selected.length === 0) return [];
-
-  const tokens = selected
-    .filter((x) => x && x !== "all" && !isNumericString(String(x)))
-    .map(String);
-
-  const numeric = selected
-    .filter((x) => x && x !== "all" && isNumericString(String(x)))
-    .map((x) => Number(x));
-
-  const candidates: string[] = [];
-
-  // 1) tokens + names
-  for (const t of tokens) {
-    candidates.push(t);
-    const p = MDR_PROCESSES.find((x) => x.id === t);
-    if (p?.name) candidates.push(p.name);
-  }
-
-  // 2) numeric -> processus.name (safe select id/name only)
-  if (numeric.length > 0) {
-    try {
-      const rows = await db
-        .select({
-          id: (processus as any).id,
-          name: (processus as any).name,
-        })
-        .from(processus)
-        .where(
-          sql`${(processus as any).id} in (${sql.join(
-            numeric.map((n) => sql`${n}`),
-            sql`, `
-          )})`
-        );
-
-      for (const r of rows || []) {
-        if ((r as any)?.name) candidates.push(String((r as any).name));
-      }
-    } catch (e) {
-      console.warn("[MDR] Unable to map numeric process IDs to names via `processus`:", e);
-    }
-  }
-
-  // 3) ALSO add numeric strings as candidates (au cas où applicableProcesses stocke "11" en string)
-  for (const n of numeric) candidates.push(String(n));
-
-  return [...new Set(candidates.map((s) => String(s).trim()).filter(Boolean))];
-}
+// ✅ buildApplicableProcessCandidates supprimée (Étape B) : ne servait plus
+// qu'à alimenter le JSON_CONTAINS(applicableProcesses) retiré ci-dessous —
+// voir server/shared/processResolution.ts pour la résolution processus
+// désormais utilisée (questions.processId uniquement).
 
 // Internal helper: get audit context WITHOUT calling tRPC endpoints
 export async function getAuditContextInternal(db: any, userId: number, auditId: number) {
@@ -344,9 +294,6 @@ export async function fetchAuditScopedQuestions(db: any, params: {
   // slug(s) -> IDs DB
   const processDbIds = await resolveProcessDbIds(db, normalizedProcessIds);
 
-  // candidates for applicableProcesses JSON matching (names + tokens)
-  const processCandidates = await buildApplicableProcessCandidates(db, normalizedProcessIds);
-
   const whereParts: any[] = [];
 
   // economicRole VARCHAR (or nullable) – accept generic questions too
@@ -390,50 +337,28 @@ export async function fetchAuditScopedQuestions(db: any, params: {
   }
 
   /**
-   * ✅ FIX IMPORTANT:
-   * On ne fait PAS:
-   *   processId IN (...)  AND  JSON_CONTAINS(...)
-   * car ça tue tout si la DB n’a pas les deux tags.
-   *
-   * On fait un SEUL bloc OR:
-   * - match via questions.processId
-   * - OU questions.applicableProcesses vide/null
-   * - OU JSON_CONTAINS(applicableProcesses, candidate)
+   * ✅ Filtre processus : uniquement questions.processId (colonne fiable,
+   * vérifiée peuplée à 100% sur les 7 référentiels — voir CORRECTIONS.md).
+   * L'ancienne branche JSON_CONTAINS(applicableProcesses, candidate)
+   * matchait cette colonne comme si elle contenait des noms de processus,
+   * alors qu'elle stocke des rôles économiques (même défaut que celui
+   * corrigé côté ISO) — en plus d'être un OR strictement redondant avec
+   * processId IN (...) désormais fiable partout, elle utilisait
+   * CAST(... AS JSON), syntaxe absente de MariaDB (erreur 1064), un vrai
+   * risque de portabilité. La retirer ne peut qu'exclure moins ou autant
+   * de questions, jamais plus : aucune régression possible.
+   * "applicableProcesses vide/null" conservé (questions génériques, sans
+   * restriction de processus déclarée), sans dépendre de son contenu.
    */
-  const hasAnyProcessFilter = processDbIds.length > 0 || processCandidates.length > 0;
+  const hasAnyProcessFilter = processDbIds.length > 0;
 
   if (hasAnyProcessFilter) {
-    const orParts: any[] = [];
-
-    if (processDbIds.length > 0) {
-      orParts.push(
-        sql`${(questions as any).processId} in (${sql.join(
-          processDbIds.map((n: number) => sql`${n}`),
-          sql`, `
-        )})`
-      );
-    }
-
-    // allow generic (no applicableProcesses) questions
-    orParts.push(
-      sql`${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0`
+    whereParts.push(
+      sql`(${(questions as any).processId} in (${sql.join(
+        processDbIds.map((n: number) => sql`${n}`),
+        sql`, `
+      )}) OR ${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0)`
     );
-
-    if (processCandidates.length > 0) {
-      const conds = processCandidates.map((cand) => {
-        const s = String(cand);
-        if (isNumericString(s)) {
-          const n = Number(s);
-          return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
-        }
-        const candJson = JSON.stringify(s); // => '"Distribution & logistique"'
-        return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
-      });
-
-      orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-    }
-
-    whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
   }
 
   const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
@@ -1353,15 +1278,10 @@ export const mdrRouter = router({
       // slug(s) -> IDs DB
       const processDbIds = await resolveProcessDbIds(db, normalizedProcessIds);
 
-      // candidates for applicableProcesses JSON matching (names + tokens)
-      const processCandidates = await buildApplicableProcessCandidates(db, normalizedProcessIds);
-
       console.log(
         `[MDR] getQuestionsForAudit audit=${auditId} role=${economicRole} processIds=${JSON.stringify(
           normalizedProcessIds
-        )} processDbIds=${JSON.stringify(processDbIds)} processCandidates=${JSON.stringify(
-          processCandidates
-        )} referentials=${JSON.stringify(referentialIds)}`
+        )} processDbIds=${JSON.stringify(processDbIds)} referentials=${JSON.stringify(referentialIds)}`
       );
 
       const questionSelect = {
@@ -1432,51 +1352,19 @@ export const mdrRouter = router({
           );
         }
 
-        /**
-         * ✅ FIX IMPORTANT:
-         * On ne fait PAS:
-         *   processId IN (...)  AND  JSON_CONTAINS(...)
-         * car ça tue tout si la DB n’a pas les deux tags.
-         *
-         * On fait un SEUL bloc OR:
-         * - match via questions.processId
-         * - OU questions.applicableProcesses vide/null
-         * - OU JSON_CONTAINS(applicableProcesses, candidate)
-         */
-        const hasAnyProcessFilter = processDbIds.length > 0 || processCandidates.length > 0;
+        // ✅ Filtre processus : questions.processId uniquement — voir
+        // fetchAuditScopedQuestions ci-dessus pour la justification
+        // complète (JSON_CONTAINS(applicableProcesses) retiré : redondant
+        // et invalide sous MariaDB, CAST(...AS JSON) n'existe pas).
+        const hasAnyProcessFilter = processDbIds.length > 0;
 
         if (hasAnyProcessFilter) {
-          const orParts: any[] = [];
-
-          if (processDbIds.length > 0) {
-            orParts.push(
-              sql`${(questions as any).processId} in (${sql.join(
-                processDbIds.map((n: number) => sql`${n}`),
-                sql`, `
-              )})`
-            );
-          }
-
-          // allow generic (no applicableProcesses) questions
-          orParts.push(
-            sql`${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0`
+          whereParts.push(
+            sql`(${(questions as any).processId} in (${sql.join(
+              processDbIds.map((n: number) => sql`${n}`),
+              sql`, `
+            )}) OR ${(questions as any).applicableProcesses} IS NULL OR JSON_LENGTH(${(questions as any).applicableProcesses}) = 0)`
           );
-
-          if (processCandidates.length > 0) {
-            const conds = processCandidates.map((cand) => {
-              const s = String(cand);
-              if (isNumericString(s)) {
-                const n = Number(s);
-                return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${n} AS JSON))`;
-              }
-              const candJson = JSON.stringify(s); // => '"Distribution & logistique"'
-              return sql`JSON_CONTAINS(${(questions as any).applicableProcesses}, CAST(${candJson} AS JSON))`;
-            });
-
-            orParts.push(sql`(${sql.join(conds, sql` OR `)})`);
-          }
-
-          whereParts.push(sql`(${sql.join(orParts, sql` OR `)})`);
         }
 
         const finalWhere = whereParts.length > 0 ? and(...whereParts) : undefined;
@@ -1561,7 +1449,6 @@ export const mdrRouter = router({
             economicRole,
             selectedProcessIds: normalizedProcessIds,
             processDbIds,
-            processCandidates,
             referentialIds: referentialIds || [],
             total: out.length,
             filteredByDb: true,
