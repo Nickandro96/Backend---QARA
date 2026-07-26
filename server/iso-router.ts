@@ -464,7 +464,13 @@ export const isoRouter = router({
       const payload: any = {
         userId: ctx.user.id,
         auditId: (input as any).auditId,
-        questionId: (q as any).id,
+        // ✅ questionId retiré du payload écrit (voir CORRECTIONS.md, incident
+        // du 25/07/2026) : questionKey est la seule clé stable dans le temps
+        // (questions.id peut changer si une donnée est réimportée). L'entrée
+        // `questionId` en entrée reste acceptée (résolution ci-dessus), mais
+        // n'est plus jamais persistée dans audit_responses pour les
+        // nouvelles écritures — les lignes déjà existantes ne sont pas
+        // touchées.
         questionKey,
         responseValue: (input as any).responseValue ?? "in_progress",
         responseComment: (input as any).responseComment ?? "",

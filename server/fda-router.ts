@@ -392,7 +392,12 @@ export const fdaRouter = router({
         .values({
           userId: ctx.user.id,
           auditId: input.auditId,
-          questionId: input.questionId,
+          // ✅ questionId retiré du payload écrit (voir CORRECTIONS.md,
+          // incident du 25/07/2026) : questionKey est la seule clé stable
+          // dans le temps (questions.id peut changer si une donnée est
+          // réimportée). L'entrée `questionId` reste acceptée en entrée
+          // (résolution ci-dessus), mais n'est plus jamais persistée pour
+          // les nouvelles écritures.
           questionKey,
           responseValue: input.responseValue,
           responseComment: input.responseComment ?? null,
