@@ -26,6 +26,7 @@ import { eq } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { referentiels, processus, questions } from "../drizzle/schema.ts";
 import { CANONICAL_PROCESSES } from "../server/processes-catalog.ts";
+import { resolveEconomicRole } from "./economic-role-mapping.mjs";
 
 const REFS = [
   { code: "MDR", name: "Règlement (UE) 2017/745 (MDR)", type: "regulation" },
@@ -155,6 +156,7 @@ async function runImport(conn) {
 
   // 3) Questions (upsert par questionKey)
   let inserted = 0, updated = 0;
+  const unmappedRoles = new Set();
   for (const row of rows) {
     const refId = refIdByCode[row.referentialCode];
 
@@ -170,6 +172,16 @@ async function runImport(conn) {
       pid = procIdByCanonicalId[canonicalId] ?? null;
     }
 
+    // ✅ Normalisation economicRole appliquée à CHAQUE import (insert ET
+    // update) — voir scripts/economic-role-mapping.mjs. Corrige l'incident
+    // du 25/07/2026 : ce script tournant à chaque déploiement (package.json
+    // "release"), il réécrivait economicRole avec la valeur BRUTE du JSON à
+    // chaque fois, annulant silencieusement toute normalisation en
+    // production (voir CORRECTIONS.md). economicRoleSource et
+    // situationTags sont désormais écrits ici aussi, jamais laissés NULL.
+    const { economicRole, economicRoleSource, situationTags, unmapped } = resolveEconomicRole(row.economicRole);
+    if (unmapped) unmappedRoles.add(row.economicRole);
+
     const values = {
       referentialId: refId,
       processId: pid,
@@ -178,7 +190,9 @@ async function runImport(conn) {
       article: row.article || null,
       annexe: row.annexe || null,
       title: row.title || null,
-      economicRole: row.economicRole || null,
+      economicRole,
+      economicRoleSource,
+      situationTags,
       applicableProcesses: row.applicableProcesses ?? [],
       questionType: row.questionType,
       questionText: row.questionText,
@@ -211,6 +225,14 @@ async function runImport(conn) {
   }
 
   console.log(`Import terminé : ${inserted} insérées, ${updated} mises à jour, sur ${rows.length}.`);
+  if (unmappedRoles.size > 0) {
+    console.warn(
+      `[import] ATTENTION : ${unmappedRoles.size} valeur(s) economicRole du corpus sans correspondance connue dans ` +
+        `scripts/economic-role-mapping.mjs : ${JSON.stringify(Array.from(unmappedRoles))}. ` +
+        `Ces lignes gardent leur valeur brute (pas de risque de sur/sous-service silencieux), mais ne sont pas ` +
+        `normalisées — compléter ECONOMIC_ROLE_MAPPING avant le prochain déploiement.`
+    );
+  }
 
   // 4) Nettoyage des processus "fantômes" créés par d'anciennes exécutions de ce
   //    script (avant le mapping vers les 15 catégories canoniques) : plus aucune

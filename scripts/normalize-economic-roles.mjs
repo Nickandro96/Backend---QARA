@@ -16,38 +16,19 @@
  *
  * Pré-requis : migration 0028 appliquée (colonne economicRoleSource).
  *
- * Table de correspondance (validée) :
- *   fabricant                      -> fabricant (inchangé)
- *   finished device manufacturer   -> fabricant
- *   fabricant IVD                  -> fabricant
- *   fabricant participant MDSAP    -> fabricant
- *   assembleur                     -> fabricant + situationTags: ["assemblage"] (Art. 22(3) MDR)
- *   U.S. agent                     -> fabricant + situationTags: ["acces_marche_us"] (21 CFR 807.40 —
- *                                      questions rédigées du point de vue du fabricant étranger qui
- *                                      doit désigner l'agent, jamais du distributeur/importateur)
- *   mandataire                     -> mandataire (inchangé)
- *   importateur                    -> importateur (inchangé)
- *   distributeur                   -> distributeur (inchangé)
- *   organisme DM                   -> NULL (universel — ISO13485 audite l'organisme, pas l'opérateur)
- *   organisme                      -> NULL (universel — ISO9001 s'applique à toute organisation)
- *   direction                      -> NULL (universel — générique, aucun rôle)
+ * ⚠️ Ce script est un correctif PONCTUEL a posteriori (a servi le 25/07/2026
+ * sur new-claude). Depuis, scripts/import-corpus.mjs applique la même table
+ * de correspondance à CHAQUE import — plus besoin de rejouer ce script sur
+ * une base qui a déjà reçu un déploiement avec l'import corrigé. Conservé
+ * pour une base qui n'aurait pas encore ce correctif (voir CORRECTIONS.md,
+ * incident du 25/07 : le pipeline de release écrasait economicRole à
+ * chaque déploiement avant ce correctif).
+ *
+ * Table de correspondance : voir scripts/economic-role-mapping.mjs (source
+ * unique, partagée avec import-corpus.mjs — ne pas dupliquer ici).
  */
 import mysql from "mysql2/promise";
-
-const MAPPING = {
-  fabricant: { role: "fabricant" },
-  "finished device manufacturer": { role: "fabricant" },
-  "fabricant IVD": { role: "fabricant" },
-  "fabricant participant MDSAP": { role: "fabricant" },
-  assembleur: { role: "fabricant", situationTags: ["assemblage"] },
-  "U.S. agent": { role: "fabricant", situationTags: ["acces_marche_us"] },
-  mandataire: { role: "mandataire" },
-  importateur: { role: "importateur" },
-  distributeur: { role: "distributeur" },
-  "organisme DM": { role: null },
-  organisme: { role: null },
-  direction: { role: null },
-};
+import { ECONOMIC_ROLE_MAPPING as MAPPING } from "./economic-role-mapping.mjs";
 
 async function main() {
   const conn = await mysql.createConnection(process.env.DATABASE_URL);
