@@ -1,17 +1,20 @@
 /**
  * QARA — Import du corpus vérifié (473 questions, 7 référentiels) dans MySQL.
- * Remplace les scripts d'import cassés/invalides du dépôt et le contenu MDR/FDA
- * précédemment importé (voir docs/audit/07-import-corpus.md — décision validée :
- * remplacement complet, pas de coexistence avec l'ancien contenu MDR/FDA).
+ * Remplace les scripts d'import cassés/invalides du dépôt et l'ancien contenu
+ * MDR pré-corpus-vérifié (voir docs/audit/07-import-corpus.md — remplacement
+ * ponctuel effectué le 04/07/2026, terminé depuis : voir CORRECTIONS.md,
+ * "retrait du DELETE+INSERT MDR").
  *
  * Usage :
  *   DATABASE_URL=... node scripts/import-corpus.mjs
  *
  * Pré-requis : migration 0018_rich_question_fields appliquée (colonnes riches).
  *
- * Idempotent pour les référentiels ISO13485/ISO9001/ISO14971/IVDR/MDSAP (upsert
- * par questionKey). Pour MDR/FDA, la toute première exécution purge l'ancien
- * contenu (voir §0) ; les exécutions suivantes sont un upsert normal.
+ * Idempotent pour les 7 référentiels — upsert par `questionKey` uniquement,
+ * jamais de DELETE. Les `id` de `questions` sont donc stables d'un import à
+ * l'autre pour toute question déjà présente (important pour toute donnée qui
+ * référencerait `questions.id`, ex. `audit_responses.questionId` — voir
+ * CORRECTIONS.md, incident du 25/07/2026).
  *
  * Option RESET_BEFORE_IMPORT=1 : vide entièrement `questions`/`referentiels`
  * avant l'import, DANS LA MÊME section verrouillée (voir plus bas) — utile
@@ -81,20 +84,21 @@ async function runImport(conn) {
     console.log("[RESET] Tables vidées, compteurs auto_increment remis à zéro.");
   }
 
-  // 0) Remplacement de l'ancien contenu MDR/FDA (décision validée le 04/07/2026 —
-  //    voir docs/audit/07-import-corpus.md). N'affecte pas ISO9001/ISO13485 (déjà
-  //    vides) ni les référentiels tiers.
-  const [mdrRef] = await db.select().from(referentiels).where(eq(referentiels.code, "MDR"));
-  if (mdrRef) {
-    const [countRows] = await conn.query("SELECT COUNT(*) AS count FROM questions WHERE referentialId = ?", [
-      mdrRef.id,
-    ]);
-    const count = countRows[0].count;
-    if (count > 0) {
-      console.log(`[REPLACE] Suppression de ${count} anciennes questions MDR (referentialId=${mdrRef.id})...`);
-      await conn.execute("DELETE FROM questions WHERE referentialId = ?", [mdrRef.id]);
-    }
-  }
+  // ✅ Ancien §0 "remplacement MDR" retiré (voir CORRECTIONS.md, incident du
+  // 25/07/2026) : il supprimait puis réinsérait les 80 questions MDR à
+  // CHAQUE exécution (pas seulement la première, faute de marqueur), ce qui
+  // changeait leur `id` auto-increment à chaque déploiement. MDR passe
+  // désormais par le même upsert par `questionKey` que les 6 autres
+  // référentiels (section 3 ci-dessous) — `id` stable, comme pour ISO/IVDR/
+  // MDSAP/FDA_QMSR depuis toujours. Le remplacement ponctuel de l'ancien
+  // contenu MDR pré-corpus-vérifié (décision du 04/07/2026) est terminé :
+  // le corpus vérifié est en place depuis, un DELETE renouvelé à chaque run
+  // n'avait plus aucune fonction.
+  //
+  // Nettoyage des anciens référentiels FDA légataires (codes remplacés par
+  // FDA_QMSR) — mécanisme différent, sans risque de récurrence : ne
+  // s'exécute que si ces codes existent encore comme référentiels distincts,
+  // devient définitivement un no-op une fois nettoyé une première fois.
   for (const code of OLD_FDA_CODES) {
     const [oldRef] = await db.select().from(referentiels).where(eq(referentiels.code, code));
     if (oldRef) {
