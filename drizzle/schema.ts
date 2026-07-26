@@ -174,6 +174,13 @@ export const referentiels = mysqlTable("referentiels", {
   type: varchar("type", { length: 50 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+
+  // Migration 0029, additive. Contrôle la visibilité dans l'étape 0 du
+  // wizard générique (sélection du référentiel) — un référentiel désactivé
+  // reste en base (audits existants intacts), juste masqué du picker.
+  // N'affecte aucun autre chemin (referentials.list garde son comportement
+  // actuel par défaut — voir server/routers.ts).
+  enabled: boolean("enabled").notNull().default(true),
 });
 
 /* =========================

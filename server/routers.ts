@@ -478,14 +478,20 @@ export const appRouter = router({
   }),
 
   referentials: router({
-    list: publicProcedure.query(async () => {
-      try {
-        const refs = await db.getAllReferentials();
-        return refs.length > 0 ? refs : FALLBACK_REFERENTIALS;
-      } catch {
-        return FALLBACK_REFERENTIALS;
-      }
-    }),
+    // ✅ enabledOnly optionnel, défaut false (comportement inchangé pour
+    // tout appelant existant — voir CORRECTIONS.md). Seule l'étape 0 du
+    // wizard générique passe enabledOnly: true.
+    list: publicProcedure
+      .input(z.object({ enabledOnly: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        try {
+          const refs = await db.getAllReferentials();
+          const filtered = input?.enabledOnly ? refs.filter((r: any) => r.enabled !== false) : refs;
+          return filtered.length > 0 ? filtered : FALLBACK_REFERENTIALS;
+        } catch {
+          return FALLBACK_REFERENTIALS;
+        }
+      }),
   }),
 
   processes: router({
