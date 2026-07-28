@@ -2,4 +2,10 @@
 -- générique (étape 0, sélection du référentiel) sans supprimer ses lignes
 -- ni casser les audits déjà créés dessus. DEFAULT true : aucun référentiel
 -- existant n'est masqué par cette migration. Voir CORRECTIONS.md.
-ALTER TABLE `referentiels` ADD COLUMN IF NOT EXISTS `enabled` BOOLEAN NOT NULL DEFAULT true;
+--
+-- Pas de "IF NOT EXISTS" ici : syntaxe refusée (ER_PARSE_ERROR 1064) par le
+-- MySQL de production — incident du 2026-07-27, voir CORRECTIONS.md. Comme
+-- 0028, on s'appuie sur la tolérance ER_DUP_FIELDNAME (1060) déjà présente
+-- dans apply-sql-migrations.ts pour un ré-run sans effet si la colonne
+-- existe déjà.
+ALTER TABLE `referentiels` ADD COLUMN `enabled` BOOLEAN NOT NULL DEFAULT true;
