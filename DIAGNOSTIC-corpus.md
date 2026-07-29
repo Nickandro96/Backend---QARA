@@ -452,10 +452,135 @@ un signal de non-sérieux qui peut légitimement faire douter de la fiabilité d
    (préserve l'historique des `audit_responses`, rappel de la contrainte B), et journaliser
    ancien texte → nouveau texte pour audit a posteriori.
 
+## J. Cadrage de l'ampleur réelle (analyse mécanique/éditorial + source amont + charge)
+
+Analyse demandée avant tout choix de méthode. Toujours aucune écriture — analyse seule.
+
+### J.1 Sur les 216 questions atteintes : combien sont réparables par script ?
+
+**Méthode :** pour chaque question tronquée, extraction du fragment de `questionText` juste
+avant le "…", et test de correspondance avec le contenu du champ `title` de la **même ligne**
+(qui n'est jamais tronqué — vérifié : 0 des 216 lignes n'a de troncature dans `title`,
+`expectedEvidence`, `conformityCriteria` ou `risk`). Si le fragment tronqué est un préfixe exact
+du contenu de `title` (après retrait du préfixe "Art. X — " / "7.5.2 — " etc.), la question est
+reconstructible mécaniquement : on régénère la phrase avec le `title` complet, sans troncature
+artificielle.
+
+| Catégorie | Nombre | % de 216 | Traitement |
+|---|---|---|---|
+| **Mécanique** — fragment tronqué = préfixe exact du `title` complet de la même ligne | **147** | 68 % | Script : réinjecter le `title` complet dans le même gabarit, aucune rédaction humaine |
+| **Manuel** — ne correspond pas à une simple troncature du `title` | **69** | 32 % | Lecture humaine requise |
+
+**Répartition du "manuel" par référentiel** (le "mécanique" en creux) :
+
+| Référentiel | Mécanique | Manuel | Total tronqué |
+|---|---|---|---|
+| MDSAP | 33 | 2 | 35 |
+| MDR | 28 | 6 | 34 |
+| ISO13485 | 27 | 6 | 33 |
+| FDA_QMSR | 19 | 7 | 26 |
+| ISO14971 | 18 | **27** | 45 |
+| IVDR | 15 | 7 | 22 |
+| ISO9001 | 7 | **14** | 21 |
+
+**ISO14971 et ISO9001 concentrent le gros du "manuel"** (27 et 14 sur 69, soit 59 % du total à
+elles deux) — cohérent avec leur taux de troncature déjà le plus élevé trouvé en section I.2.
+
+**Détail des 69 "manuels", deux sous-causes distinctes trouvées en creusant (pas une seule) :**
+- **≈19 sont en fait un bug de connecteur, pas une vraie troncature de contenu** : le `title`
+  complet est bel et bien présent en entier dans le texte, mais suivi d'un "est…" mal formé avant
+  la clôture fixe "est la preuve." (ex. `Q-13485-PP-4306` : "...maîtrise de contamination
+  **est…** est la preuve." — le titre est intégral, c'est juste un verbe de liaison manquant).
+  **Aucune perte de contenu ici non plus** — correction mécanique par suppression du fragment
+  cassé ("est…"), pas de rédaction nécessaire.
+- **≈19 sont de vraies paraphrases raccourcies** (pas une troncature mécanique du `title`,  ex.
+  `Q-FDA-N-2561` : titre "demande de classification De Novo (FD&C 513(f)(2)) pour dispositif
+  nouveau à risque faible/modéré sans predicate légalement commercialisé..." → texte "voie De
+  Novo pour dispositif nouveau à risque faible/modéré sans…" — un résumé différent du titre, pas
+  un simple préfixe) — **celles-ci nécessitent une vraie rédaction humaine**, la variable
+  d'origine (probablement un "titre court" distinct, non conservé dans le JSON final) n'existe
+  plus.
+- Le reste (~31) n'a pas été sous-catégorisé plus finement — nécessite un passage script
+  supplémentaire pour affiner, mais reste dans le tas "manuel" par prudence.
+
+**Chiffre demandé, révisé à la baisse par rapport à une lecture rapide : sur 216 questions
+atteintes, au moins 147 (68 %) — et probablement ~166 (77 %) une fois le sous-cas "connecteur
+cassé" ajouté — sont réparables par script sans aucune rédaction humaine. Le vrai résidu
+éditorial (paraphrase à refaire) est de l'ordre de 50-69 questions, pas 216.**
+
+### J.2 La source amont existe-t-elle ?
+
+**Oui, pour la majorité — dans la même ligne de la base, pas ailleurs.** Le `title` de chaque
+question est **toujours complet, jamais tronqué** (vérifié : 0/473). C'est la source directe
+pour les 147 (+ ~19) cas mécaniques ci-dessus — **"revue éditoriale" devient "régénération
+depuis `title`"** pour ces cas, exactement comme tu l'anticipais.
+
+**Pour les ~50-69 cas de vraie paraphrase**, en revanche, la source courte n'existe nulle part
+ailleurs que je puisse trouver :
+- **Fichier source `questions_import_ready.json`** : structure plate, un objet complet par
+  question, aucun champ "titre court" ou "label" distinct de `title` — la variable utilisée pour
+  générer ces paraphrases n'a pas été conservée telle quelle.
+- **Historique git** : un seul commit a jamais touché ce fichier (`60fda8a3`), aucune version
+  antérieure à comparer.
+- **Champs riches de la même ligne** (`expectedEvidence`, `conformityCriteria`, `risk`,
+  `officialSource`) : présents et complets (aucune troncature), et **utilisables comme matière
+  première pour la reformulation humaine/IA-assistée** de ces ~50-69 cas — pas une source
+  "prête à copier", mais un point d'ancrage réglementaire fiable pour rédiger une reformulation
+  fidèle sans inventer.
+
+**Conclusion : la "reconstruction depuis la source" s'applique à 68-77 % des 216, pas à la
+totalité — mais elle s'applique bien à la majorité, ce qui change effectivement la nature du
+travail restant d'une réécriture générale à une réécriture ciblée sur un sous-ensemble plus
+restreint.**
+
+### J.3 Charge estimée de la passe éditoriale, par référentiel
+
+**Hypothèse de méthode (à valider) : rédaction assistée par IA (ancrée sur `title` +
+`expectedEvidence` + `officialSource` de la ligne), validation/correction humaine ligne par
+ligne — pas une rédaction manuelle from scratch.** Sans cette assistance, doubler les estimées
+ci-dessous.
+
+Périmètre de la charge éditoriale réelle (après déduction du mécanique) :
+- 69 questions à texte cassé nécessitant une vraie reformulation (J.1)
+- 71 groupes de la zone intermédiaire nécessitant une lecture + décision fusion/conservation
+  (section H) — **NB : chevauchement partiel possible avec les 69 ci-dessus si une question
+  cassée appartient aussi à un groupe divergent ; traité comme une seule revue combinée dans ce
+  cas, pas additionné deux fois dans le temps réel**
+- 21 groupes à criticité divergente (19 tranchables rapidement, 2 nécessitant réflexion — section
+  D.1/G)
+
+| Référentiel | Textes cassés à réécrire | Groupes zone intermédiaire | Total items à traiter | Temps estimé |
+|---|---|---|---|---|
+| ISO14971 | 27 | 13 | 40 | ~6 h |
+| MDR | 6 | 14 | 20 | ~3 h |
+| IVDR | 7 | 12 | 19 | ~2,75 h |
+| ISO13485 | 6 | 12 | 18 | ~2,5 h |
+| ISO9001 | 14 | 2 | 16 | ~2,25 h |
+| MDSAP | 2 | 14 | 16 | ~2,25 h |
+| FDA_QMSR | 7 | 4 | 11 | ~1,5 h |
+| **Total** | **69** | **71** | **140** | **~20,25 h** |
+
+Temps par item estimé à ~8-9 minutes en moyenne (proposition IA + lecture + décision + correction
+éventuelle), incluant le changement de contexte entre items. **Plus, hors référentiel (coût fixe
+partagé, pas par référentiel) :**
+- Construction + test du script de réparation mécanique (147+19 cas) : ~3-4 h
+- Validation par échantillon du résultat mécanique (pas ligne à ligne, un échantillon
+  représentatif par référentiel avant application générale) : ~2 h
+- Passe de vérification finale post-corrections (comptages, un test de création d'audit par
+  référentiel dans l'app) : ~2-3 h
+
+**Total estimé : ~27-29 heures de travail effectif, soit environ 3,5 à 4 jours ouvrés à temps
+plein — pas des semaines.** C'est un chantier court, à condition de garder l'assistance IA
+encadrée comme méthode (une rédaction 100 % manuelle sans assistance porterait ça plutôt vers
+6-8 jours ouvrés). ISO14971 concentre à elle seule presque un quart de la charge éditoriale — si
+tu veux un gain visible rapide sur un seul référentiel avant de t'engager sur le reste, c'est
+celui à traiter en premier après la passe mécanique.
+
 ## F. Ce qui reste
 
-Rien de plus à ce stade — les Tâches 1, 2 (partiellement, via les sections G/H) et 3 sont
-couvertes. Une revue plus systématique du schéma de troncature spécifique (Tâche 2, point 1 du
-prompt-maître : recherche exhaustive par motifs, tableau type de défaut/nombre/gravité) n'a pas
-été faite en détail ligne par ligne — seule la mesure globale (216/473, 45,7 %) est établie. À
-faire si tu veux le détail par motif avant de trancher entre correctif ciblé et revue éditoriale.
+Le sous-ensemble exact des ~31 questions "manuel non sous-catégorisé" (J.1) n'a pas été affiné
+plus finement faute de script supplémentaire — à faire si tu veux une répartition exacte
+connecteur-cassé/paraphrase avant de lancer la passe éditoriale. Sinon, cadrage complet livré :
+prêt pour ta décision sur le lancement de la passe mécanique (gain rapide, quasi sans risque) et
+l'organisation de la passe éditoriale (méthode IA-assistée + validation humaine, ~27-29h,
+ISO14971 en premier).
