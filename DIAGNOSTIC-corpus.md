@@ -282,13 +282,180 @@ Si les résultats sur new-claude divergent de ceux ci-dessus (141/354/21/4/62), 
 immédiatement avant de continuer — ce serait le signe que mon miroir local a dérivé de la
 production entre-temps.
 
-## F. Ce qui reste (Tâches 2 et 3 — pas commencées, en attente de ta validation sur la Tâche 1)
+## G. Fiabilité de la criticité sur l'ensemble du corpus (approfondissement demandé)
 
-Tâche 2 (qualité de formulation, gabarits non substitués, schéma des suffixes de `questionKey`)
-et Tâche 3 (provenance du corpus, verdict revue de fond) ne sont pas traitées dans cette version
-du rapport — conformément à ta demande de commencer par la Tâche 1 et de valider la stratégie
-type par type avant de poursuivre. Note en passant, déjà visible dans les exemples ci-dessus
-(D.1) : le motif exact que tu avais repéré sur ISO13485 ("…est la preuve.", ellipse suivie de
-"est" répété) apparaît identiquement sur au moins 3 des exemples MDR cités en D.1 — ce n'est
-donc pas un cas isolé, ce qui confirme ton hypothèse d'un problème systémique de gabarit, à
-creuser en Tâche 2.
+**Hypothèse testée :** le verbe d'ouverture du gabarit détermine-t-il systématiquement la
+criticité, indépendamment de l'exigence réelle ?
+
+**Test rigoureux (pas le petit échantillon de 21 groupes, qui est biaisé par construction —
+il a été sélectionné parce qu'il montre une divergence, donc il ne peut pas servir à mesurer un
+biais général) :** comparaison appariée des deux gabarits les plus fréquents du corpus,
+"Montrez-moi, sur un cas réel récent, comment..." (105 questions) et "Déroulez un cas concret
+concerné par..." (38 questions), **uniquement sur les groupes où les deux gabarits coexistent
+pour la même exigence** (33 groupes) :
+
+| Résultat | Nombre |
+|---|---|
+| Criticité identique entre les deux gabarits | 23 (70 %) |
+| "Montrez-moi..." plus haut que "Déroulez..." | 5 |
+| "Déroulez..." plus haut que "Montrez-moi..." | 5 |
+
+**Conclusion honnête, qui corrige mon hypothèse initiale : il n'y a pas de biais directionnel
+prouvé.** Sur l'échantillon apparié complet, la répartition est parfaitement symétrique (5
+contre 5) et 70 % des paires ont exactement la même criticité. Le gabarit ne détermine donc pas
+systématiquement une criticité plus basse ou plus haute.
+
+**Ce qui reste vrai, en revanche :** dans 30 % des cas appariés (10/33), la même exigence
+reçoit une criticité différente selon la variante — ce n'est pas un biais de verbe, c'est du
+**bruit d'assignation** (la criticité semble avoir été attribuée indépendamment à chaque ligne
+générée, sans vérification de cohérence avec les autres variantes de la même exigence), cohérent
+avec le taux de 21/141 (15 %) déjà trouvé en Tâche 1 (section D.1).
+
+**Vérification complémentaire — les gabarits fortement corrélés à "high" ne sont pas biaisés,
+ils sont thématiquement concentrés (donc légitimes) :** "Choisissons un danger réel concerné
+par" (72 questions, 97 % high/critical) est utilisé à 53 % (38/72) sur ISO14971 et à 47 % sur le
+processus "gestion des risques" — cohérent avec le fait que ces questions portent réellement sur
+l'analyse de risques, qui mérite une criticité élevée. Même chose pour "Ouvrons le dernier
+dossier de conception" (95 % high, 18/20 sur le processus conception) et "Prouvez-moi, sur un
+projet réel" (93 % high, 14/15 sur conception). **Ces corrélations reflètent le sujet traité, pas
+un artefact de génération.**
+
+**Verdict sur la fiabilité de la criticité :** ni totalement fiable, ni totalement aléatoire.
+Le taux de bruit mesurable (15-30 % selon la méthode de mesure, sur les seules paires
+comparables) est trop élevé pour faire une confiance aveugle à la colonne `criticality` telle
+quelle, mais il n'y a pas de biais structurel massif qui invaliderait tout le corpus d'un coup
+— une correction ciblée sur les groupes identifiés (141 groupes, harmoniser à la criticité la
+plus élevée du groupe par prudence réglementaire) réglerait la partie mesurable du problème.
+
+## H. Cinq exemples complets de la zone intermédiaire (0,25-0,49 de similarité, 71 groupes)
+
+Échantillon non biaisé : le minimum, le 25e percentile, la médiane, le 75e percentile et le
+maximum de similarité dans cette zone — pas une sélection favorable à une conclusion.
+
+**1. sim=0,25 — MDR, Annexe I Ch. II (conception/fabrication)**
+- `Q-MDR-GCF-4569` (high) : "Ouvrons le dernier dossier de conception concerné par exigences de conception et fabrication démontrées par preuves techniques : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation."
+- `Q-MDR-GCF-8622` (high) : "Prouvez-moi, sur un projet réel, que exigences de conception et fabrication démontrées par preuves techniques a été appliquée et vérifiée, pas seulement planifiée."
+
+**2. sim=0,27 — FDA_QMSR, 21 CFR 830 (UDI/GUDID)**
+- `Q-FDA-US-2719` (medium) : "Déroulez un cas concret concerné par attribution, changement, maintien et soumission GUDID des identifiants UDI : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?"
+- `Q-FDA-US-4294` (medium) : "Montrez-moi, sur un cas réel récent, comment attribution, changement, maintien et soumission GUDID des… est la preuve." *(gabarit tronqué, cf. section G/Tâche 2)*
+
+**3. sim=0,33 — MDR, Art. 13 (vérifications importateur)**
+- `Q-MDR-I-5980` (medium) : "Montrez-moi, sur un cas réel récent, comment vérifications importateur avant mise sur le marché et traçabilité des… est appliquée en pratique et où en est la preuve."
+- `Q-MDR-I-6277` (medium) : "Déroulez un cas concret concerné par vérifications importateur avant mise sur le marché et traçabilité des… : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?"
+
+**4. sim=0,47 — ISO14971, 10.4 (actions post-PMS)**
+- `Q-14971-APP-5733` (high) et `Q-14971-APP-9033` (high) : texte **strictement identique** ("Choisissons un danger réel concerné par actions sur le dispositif...") — un vrai doublon caché dans ce groupe de 3.
+- `Q-14971-APP-7458` (high) : reformulation ("Montrez-moi comment actions sur le dispositif, le dossier de risque ou le PMS lorsque de… relie votre analyse de risques à une décision concrète sur le produit.")
+
+**5. sim=0,49 — MDR, Art. 84 (plan PMS)**
+- `Q-MDR-PP-2250` et `Q-MDR-PP-6472` : texte **strictement identique** ("Prenez la dernière action corrective liée à plan PMS documenté...") — encore un doublon caché.
+- `Q-MDR-PP-8047` : reformulation ("Montrez-moi comment vous prouvez que l'action prise sur plan PMS documenté... a réellement empêché le problème de revenir.")
+
+**Verdict sur la zone intermédiaire, sur cette base (échantillon de 5, pas un audit exhaustif des
+71) : très majoritairement du bruit de génération, pas de vraies nuances d'audit.** Sur les 5
+exemples, aucun ne présente un angle d'audit réellement différent au sens de la section C
+(Type 2) — ce sont tous des reformulations gabarit-sur-gabarit qui se ressemblent moins
+lexicalement que les groupes Type 1 "évidents", mais qui posent fondamentalement la même
+question. Deux des cinq contiennent même un doublon texte-strictement-identique caché derrière
+le calcul de similarité moyenne du groupe (la 3e variante fait baisser la moyenne). **Ça pousse
+vers un remède éditorial plus large que prévu** — l'heuristique lexicale (Jaccard) ne sépare pas
+fiablement "même question, gabarit différent" de "question réellement différente" dès que les
+gabarits ne partagent pas beaucoup de mots ; il faudrait soit une lecture manuelle complète des
+71 groupes, soit une méthode de similarité sémantique plus fine (embeddings) pour trancher
+proprement — la méthode purement lexicale utilisée en Tâche 1 a une limite réelle, que je
+signale plutôt que de la passer sous silence.
+
+## I. Tâche 3 — Origine du corpus et verdict
+
+### I.1 Provenance, telle que traçable dans le dépôt
+
+Le corpus (`scripts/questions_import_ready.json`, 473 entrées, 2,2 Mo) n'a **qu'un seul commit
+dans toute l'histoire du dépôt** : `60fda8a3`, "Import verified content corpus (473 questions, 7
+referentials)", 2026-07-04, auteur `Claude <noreply@anthropic.com>`.
+
+Le message de commit et `docs/audit/07-import-corpus.md` indiquent que ce corpus a été
+**"préparé séparément"** et **"fourni"** via des fichiers (`INSTRUCTION-CLAUDE-CODE.md`,
+`README-pont-import.md`, `SPEC-1/2/3-*.md`, `import-corpus.mjs`, `questions_import_ready.json`)
+— **aucun de ces fichiers sources n'a jamais été commité dans ce dépôt** (recherche sur tout
+l'historique git, aucune trace). **La provenance réelle du contenu (quel processus, quel outil,
+quelle méthode de génération) n'est donc pas traçable depuis ce dépôt.**
+
+Fait le plus important : `07-import-corpus.md` déclare explicitement que le corpus est
+**"décrit comme vérifié à 100% sur sources officielles"** — une reformulation de la fourniture,
+pas une vérification indépendante — et conclut : **"Ces specs ne redemandent pas d'audit du
+contenu réglementaire (déjà fait et vérifié côté fourniture) — le rôle de cette session est
+l'implémentation, pas la recherche."** Autrement dit : **personne n'a jamais audité la qualité
+du contenu avant ce diagnostic.** Seule la mécanique d'import (comptages, tests E2E) a été
+vérifiée.
+
+### I.2 Preuves structurelles d'une génération sans passe de curation
+
+- **216 questions sur 473 (45,7 %) contiennent l'artefact d'ellipse** ("…") **directement dans
+  le JSON source** — pas introduit par le script d'import, confirmé en lisant le fichier brut.
+  Présent sur les **7 référentiels**, de 31 % (IVDR) à 67 % (ISO14971) — un défaut systémique,
+  pas un cas isolé.
+- **Ce défaut ne se limite pas aux 141 groupes divergents : 63 des 119 questions "uniques" (sans
+  aucun doublon/variante) en sont aussi atteintes, soit 53 %.** C'est la preuve la plus
+  importante de cette section — même en réglant parfaitement les 141 groupes (Tâche 1), la
+  majorité du problème de qualité textuelle resterait intacte sur le reste du corpus.
+- **`officialSource` n'a que 13 valeurs distinctes sur 473 questions** — une par référentiel
+  (ex. "NF EN ISO 13485:2016" répété identique sur les 93 questions ISO13485, un lien EUR-Lex
+  répété sur les 80 questions MDR). C'est une citation de niveau réglementation, pas une
+  vérification article par article : le corpus cite la bonne loi/norme globalement, mais rien
+  n'indique une vérification ligne par ligne contre le texte exact de chaque article.
+- Les champs riches (`expectedEvidence`, `aiPrompt`, `risk`) sont des paragraphes génériques
+  réutilisés à l'identique sur des dizaines d'exigences différentes au sein d'un même
+  référentiel (déjà visible dans les exemples Tâche 1, section B) — cohérent avec un système à
+  gabarits plutôt qu'une rédaction question par question.
+- Suffixes `questionKey` (`-8687`, `-9738`, etc.) : nombres à 4 chiffres sans structure
+  apparente, cohérents avec une génération programmatique (ex. `Math.random()` ou équivalent)
+  plutôt qu'une numérotation contrôlée.
+
+### I.3 Verdict
+
+**Une revue de fond est nécessaire — un correctif ciblé sur les 141 groupes ne suffit pas.**
+
+Raisonnement : le correctif ciblé de la Tâche 1 (fusionner ~25-96 groupes selon le seuil retenu,
+harmoniser la criticité de 141 groupes) réglerait la duplication et une partie du bruit de
+criticité. **Mais il ne toucherait quasiment pas le défaut de formulation** : celui-ci touche
+216 questions dont 63 hors de tout groupe divergent — un correctif limité aux groupes laisserait
+au moins 63 questions cassées visibles par les utilisateurs, en plus d'une partie des 153
+questions à l'intérieur des groupes qui ne seraient pas systématiquement corrigées par une simple
+fusion (fusionner un groupe ne garantit pas que la question conservée soit elle-même bien
+formée).
+
+Pour un produit destiné à un usage réglementaire potentiellement examiné par un organisme
+notifié, une question affichant "…est la preuve." n'est pas un défaut cosmétique mineur — c'est
+un signal de non-sérieux qui peut légitimement faire douter de la fiabilité de tout l'outil.
+
+### I.4 Méthode proposée pour la revue de fond (à valider, pas à exécuter)
+
+1. **Périmètre en deux passes**, pas une seule revue monolithique :
+   - **Passe 1 — assainissement mécanique** (peu de jugement, fort volume) : détection et
+     correction automatisée des motifs de troncature identifiés (ellipses en fin de segment,
+     doubles "est... est", répétitions de titre intégral) — corrigeable par script avec
+     validation d'échantillon, pas par relecture ligne à ligne des 216 cas.
+   - **Passe 2 — revue éditoriale qualitative**, par ordre de priorité : (a) `criticality =
+     critical` d'abord (49 questions, le plus haut risque réglementaire si le contenu est
+     mauvais), (b) puis les référentiels avec le taux de défaut le plus élevé (ISO14971 67 %,
+     FDA_QMSR 60 %), (c) puis le reste par référentiel.
+2. **Assistance IA encadrée, jamais IA seule** : proposition de reformulation par IA, ancrée
+   explicitement sur le texte réglementaire réel (article/annexe cité), jamais sur la
+   reformulation existante seule (pour ne pas perpétuer une erreur en la paraphrasant) —
+   validation humaine ligne par ligne obligatoire avant toute écriture, exactement comme pour la
+   table de correspondance des rôles économiques plus tôt dans ce projet.
+3. **Aucune exigence nouvelle inventée** : toute reformulation doit rester strictement bornée au
+   contenu déjà présent dans `expectedEvidence`/`risk`/`article` de la question d'origine, jamais
+   ajouter une exigence qui n'y figurait pas.
+4. **Traçabilité obligatoire** : conserver `questionKey` inchangé pour toute question réécrite
+   (préserve l'historique des `audit_responses`, rappel de la contrainte B), et journaliser
+   ancien texte → nouveau texte pour audit a posteriori.
+
+## F. Ce qui reste
+
+Rien de plus à ce stade — les Tâches 1, 2 (partiellement, via les sections G/H) et 3 sont
+couvertes. Une revue plus systématique du schéma de troncature spécifique (Tâche 2, point 1 du
+prompt-maître : recherche exhaustive par motifs, tableau type de défaut/nombre/gravité) n'a pas
+été faite en détail ligne par ligne — seule la mesure globale (216/473, 45,7 %) est établie. À
+faire si tu veux le détail par motif avant de trancher entre correctif ciblé et revue éditoriale.
