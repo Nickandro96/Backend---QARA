@@ -165,3 +165,91 @@ L'élégance de formulation relève de la passe éditoriale, pas de cette passe 
    au prochain import.
 
 **Rien n'est exécuté avant ton feu vert sur la méthode ci-dessus.**
+
+---
+
+## G. Méthode approuvée — livraison (étapes 2-4)
+
+*Ajouté après ton feu vert sur la méthode (section A-F). Rédigé le 2026-07-31.*
+
+### G.0 — Correction de topologie de branche (avant tout le reste)
+
+La branche de travail `claude/qara-corpus-mechanical-pass-x12719`, telle que créée en ouverture
+de session, était basée sur `main` — pas sur `claude/qara-compliance-audit-qitbxl` (prod) comme
+l'exigent les règles de ce projet. `main` et `qitbxl` ont divergé de 83 commits côté `qitbxl`
+(tout le travail de fond : normalisation `economicRole`, routeur générique, champs riches des
+questions, etc. — absent de `main`). Continuer sur `main` aurait produit une migration `0030`
+incompatible avec le schéma réel de production.
+
+**Corrigé avant d'écrire quoi que ce soit d'autre** : rebase du commit de validation (section A-F)
+sur `origin/claude/qara-compliance-audit-qitbxl`, puis `push --force-with-lease` (aucun autre
+commit n'existait encore sur cette branche, aucune PR ouverte — rebase sans perte). La branche
+est maintenant issue de `qitbxl`, conformément à la règle B.1. Vérifié : `drizzle/schema.ts` et
+`drizzle/migrations/` reflètent maintenant l'état réel de prod (migration 0029 présente,
+`questionText` bien de type `text`), et `scripts/questions_import_ready.json` de cette branche
+est bit-à-bit identique (SHA-256) au fichier lu depuis la branche diagnostic — la méthode des
+sections A-F s'applique donc bien à la source réelle.
+
+### G.1 — Script déterministe et reproductible
+
+`scripts/mechanical-pass-reconstruct.mjs` : lit `scripts/questions_import_ready.json` en entrée,
+applique la méthode validée (17 paires ouverture/clôture dérivées des 257 questions non
+tronquées, cf. section B), et produit :
+- `scripts/output/mechanical-pass-report.json` — comptages exacts + la liste des 45 `questionKey`
+  restant pour la passe éditoriale (avec la raison : `no-opener-match` ou `title-mismatch`) ;
+- `scripts/output/mechanical-pass.sql` — le SQL prêt à coller dans Railway ;
+- réécrit `scripts/questions_import_ready.json` en place (**seul `questionText` change, sur
+  exactement 171 `questionKey`, aucun autre champ** — vérifié par diff : 171 lignes `questionText`
+  modifiées, 0 ailleurs).
+
+Exécuté une fois dans cette session : **216 tronquées → 171 reconstruites, 45 résidu éditorial**,
+répartition par référentiel :
+
+| Référentiel | Reconstructibles | Résidu éditorial |
+|---|---|---|
+| MDSAP | 34 | 1 |
+| MDR | 31 | 3 |
+| ISO13485 | 33 | 0 |
+| FDA_QMSR | 19 | 7 |
+| ISO14971 | 20 | 25 |
+| IVDR | 19 | 3 |
+| ISO9001 | 15 | 6 |
+| **Total** | **171** | **45** |
+
+### G.2 — Colonne de traçabilité (migration additive)
+
+`drizzle/migrations/0030_questions_text_source.sql` : `ALTER TABLE questions ADD COLUMN
+questionTextSource TEXT NULL`. Pas de `IF NOT EXISTS` (leçon de l'incident du 2026-07-27 sur la
+migration 0029 — syntaxe rejetée par le MySQL de production) ; si "Duplicate column name" à
+l'exécution, la colonne existe déjà, c'est un no-op attendu. `drizzle/schema.ts` mis à jour en
+cohérence.
+
+### G.3 — Script SQL (`scripts/output/mechanical-pass.sql`)
+
+Un bloc par référentiel (7 `UPDATE ... CASE questionKey WHEN ... END WHERE questionKey IN
+(...)`), chacun exécutable comme une seule instruction dans l'éditeur Query Railway. Idempotent :
+`questionTextSource` n'est peuplée que si elle est `NULL` (`CASE WHEN questionTextSource IS NULL
+THEN questionText ELSE questionTextSource END`) — un ré-exécution ne remplace jamais l'original
+archivé par une valeur déjà reconstruite. Aucun `questionKey` modifié, aucune ligne ajoutée ou
+supprimée. Requêtes de vérification avant (section 0) et après (section 3) incluses dans le même
+fichier.
+
+### G.4 — Procédure d'exécution (attend le feu vert)
+
+1. **Sauvegarde de la table `questions`** sur new-claude (hors de ce dépôt, responsabilité
+   utilisateur — mysqldump ou export Railway).
+2. Coller et exécuter le bloc "0. VERIFICATION AVANT" de `mechanical-pass.sql` — confirmer 473
+   total, 216 tronquées, avant de continuer.
+3. Coller le bloc "1. MIGRATION ADDITIVE" (`ALTER TABLE`).
+4. Coller chacun des 7 blocs "2. RECONSTRUCTION — {référentiel}", un par un.
+5. Coller le bloc "3. VERIFICATION APRES" — confirmer 473 total (inchangé), 45 tronquées
+   restantes (passe éditoriale), 171 lignes avec `questionTextSource` peuplée, 473 `questionKey`
+   distincts (inchangé), et comparer l'échantillon de contrôle aux exemples de la section D.
+6. Si tout correspond : merge de cette branche vers `qitbxl` (avec ton feu vert explicite),
+   `scripts/questions_import_ready.json` déjà corrigé dans ce même commit empêche la régression
+   au prochain déploiement (le script `release` ré-exécute `import-corpus.mjs` à chaque
+   déploiement Railway, upsert par `questionKey` — il réécrirait `questionText` depuis la source
+   si elle n'était pas corrigée aussi).
+
+**Aucune étape ci-dessus n'a été exécutée contre new-claude. En attente de ton feu vert avant la
+sauvegarde + exécution.**
