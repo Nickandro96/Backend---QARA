@@ -285,6 +285,11 @@ export const questions = mysqlTable("questions", {
 
   questionType: varchar("questionType", { length: 50 }),
   questionText: text("questionText"),
+  // Valeur originale (pré-troncature) de questionText, préservée uniquement
+  // pour les questions réécrites par la passe mécanique — voir migration
+  // 0030 et VALIDATION-passe-mecanique.md. NULL pour toute question non
+  // touchée par cette passe.
+  questionTextSource: text("questionTextSource"),
   expectedEvidence: text("expectedEvidence"),
 
   criticality: varchar("criticality", { length: 50 }),
