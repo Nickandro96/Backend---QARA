@@ -236,7 +236,7 @@ Validé le 2026-08-04 et appliqué au JSON, aux données éditoriales et aux SQL
 
 ---
 
-## Lot 4 — ISO 14971 §10.4 et risques d'utilisation/logiciel (7 questions)
+## Lot 4 — ISO 14971 §10.4 et risques d'utilisation/logiciel (7 questions) — ✅ VALIDÉ LE 2026-08-04
 
 1. **Q-14971-APP-5733 — §10.4 — high**  
    « Prenez une information reçue après la production qui concernait la sécurité. Quelles actions avez-vous prises sur le dossier de risques et sur les dispositifs déjà sur le marché ? »
@@ -259,7 +259,89 @@ Validé le 2026-08-04 et appliqué au JSON, aux données éditoriales et aux SQL
 7. **Q-14971-LRL-4167 — §5.4 avec domaine d'application — high**  
    « Comment vérifiez-vous que les risques liés au logiciel et à la cybersécurité sont inclus dans votre analyse des risques ? Montrez-moi un exemple. »
 
-### Décision attendue sur le lot 4
+### Décision du lot 4
 
-- approuvé sans modification ;
-- corrections demandées par `questionKey`.
+Validé le 2026-08-04 et appliqué au JSON, aux données éditoriales et aux SQL préparatoires. ISO 14971 : 25/25 finalisées en langage simple. Aucun déploiement ni SQL de production.
+
+
+---
+
+# Reformulations restantes — langage simple
+
+## Lot 5 — ISO 9001 (6 questions)
+
+1. **Q-9001-PI-3467 — parties intéressées**  
+   « Quelles personnes ou organisations peuvent influencer votre système qualité, et qu'attendent-elles de vous ? Montrez comment vous suivez l'évolution de leurs attentes. »
+
+2. **Q-9001-RO-2538 — risques et opportunités**  
+   « Prenez un risque ou une opportunité pour votre système qualité. Qu'avez-vous décidé de faire et comment avez-vous vérifié que cela fonctionnait ? »
+
+3. **Q-9001-RO-9521 — intégration des actions**  
+   « Comment les actions liées aux risques et aux opportunités sont-elles intégrées au travail quotidien ? Montrez-moi un exemple. »
+
+4. **Q-9001-CLO-5514 — contexte et climat**  
+   « Quels changements internes ou externes peuvent affecter votre système qualité ? Montrez comment vous avez déterminé si le changement climatique est un sujet important pour votre activité. »
+
+5. **Q-9001-PS-7808 — périmètre du système qualité**  
+   « Quels sites, activités, produits et services sont couverts par votre système qualité ? Montrez comment vous avez justifié ce qui n'est pas couvert. »
+
+6. **Q-9001-L-0975 — engagement de la direction**  
+   « Comment la direction montre-t-elle qu'elle est responsable du système qualité ? Donnez un exemple de décision prise ou de ressource accordée. »
+
+Référence officielle : ISO 9001:2015 et amendement ISO 9001:2015/Amd 1:2024, publié en février 2024. Une nouvelle édition ISO 9001 est en cours de publication mais n'est pas encore la version publiée applicable au moment de cette validation.
+
+## Lot 6 — IVDR (3 questions)
+
+1. **Q-IVDR-MSMI-5641 — mise sur le marché**  
+   « Avant de mettre un DIV sur le marché, quels contrôles réalisez-vous pour vérifier qu'il respecte l'IVDR et qu'il est utilisé comme prévu ? Montrez un dossier réel. »
+
+2. **Q-IVDR-PI-0993 — PSUR, article 81**  
+   « Pour votre dernier rapport périodique de sécurité applicable, montrez qu'il a été mis à jour, approuvé et transmis comme prévu. »
+
+3. **Q-IVDR-GIUI-6261 — étiquetage et notice**  
+   « Prenez un DIV commercialisé. Montrez que son étiquette et sa notice sont lisibles, conformes et approuvées avant utilisation. »
+
+## Lot 7 — FDA (7 questions)
+
+1. **Q-FDA-5K-1069 — 510(k)**  
+   « Pour un dossier 510(k) récent, pourquoi avez-vous choisi le dispositif de comparaison et quelles preuves montrent que votre dispositif est aussi sûr et efficace ? »
+
+2. **Q-FDA-N-2561 — De Novo**  
+   « Pour un dossier De Novo, pourquoi cette voie a-t-elle été choisie et pourquoi aucun dispositif de comparaison adapté n'existait-il ? »
+
+3. **Q-FDA-N-1933 — décision De Novo**  
+   « Qui a validé le choix de la voie De Novo ? Montrez l'analyse des risques et les preuves utilisées pour cette décision. »
+
+4. **Q-FDA-N-6492 — résultat De Novo**  
+   « Pour un dossier De Novo accepté, montrez la décision de la FDA et les contrôles particuliers que vous devez maintenant respecter. »
+
+5. **Q-FDA-SQ-5662 — fournisseur critique**  
+   « Prenez un fournisseur critique. Comment l'avez-vous choisi, contrôlé et suivi ? Montrez les résultats les plus récents. »
+
+6. **Q-FDA-SC-6736 — cybersécurité avant mise sur le marché**  
+   « Pour un dispositif connecté récent, montrez comment la cybersécurité a été prise en compte depuis la conception jusqu'à la validation, y compris la liste des composants logiciels. »
+
+7. **Q-FDA-SC-4677 — vulnérabilités après mise sur le marché**  
+   « Comment surveillez-vous et corrigez-vous les failles de cybersécurité après la mise sur le marché ? Montrez-moi un exemple réel. »
+
+Références officielles vérifiées : FDA 510(k), De Novo, FD&C Act §524B et documentation FDA sur les cyber devices. Depuis le 1er octobre 2025, les demandes De Novo sont en principe soumises électroniquement avec eSTAR, sauf exemption.
+
+## Lot 8 — MDR et MDSAP (4 questions)
+
+1. **Q-MDR-S-3363 — SSCP**  
+   « Pour un dispositif implantable ou de classe III, montrez que le résumé de sécurité et de performances est compréhensible, validé par l'organisme notifié et publié dans Eudamed. »
+
+2. **Q-MDR-S-5062 — mise à jour du SSCP**  
+   « Qui vérifie et met à jour le résumé de sécurité et de performances ? Montrez la dernière version et son approbation. »
+
+3. **Q-MDR-SM-0792 — demande d'une autorité**  
+   « Montrez la dernière demande reçue d'une autorité et votre réponse. Avez-vous fourni tous les documents et échantillons demandés dans la langue acceptée ? »
+
+4. **Q-MDSAP-PL-3453 — liens entre processus**  
+   « Montrez-moi un exemple où un problème trouvé dans un processus a conduit à contrôler plus en détail un autre processus lié. »
+
+Références officielles vérifiées : MDR article 32 et article 10(14) ; MDSAP AU P0002, approche par processus et liens entre processus.
+
+## Validation finale attendue
+
+Ces 20 formulations constituent les quatre derniers lots de la passe éditoriale. Une validation globale explicite de ces lots clôt les 45 reformulations. Elle ne vaut pas autorisation de déploiement ni d'écriture en production.
