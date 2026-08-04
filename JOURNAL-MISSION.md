@@ -94,3 +94,13 @@ logique du CHANTIER 1 et ne dépend pas de l'exécution SQL en attente.
 ### Prochaine action
 
 Implémenter sur branche de travail la désactivation additive (`isActive`, `supersededByQuestionKey`) avec distinction stricte nouveaux audits / audits historiques, puis tests. Ne pas fusionner ni appliquer en production avant point de contrôle B. Préparer en parallèle les prochains lots exacts pour point de contrôle A.
+
+### Préparation complémentaire terminée
+
+- 7 lots couvrant les 46 ensembles de doublons exacts préparés dans `docs/corpus/exact-duplicate-validation-lots.md` ; lot 1 marqué validé, lots 2 à 7 en attente du point de contrôle A.
+- Les 21 groupes à criticité divergente sont exposés ligne par ligne dans `docs/corpus/criticality-divergence-validation.md`.
+- Aucun choix automatique de criticité, aucune désactivation et aucune écriture en base.
+
+### Reprise recommandée
+
+À la prochaine session utilisateur : présenter les lots 2 à 7 par blocs simples. En autonomie, poursuivre l’audit technique des chemins nouveaux audits / rapports historiques avant toute implémentation du statut actif.
