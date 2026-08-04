@@ -107,7 +107,7 @@ Aucune approbation de ce lot ne vaut approbation des autres lots.
 
 ---
 
-## Lot 2 — ISO 14971 §7.4–7.6 (6 questions)
+## Lot 2 — ISO 14971 §7.4–7.6 (6 questions) — ✅ VALIDÉ LE 2026-08-04 EN LANGAGE SIMPLE
 
 ### 1. Q-14971-ABR-2180
 
@@ -164,9 +164,39 @@ Aucune approbation de ce lot ne vaut approbation des autres lots.
 - Nature : reconstruction de troncature.
 - Réserve hors reformulation : la criticité `low` paraît potentiellement sous-évaluée pour une exigence de complétude de la maîtrise des risques. Ne pas la changer dans ce lot ; la traiter avec les 21 criticités divergentes au point de contrôle dédié.
 
-## Décision attendue sur le lot 2
+## Décision du lot 2
 
-- approuvé sans modification ;
-- corrections demandées par `questionKey`.
+Validé en langage simple le 2026-08-04. Les six formulations approuvées ont été appliquées au JSON, aux données éditoriales et aux SQL préparatoires. Aucun déploiement ni SQL de production.
 
 Aucune approbation de ce lot ne vaut approbation des lots suivants.
+
+
+---
+
+## Révision en langage simple du lot 1 — validation complémentaire requise
+
+Cette révision remplace les formulations longues précédemment approuvées. Elle ne sera appliquée
+qu'après accord explicite.
+
+1. **Q-14971-MR-4038 — 7.1**  
+   « Prenez un risque réel. Quelles mesures avez-vous envisagées, laquelle avez-vous retenue et pourquoi ? Montrez que le risque restant est acceptable. »
+
+2. **Q-14971-MR-9272 — 7.1**  
+   « Montrez-moi un exemple où l'analyse des risques a conduit à une décision ou à une modification du dispositif. Quelle preuve garde la trace de cette décision ? »
+
+3. **Q-14971-AOM-0896 — 7.1**  
+   « Pour un risque réel, avez-vous d'abord cherché à le réduire par la conception, puis par une protection, et enfin par une information de sécurité ? Montrez votre choix. »
+
+4. **Q-14971-AOM-5470 — 7.1**  
+   « Montrez-moi un exemple où vous avez suivi l'ordre prévu pour réduire un risque. Pourquoi avez-vous retenu cette solution ? »
+
+5. **Q-14971-AOM-2955 — 7.1**  
+   « Qui a choisi la mesure utilisée pour réduire le risque ? Montrez les preuves utilisées et comment son efficacité a été vérifiée. »
+
+6. **Q-14971-MŒC-8079 — 7.2**  
+   « Pour une mesure destinée à réduire un risque, montrez qu'elle a bien été mise en place et qu'elle réduit réellement ce risque. »
+
+### Décision attendue
+
+- révision simple du lot 1 approuvée ;
+- corrections demandées par `questionKey`.
