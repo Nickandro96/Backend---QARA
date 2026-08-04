@@ -1,0 +1,45 @@
+-- QARA — CORRECTION DES 24 TITRES UNIQUEMENT
+-- NE MODIFIE PAS questionText, questionTextSource OU questionKey.
+-- Point de contrôle A requis pour les titres ; Point de contrôle B avant exécution en production.
+
+SELECT COUNT(*) AS total, COUNT(DISTINCT questionKey) AS cles_distinctes FROM questions;
+SELECT COUNT(*) AS titres_longueur_250_avant FROM questions WHERE CHAR_LENGTH(title) = 250;
+
+-- 4. CORRECTION DES 24 TITRES TRONQUES (title uniquement, questionText/
+--    questionTextSource non touchés par ce bloc)
+-- ============================================================
+
+UPDATE questions
+SET title = CASE questionKey
+    WHEN 'Q-FDA-N-2561' THEN '21 CFR 860 Subpart D (§§860.200–860.260) — demande de classification De Novo (FD&C 513(f)(2)) pour dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : contenu, recevabilité, délais et effets de l''ordre de classification (contrôles spéciaux applicables, base pour de futurs 510(k)).'
+    WHEN 'Q-FDA-N-1933' THEN '21 CFR 860 Subpart D (§§860.200–860.260) — demande de classification De Novo (FD&C 513(f)(2)) pour dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : contenu, recevabilité, délais et effets de l''ordre de classification (contrôles spéciaux applicables, base pour de futurs 510(k)).'
+    WHEN 'Q-FDA-N-6492' THEN '21 CFR 860 Subpart D (§§860.200–860.260) — demande de classification De Novo (FD&C 513(f)(2)) pour dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : contenu, recevabilité, délais et effets de l''ordre de classification (contrôles spéciaux applicables, base pour de futurs 510(k)).'
+    WHEN 'Q-FDA-SQ-5662' THEN 'QMSR 21 CFR 820.10 — maîtrise des achats et des fournisseurs via ISO 13485 7.4 incorporée par référence (§820.7) : critères d''évaluation/sélection/surveillance proportionnés au risque, informations d''achat, vérification du produit acheté ; les rapports de performance fournisseur documentés.'
+    WHEN 'Q-FDA-SC-6736' THEN 'FD&C section 524B — exigences cybersécurité pour les « cyber devices » (plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, SBOM) dans les soumissions premarket ; intégration au design control ISO 13485 7.3 (gestion du cycle de vie du logiciel).'
+    WHEN 'Q-FDA-SC-4677' THEN 'FD&C section 524B — exigences cybersécurité pour les « cyber devices » (plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, SBOM) dans les soumissions premarket ; intégration au design control ISO 13485 7.3 (gestion du cycle de vie du logiciel).'
+    WHEN 'Q-9001-CLO-5514' THEN '4.1 — détermination et surveillance des enjeux externes et internes pertinents pour la finalité, l''orientation stratégique et les résultats attendus du SMQ, y compris la détermination de la pertinence des changements climatiques comme enjeu (Amd.1:2024).'
+    WHEN 'Q-9001-PS-7808' THEN '4.3 — détermination du domaine d''application du SMQ (enjeux 4.1, parties intéressées 4.2, produits/services) et justification documentée de toute exigence jugée non applicable, sans incidence sur la conformité des produits/services ni la satisfaction client.'
+    WHEN 'Q-9001-L-0975' THEN '5.1 — leadership et engagement démontrés de la direction (responsabilité de l''efficacité du SMQ, intégration aux processus métiers, ressources) incluant l''orientation client (5.1.2 : exigences déterminées et satisfaites, risques/opportunités sur la conformité traités).'
+    WHEN 'Q-MDR-S-3363' THEN 'Art. 32 — résumé des caractéristiques de sécurité et des performances cliniques (SSCP) pour les dispositifs implantables et de classe III (hors sur mesure et investigation), validé par l''organisme notifié et téléversé dans Eudamed, rédigé de manière compréhensible pour l''utilisateur prévu (et le grand public le cas échéant).'
+    WHEN 'Q-MDR-S-5062' THEN 'Art. 32 — résumé des caractéristiques de sécurité et des performances cliniques (SSCP) pour les dispositifs implantables et de classe III (hors sur mesure et investigation), validé par l''organisme notifié et téléversé dans Eudamed, rédigé de manière compréhensible pour l''utilisateur prévu (et le grand public le cas échéant).'
+    WHEN 'Q-MDR-SM-0792' THEN 'Art. 10(14) — obligation du fabricant de coopérer avec l''autorité compétente : fournir sur demande motivée toutes les informations et la documentation démontrant la conformité (dans une langue officielle acceptée), donner accès et remettre des échantillons si demandés.'
+    WHEN 'Q-MDSAP-PL-3453' THEN 'MDSAP AU P0002 (Audit Approach) — exploitation des liaisons inter-processus : les informations issues d''un processus (ex. NC, réclamations, données de surveillance) orientent l''échantillonnage et la profondeur d''audit des processus liés, conformément à l''approche d''audit MDSAP.'
+    WHEN 'Q-FDA-CMC-0807' THEN 'QMSR 21 CFR 820.35(a) — exigences d''enregistrement des réclamations (revue, évaluation, investigation, UDI) en complément d''ISO 13485 8.2.2 incorporée par référence (§820.7/820.10) ; boucle avec le reporting MDR (21 CFR 803), les corrections/removals et les CAPA associées.'
+    WHEN 'Q-FDA-CMC-1104' THEN 'QMSR 21 CFR 820.35(a) — exigences d''enregistrement des réclamations (revue, évaluation, investigation, UDI) en complément d''ISO 13485 8.2.2 incorporée par référence (§820.7/820.10) ; boucle avec le reporting MDR (21 CFR 803), les corrections/removals et les CAPA associées.'
+    WHEN 'Q-FDA-CMC-4738' THEN 'QMSR 21 CFR 820.35(a) — exigences d''enregistrement des réclamations (revue, évaluation, investigation, UDI) en complément d''ISO 13485 8.2.2 incorporée par référence (§820.7/820.10) ; boucle avec le reporting MDR (21 CFR 803), les corrections/removals et les CAPA associées.'
+    WHEN 'Q-FDA-DCS-2444' THEN '21 CFR 807.81(a)(3) — nouveau 510(k) requis pour tout changement/modification significatif du dispositif ou de son étiquetage susceptible d''affecter sécurité ou efficacité (guidance FDA « Deciding When to Submit a 510(k) for a Change to an Existing Device »).'
+    WHEN 'Q-FDA-DCS-2147' THEN '21 CFR 807.81(a)(3) — nouveau 510(k) requis pour tout changement/modification significatif du dispositif ou de son étiquetage susceptible d''affecter sécurité ou efficacité (guidance FDA « Deciding When to Submit a 510(k) for a Change to an Existing Device »).'
+    WHEN 'Q-FDA-SQ-4087' THEN 'QMSR 21 CFR 820.10 — maîtrise des achats et des fournisseurs via ISO 13485 7.4 incorporée par référence (§820.7) : critères d''évaluation/sélection/surveillance proportionnés au risque, informations d''achat, vérification du produit acheté ; les rapports de performance fournisseur documentés.'
+    WHEN 'Q-FDA-SC-8311' THEN 'FD&C section 524B — exigences cybersécurité pour les « cyber devices » (plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, SBOM) dans les soumissions premarket ; intégration au design control ISO 13485 7.3 (gestion du cycle de vie du logiciel).'
+    WHEN 'Q-14971-CIP-2019' THEN '10.2 — collecte des informations selon les six sources exigées : production/surveillance du procédé, utilisateurs, installation/utilisation/maintenance, chaîne d''approvisionnement, informations publiques, état de l''art généralement admis (+ veille active de l''état de l''art).'
+    WHEN 'Q-9001-OA-2015' THEN '10.1 — détermination et sélection des opportunités d''amélioration et actions pour satisfaire aux exigences client et accroître la satisfaction : amélioration des produits/services (incluant besoins et attentes futurs), correction/prévention/réduction des effets indésirables, amélioration de la performance et de l''efficacité du SMQ.'
+    WHEN 'Q-MDR-S-1304' THEN 'Art. 32 — résumé des caractéristiques de sécurité et des performances cliniques (SSCP) pour les dispositifs implantables et de classe III (hors sur mesure et investigation), validé par l''organisme notifié et téléversé dans Eudamed, rédigé de manière compréhensible pour l''utilisateur prévu (et le grand public le cas échéant).'
+    WHEN 'Q-MDR-DSM-0911' THEN 'Annexe XIII — procédure pour les dispositifs sur mesure : déclaration (section 1) accompagnant le dispositif et mise à disposition du patient/utilisateur identifié (Art. 21(2)), documentation (section 2) établie, tenue à jour et tenue à disposition des autorités compétentes.'
+    ELSE title
+  END
+WHERE questionKey IN ('Q-FDA-N-2561', 'Q-FDA-N-1933', 'Q-FDA-N-6492', 'Q-FDA-SQ-5662', 'Q-FDA-SC-6736', 'Q-FDA-SC-4677', 'Q-9001-CLO-5514', 'Q-9001-PS-7808', 'Q-9001-L-0975', 'Q-MDR-S-3363', 'Q-MDR-S-5062', 'Q-MDR-SM-0792', 'Q-MDSAP-PL-3453', 'Q-FDA-CMC-0807', 'Q-FDA-CMC-1104', 'Q-FDA-CMC-4738', 'Q-FDA-DCS-2444', 'Q-FDA-DCS-2147', 'Q-FDA-SQ-4087', 'Q-FDA-SC-8311', 'Q-14971-CIP-2019', 'Q-9001-OA-2015', 'Q-MDR-S-1304', 'Q-MDR-DSM-0911');
+
+-- ============================================================
+
+SELECT COUNT(*) AS titres_longueur_250_apres FROM questions WHERE CHAR_LENGTH(title) = 250;
+SELECT COUNT(*) AS total_apres, COUNT(DISTINCT questionKey) AS cles_distinctes_apres FROM questions;
