@@ -70,7 +70,7 @@ fait).
 
 ## PROCHAINE ACTION
 
-**Lot 1 validé le 2026-08-04** : 6 questions ISO 14971 (§7.1–7.2). Pour `Q-14971-MŒC-8079`, l'utilisateur a validé la correction « vérification distincte » ; elle est appliquée dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. **Lot 2 préparé** : 6 questions ISO 14971 (§7.4–7.6) dans `VALIDATION-passe-editoriale-lots.md`. Attendre la décision utilisateur sur le lot 2 (Point de contrôle A).
+**Lot 2 validé le 2026-08-04 en langage simple** : 6 questions ISO 14971 (§7.4–7.6), appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. L'utilisateur impose désormais une règle globale : questions aussi simples que possible, comprises à tous les niveaux hiérarchiques. **Lot 1 révisé selon cette règle** : 6 formulations simplifiées préparées dans `VALIDATION-passe-editoriale-lots.md`, en attente de validation complémentaire avant application.
 
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
 d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
