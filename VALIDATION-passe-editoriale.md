@@ -1,15 +1,13 @@
 # QARA — Passe éditoriale du corpus (45 questions) : validation et livraison
 
-**Statut : reformulations validées par l'utilisateur (feu vert donné en session). SQL préparé,
-rien exécuté en prod.** Rédigé le 2026-07-31, fait suite à `VALIDATION-passe-mecanique.md`
+**Statut corrigé le 2026-08-04 : les 45 reformulations ne sont PAS validées globalement. Seul un lot ISO 14971 partiel a été examiné. SQL préparatoire uniquement ; rien ne doit être exécuté ou déployé avant validation explicite lot par lot.** Rédigé le 2026-07-31, fait suite à `VALIDATION-passe-mecanique.md`
 (passe mécanique, 171 questions, déjà mergée en prod via migration 0030).
 
 ## A. Contexte
 
 Après la passe mécanique (216 → 45 questions encore atteintes d'un défaut de formulation),
 répartition du résidu : ISO14971 25 · FDA_QMSR 7 · ISO9001 6 · MDR 3 · IVDR 3 · MDSAP 1.
-Ces 45 ont été présentées à l'utilisateur en 9 lots (format : texte actuel / champs d'ancrage /
-reformulation proposée / justification), validées avec feu vert global.
+La branche contient 45 propositions. La trace disponible ne démontre pas leur présentation complète ni un feu vert global. Elles doivent être représentées par lots de 5 à 8 au format : texte actuel / champs d'ancrage / reformulation proposée / justification, puis validées explicitement.
 
 ## B. Défaut supplémentaire trouvé en cours de route : `title` tronqué silencieusement
 
@@ -37,8 +35,7 @@ directe du référentiel, pas une invention) :
 
 ## C. Script et livraison
 
-`scripts/editorial-pass-data.mjs` : les 45 `questionKey` → reformulation, telles que validées
-en session (`titleTruncated: true` sur les 13 concernées par le point B).
+`scripts/editorial-pass-data.mjs` : les 45 `questionKey` → propositions de reformulation en attente de validation complète (`titleTruncated: true` sur les 13 concernées par le point B).
 
 `scripts/editorial-pass-apply.mjs` : contrôles avant toute écriture (chaque `questionKey` existe
 une fois, son `questionText` actuel contient encore "…", aucune reformulation n'introduit "…"),
