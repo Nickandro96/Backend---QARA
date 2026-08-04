@@ -11095,7 +11095,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment vous avez évalué l'acceptabilité du risque résiduel global du dispositif — l'ensemble des risques résiduels individuels combinés, pas seulement risque par risque — avant sa mise sur le marché.",
+    "questionText": "Avant la mise sur le marché, comment avez-vous vérifié que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez le résultat de cette évaluation.",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11221,7 +11221,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Déroulez, sur un audit récent, le raisonnement qui a permis de juger le risque résiduel global du dispositif acceptable : quelles données, quelle méthode d'agrégation, quelle décision et par qui ?",
+    "questionText": "Qui a validé que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez les données utilisées et la décision prise.",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11284,7 +11284,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi, sur la dernière libération commerciale d'un dispositif, la revue de gestion des risques réalisée avant libération : qui l'a menée, sur quelles preuves, et comment elle conclut que le processus a été correctement mis en œuvre et que le risque résiduel global est acceptable.",
+    "questionText": "Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue.",
     "expectedEvidence": "procédure ou instruction applicable à Revue gestion des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11410,7 +11410,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Déroulez un cas concret de revue de gestion des risques avant libération commerciale : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
+    "questionText": "Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l'approbation.",
     "expectedEvidence": "procédure ou instruction applicable à Revue gestion des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11606,7 +11606,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons une information de production/post-production réelle (réclamation, retour terrain, littérature) : montrez-moi comment vous l'examinez pour sa pertinence en matière de sécurité — nouveau danger, risque devenu inacceptable, remise en cause du risque résiduel global, évolution de l'état de l'art — son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ?",
     "expectedEvidence": "procédure ou instruction applicable à Revue des informations post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11756,7 +11756,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment l'examen des informations de production et post-production — nouveaux dangers, risque devenu inacceptable, remise en cause du risque résiduel global, évolution de l'état de l'art — relie votre analyse de risques à une décision concrète sur le produit.",
+    "questionText": "Montrez-moi un exemple où une information venant du terrain a conduit à modifier le dossier de risques ou le dispositif.",
     "expectedEvidence": "procédure ou instruction applicable à Revue des informations post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
