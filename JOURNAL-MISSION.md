@@ -70,7 +70,7 @@ fait).
 
 ## PROCHAINE ACTION
 
-**Lots 1 à 3 validés le 2026-08-04 en langage simple** : 18 questions ISO 14971 (§7.1–§10.3), appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. Règle globale : questions aussi simples que possible, comprises à tous les niveaux hiérarchiques. **Lot 4 préparé** : les 7 dernières questions ISO 14971 (§10.4, risques d'utilisation et logiciel/cybersécurité) dans `VALIDATION-passe-editoriale-lots.md`, en attente du Point de contrôle A.
+**ISO 14971 finalisée le 2026-08-04** : 25/25 questions validées en langage simple et appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. **20 questions restantes préparées** en quatre lots dans `VALIDATION-passe-editoriale-lots.md` : ISO 9001 (6), IVDR (3), FDA (7), MDR/MDSAP (4). Références officielles vérifiées ; validation réglementaire globale encore requise (Point de contrôle A).
 
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
 d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
