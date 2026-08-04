@@ -155,6 +155,39 @@ SET expectedEvidence = 'Analyse des risques et opportunités du SMQ ; plan d’a
 WHERE questionKey IN ('Q-9001-RO-2538', 'Q-9001-RO-9521');
 
 -- ============================================================
+-- CORRECTIONS REGLEMENTAIRES FINALES — PREUVE CONSOLIDEE
+-- ============================================================
+
+-- ISO 14971 §10 : les informations de production et post-production
+-- alimentent le dossier de gestion des risques et peuvent déclencher
+-- une réévaluation. Aucun lien avec IQ/OQ/PQ ou la validation des procédés.
+UPDATE questions
+SET
+  questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
+  questionText = 'Montrez comment les données de production et de surveillance sont transmises au dossier de gestion des risques. Donnez un exemple où elles ont déclenché une réévaluation.'
+WHERE questionKey = 'Q-14971-PPP-1811';
+
+-- FDA CAPA : référence actuelle QMSR + traçabilité de l'ancienne QSR.
+-- Depuis le 2 février 2026, 21 CFR 820.10 incorpore ISO 13485:2016 ;
+-- 21 CFR 820.100 est indiqué comme ancienne référence, pas comme QMSR actuel.
+UPDATE questions
+SET
+  questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
+  questionText = 'Sous le QMSR actuel — 21 CFR 820.10 incorporant ISO 13485:2016 §8.5.2 et §8.5.3 (anciennement 21 CFR 820.100 sous la QSR) — prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.'
+WHERE questionKey IN ('Q-FDA-CMC-0807', 'Q-FDA-CMC-1104', 'Q-FDA-CMC-4738');
+
+-- Preuve ciblée des quatre catégories réglementaires validées.
+SELECT questionKey, questionText
+FROM questions
+WHERE questionKey IN (
+  'Q-14971-PPP-1811',
+  'Q-FDA-CMC-0807', 'Q-FDA-CMC-1104', 'Q-FDA-CMC-4738',
+  'Q-9001-RO-2538', 'Q-9001-RO-9521',
+  'Q-14971-RRG-7446', 'Q-14971-RRG-3515'
+)
+ORDER BY questionKey;
+
+-- ============================================================
 -- VERIFICATION APRES
 -- ============================================================
 
