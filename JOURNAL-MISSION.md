@@ -17,12 +17,9 @@ qui a suivi exécute `import-corpus.mjs` à chaque release, qui a très probable
 probablement encore NULL pour elles** — `import-corpus.mjs` ne la touche jamais. Backfill préparé,
 voir plus bas.
 
-**Passe éditoriale (45 questions)** : ⚠️ **NON validée dans son ensemble par l'utilisateur**. Seul un lot ISO 14971 partiel a été examiné ; aucune discussion partielle ne vaut feu vert global. Le script et le JSON de cette branche contiennent des propositions préparatoires uniquement. **Ne pas merger vers `qitbxl`, ne pas déployer et ne pas exécuter les blocs SQL éditoriaux** avant présentation puis validation explicite des 45 par lots de 5 à 8 (Point de contrôle A).
+**Passe éditoriale (45 questions)** : ✅ validée intégralement par l’utilisateur en langage simple. Les quatre ajustements réglementaires finaux ont également été validés : production/post-production ISO 14971, CAPA FDA selon le QMSR actuel, périmètre SMQ d’ISO 9001 §6.1 et risque résiduel global ISO 14971 §8. Aucun déploiement ni SQL de production n’a été exécuté.
 
-**24 titres tronqués silencieusement** (défaut trouvé en cours de route, hors du diagnostic
-initial — voir `VALIDATION-titres-tronques.md`) : corrections proposées dans le fichier source
-(13 sont liées aux 45, 11 hors scope), mais **pas encore validées comme lot réglementaire complet**.
-Elles ne doivent être ni mergées, ni déployées, ni exécutées en base avant validation explicite.
+**24 titres tronqués silencieusement** : ✅ corrections validées explicitement par l’utilisateur. Elles restent bloquées par le point de contrôle B avant toute exécution en production.
 
 **Script SQL consolidé prêt** : `scripts/output/final-pass.sql` (8 blocs : migration additive,
 backfill questionTextSource pour les 171, 6 blocs de la passe éditoriale, correction des 24
@@ -70,16 +67,13 @@ fait).
 
 ## PROCHAINE ACTION
 
-**Point de contrôle B** : la PR technique #5 et la PR corpus #6 sont ouvertes en brouillon. Procédure exacte dans `PROCEDURE-PRODUCTION-CORPUS.md`. Attendre confirmation d'une sauvegarde récupérable de new-claude et de `IMPORT_CORPUS_ON_RELEASE` absent/différent de `1` avant toute fusion. Ordre : sauvegarde → PR #5 → vérifier import ignoré → actualiser/fusionner PR #6 → vérifier import ignoré → SQL séparés backfill, éditorial, titres → contrôles finaux.
+**Corrections réglementaires appliquées à la branche le 2026-08-04** : `Q-14971-PPP-1811`, les trois `Q-FDA-CMC-*`, les preuves ISO 9001 §6.1 et les deux formulations ISO 14971 §8 ont été alignées. 473 clés conservées, aucune `questionKey` modifiée. Paquet séparé : `scripts/output/regulatory-corrections.sql`.
+
+**Point de contrôle B** : la PR technique #5 et la PR corpus #6 sont ouvertes en brouillon. Procédure exacte dans `PROCEDURE-PRODUCTION-CORPUS.md`. Attendre confirmation d'une sauvegarde récupérable de new-claude et de `IMPORT_CORPUS_ON_RELEASE` absent/différent de `1` avant toute fusion. Ordre : sauvegarde → PR #5 → vérifier import ignoré → actualiser/fusionner PR #6 → vérifier import ignoré → SQL séparés backfill, éditorial, corrections réglementaires, titres → contrôles finaux.
 
 **Passe éditoriale finalisée le 2026-08-04** : 45/45 questions validées en langage simple (ISO14971 25, ISO9001 6, IVDR 3, FDA_QMSR 7, MDR 3, MDSAP 1) et appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. Preuve : 473 lignes / 473 clés uniques ; 45/45 correspondances exactes JSON ↔ données ↔ SQL ; 0 troncature dans `questionText` ; 0 titre avec « … » ou longueur 250. **Point de contrôle A franchi pour les 45 reformulations et, le 2026-08-04, pour les 24 titres complétés. Tout le contenu de cette passe est validé. Point de contrôle B reste requis avant toute sauvegarde/exécution SQL/déploiement de corpus.**
 
-**Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
-d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
-explicite lot par lot. **Ne pas demander l'exécution de `final-pass.sql` en l'état** : il mélange le
-backfill de traçabilité, les 45 reformulations non validées et les 24 titres. Le scinder d'abord en
-livrables indépendants. Le backfill `questionTextSource` doit rester idempotent (`IS NULL`) et être
-exécuté seulement après sauvegarde et contrôles de new-claude (Point de contrôle B).
+**Point de contrôle A franchi pour ce lot** : les 45 reformulations, les 24 titres et les quatre corrections réglementaires sont validés. Les paquets restent séparés et idempotents. Le point de contrôle B — sauvegarde récupérable et contrôles de new-claude — demeure obligatoire avant toute fusion ou exécution.
 
 **Pendant ce temps, en autonomie complète** (aucun des deux points de contrôle n'est concerné) :
 commencer le cadrage des **141 groupes divergents** — préparer une proposition de traitement
