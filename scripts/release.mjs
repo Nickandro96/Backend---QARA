@@ -1,5 +1,6 @@
 /**
  * Railway release entrypoint.
+ * Railway redeploy trigger after a transient registry failure (no runtime effect).
  *
  * SQL migrations keep the historical deployment behavior. Corpus import is
  * deliberately opt-in because it rewrites production question content from
