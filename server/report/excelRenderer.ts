@@ -92,7 +92,9 @@ export async function renderReportExcel(data: ReportData): Promise<Buffer> {
     { header: L("gapReference"), key: "ref", width: 16 },
     { header: L("criticality"), key: "gravite", width: 14 },
     { header: L("requirement"), key: "req", width: 22 },
+    { header: L("objectiveEvidence"), key: "evidence", width: 45 },
     { header: L("gapStatement"), key: "gap", width: 60 },
+    { header: L("criticalityJustification"), key: "justification", width: 50 },
     { header: L("processAndSite"), key: "process", width: 30 },
     { header: L("status"), key: "status", width: 22 },
   ];
@@ -103,7 +105,9 @@ export async function renderReportExcel(data: ReportData): Promise<Buffer> {
       gravite:
         gap.gravite === "majeur" ? L("criticalityMajor") : gap.gravite === "mineur" ? L("criticalityMinor") : L("criticalityObservation"),
       req: `${gap.requirementRef ?? ""} ${gap.requirementTitle ?? ""}`.trim() || notProvided(),
+      evidence: gap.objectiveEvidence ?? notProvided(),
       gap: gap.gapStatement,
+      justification: gap.criticalityJustification || notProvided(),
       process: `${gap.processName ?? notProvided()} / ${gap.siteName ?? notProvided()}`,
       status: gap.status,
     });
@@ -114,7 +118,7 @@ export async function renderReportExcel(data: ReportData): Promise<Buffer> {
     }
   });
   gapSheet.views = [{ state: "frozen", ySplit: 1 }];
-  if (data.gapRegister.length > 0) gapSheet.autoFilter = { from: "A1", to: `F${data.gapRegister.length + 1}` };
+  if (data.gapRegister.length > 0) gapSheet.autoFilter = { from: "A1", to: `H${data.gapRegister.length + 1}` };
 
   // ---------------- Onglet Plan CAPA ----------------
   const capaSheet = workbook.addWorksheet(L("tabCapaPlan"));
