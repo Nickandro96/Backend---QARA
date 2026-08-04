@@ -115,7 +115,7 @@ SET
     WHEN 'Q-14971-RIC-7118' THEN 'Comment vérifiez-vous que les mesures prises pour réduire un risque n''en créent pas un autre ? Montrez-moi un exemple réel.'
     WHEN 'Q-14971-CM-1778' THEN 'Montrez-moi que tous les dangers identifiés ont été traités et que toutes les actions prévues ont été terminées et vérifiées.'
     WHEN 'Q-14971-RRG-7446' THEN 'Avant la mise sur le marché, comment avez-vous vérifié que le risque résiduel global du dispositif était acceptable ? Montrez le résultat de cette évaluation.'
-    WHEN 'Q-14971-RRG-3515' THEN 'Qui a approuvé l''acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.'
+    WHEN 'Q-14971-RRG-3515' THEN 'Qui a approuvé l’acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.'
     WHEN 'Q-14971-RGR-9160' THEN 'Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue.'
     WHEN 'Q-14971-RGR-3091' THEN 'Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l''approbation.'
     WHEN 'Q-14971-RIPP-2086' THEN 'Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ?'
