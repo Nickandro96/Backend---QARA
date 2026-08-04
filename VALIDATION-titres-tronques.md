@@ -1,5 +1,7 @@
 # QARA — Correction des 24 `title` tronqués + point d'exécution prod
 
+**Statut : ✅ 24/24 titres validés explicitement par l'utilisateur le 2026-08-04. Aucun déploiement ni SQL de production à cette date.**
+
 Rédigé le 2026-08-04. Fait suite à `VALIDATION-passe-editoriale.md`.
 
 ## A. Rappel : les 24 lignes concernées
