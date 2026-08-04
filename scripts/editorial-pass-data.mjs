@@ -1,7 +1,8 @@
 /**
  * QARA — Passe éditoriale du corpus : 45 propositions de reformulation.
- * ATTENTION : elles ne sont pas validées globalement par l'utilisateur ; seul
- * un lot ISO 14971 partiel a été examiné. Ne pas déployer ni appliquer en base.
+ * STATUT : les 45 reformulations ont été validées par l'utilisateur, y compris
+ * les quatre ajustements réglementaires finaux. Toute exécution en production
+ * reste soumise à sauvegarde et au point de contrôle B.
  * Voir VALIDATION-passe-editoriale.md pour le détail de
  * l'ancrage (title/expectedEvidence/officialSource/texte réglementaire réel)
  * et la justification de chaque reformulation.
@@ -27,8 +28,8 @@ export const EDITORIAL_REFORMULATIONS = [
   { questionKey: "Q-14971-RIC-1049", referentialCode: "ISO14971", text: "Prenez une mesure mise en place pour réduire un risque. A-t-elle créé un nouveau risque ou modifié un risque déjà connu ? Montrez comment vous l'avez vérifié et traité." },
   { questionKey: "Q-14971-RIC-7118", referentialCode: "ISO14971", text: "Comment vérifiez-vous que les mesures prises pour réduire un risque n'en créent pas un autre ? Montrez-moi un exemple réel." },
   { questionKey: "Q-14971-CM-1778", referentialCode: "ISO14971", text: "Montrez-moi que tous les dangers identifiés ont été traités et que toutes les actions prévues ont été terminées et vérifiées." },
-  { questionKey: "Q-14971-RRG-7446", referentialCode: "ISO14971", text: "Avant la mise sur le marché, comment avez-vous vérifié que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez le résultat de cette évaluation." },
-  { questionKey: "Q-14971-RRG-3515", referentialCode: "ISO14971", text: "Qui a validé que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez les données utilisées et la décision prise." },
+  { questionKey: "Q-14971-RRG-7446", referentialCode: "ISO14971", text: "Avant la mise sur le marché, comment avez-vous vérifié que le risque résiduel global du dispositif était acceptable ? Montrez le résultat de cette évaluation." },
+  { questionKey: "Q-14971-RRG-3515", referentialCode: "ISO14971", text: "Qui a approuvé l’acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise." },
   { questionKey: "Q-14971-RGR-9160", referentialCode: "ISO14971", text: "Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue." },
   { questionKey: "Q-14971-RGR-3091", referentialCode: "ISO14971", text: "Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l'approbation." },
   { questionKey: "Q-14971-RIPP-2086", referentialCode: "ISO14971", text: "Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ?" },
