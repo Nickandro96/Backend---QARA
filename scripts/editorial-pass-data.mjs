@@ -1,7 +1,8 @@
 /**
- * QARA — Passe éditoriale du corpus : les 45 reformulations validées par
- * l'utilisateur (feu vert), question par question, référentiel par
- * référentiel. Voir VALIDATION-passe-editoriale.md pour le détail de
+ * QARA — Passe éditoriale du corpus : 45 propositions de reformulation.
+ * ATTENTION : elles ne sont pas validées globalement par l'utilisateur ; seul
+ * un lot ISO 14971 partiel a été examiné. Ne pas déployer ni appliquer en base.
+ * Voir VALIDATION-passe-editoriale.md pour le détail de
  * l'ancrage (title/expectedEvidence/officialSource/texte réglementaire réel)
  * et la justification de chaque reformulation.
  *
