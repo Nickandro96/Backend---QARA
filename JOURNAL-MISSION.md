@@ -70,6 +70,8 @@ fait).
 
 ## PROCHAINE ACTION
 
+**Lot 1 préparé** : `VALIDATION-passe-editoriale-lots.md` contient 6 questions ISO 14971 (§7.1–7.2), comparées entre la branche de production et la proposition. Point réglementaire ouvert sur `Q-14971-MŒC-8079` : préférer « vérification distincte » à « vérification indépendante » sauf confirmation explicite d'une exigence d'indépendance. Attendre la décision utilisateur sur ce lot (Point de contrôle A), puis préparer le lot 2 sans déployer.
+
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
 d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
 explicite lot par lot. **Ne pas demander l'exécution de `final-pass.sql` en l'état** : il mélange le
