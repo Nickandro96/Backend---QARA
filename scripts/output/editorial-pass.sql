@@ -102,12 +102,12 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-14971-MR-4038' THEN 'Choisissons un danger réel concerné par l''analyse des options de maîtrise des risques et la détermination des mesures appropriées pour ramener ce risque à un niveau acceptable : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.'
-    WHEN 'Q-14971-MR-9272' THEN 'Montrez-moi comment l''analyse des options de maîtrise des risques et la détermination des mesures appropriées pour ramener ce risque à un niveau acceptable relie votre analyse de risques à une décision concrète sur le produit.'
-    WHEN 'Q-14971-AOM-0896' THEN 'Choisissons un danger réel concerné par l''ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception et à la fabrication, puis mesures de protection, puis information pour la sécurité — : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.'
-    WHEN 'Q-14971-AOM-5470' THEN 'Montrez-moi comment l''ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception, mesures de protection, puis information pour la sécurité — relie votre analyse de risques à une décision concrète sur le produit.'
-    WHEN 'Q-14971-AOM-2955' THEN 'Déroulez un cas concret concerné par l''ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception et à la fabrication, mesures de protection, information pour la sécurité — : quelle décision, par qui, sur quelle preuve, avec quel contrôle d''efficacité ?'
-    WHEN 'Q-14971-MŒC-8079' THEN 'Montrez-moi, sur un cas réel récent, comment la mesure de maîtrise retenue a fait l''objet des deux vérifications distinctes exigées par la norme : la vérification que la mesure a bien été mise en œuvre, et la vérification distincte de son efficacité.'
+    WHEN 'Q-14971-MR-4038' THEN 'Prenez un risque réel. Quelles mesures avez-vous envisagées, laquelle avez-vous retenue et pourquoi ? Montrez que le risque restant est acceptable.'
+    WHEN 'Q-14971-MR-9272' THEN 'Montrez-moi un exemple où l''analyse des risques a conduit à une décision ou à une modification du dispositif. Quelle preuve garde la trace de cette décision ?'
+    WHEN 'Q-14971-AOM-0896' THEN 'Pour un risque réel, avez-vous d''abord cherché à le réduire par la conception, puis par une protection, et enfin par une information de sécurité ? Montrez votre choix.'
+    WHEN 'Q-14971-AOM-5470' THEN 'Montrez-moi un exemple où vous avez suivi l''ordre prévu pour réduire un risque. Pourquoi avez-vous retenu cette solution ?'
+    WHEN 'Q-14971-AOM-2955' THEN 'Qui a choisi la mesure utilisée pour réduire le risque ? Montrez les preuves utilisées et comment son efficacité a été vérifiée.'
+    WHEN 'Q-14971-MŒC-8079' THEN 'Pour une mesure destinée à réduire un risque, montrez qu''elle a bien été mise en place et qu''elle réduit réellement ce risque.'
     WHEN 'Q-14971-ABR-2180' THEN 'Prenez un risque qui reste trop élevé après les mesures mises en place. Montrez pourquoi il ne pouvait pas être réduit davantage et comment vous avez comparé ce risque aux bénéfices attendus du dispositif.'
     WHEN 'Q-14971-ABR-5814' THEN 'Qui a décidé que les bénéfices du dispositif justifiaient le risque restant ? Montrez les données utilisées, la justification et l''approbation de cette décision.'
     WHEN 'Q-14971-ABR-6111' THEN 'Sur un cas concret, montrez ce qui a été décidé lorsqu''un risque restait trop élevé et qu''aucune mesure supplémentaire n''était possible.'
