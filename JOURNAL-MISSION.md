@@ -17,13 +17,12 @@ qui a suivi exécute `import-corpus.mjs` à chaque release, qui a très probable
 probablement encore NULL pour elles** — `import-corpus.mjs` ne la touche jamais. Backfill préparé,
 voir plus bas.
 
-**Passe éditoriale (45 questions)** : ✅ reformulations validées par l'utilisateur (feu vert),
-✅ script préparé et vérifié localement (0 troncature restante dans le fichier source),
-❌ **pas encore exécutée en base de production** — attend l'exécution du SQL par l'utilisateur.
+**Passe éditoriale (45 questions)** : ⚠️ **NON validée dans son ensemble par l'utilisateur**. Seul un lot ISO 14971 partiel a été examiné ; aucune discussion partielle ne vaut feu vert global. Le script et le JSON de cette branche contiennent des propositions préparatoires uniquement. **Ne pas merger vers `qitbxl`, ne pas déployer et ne pas exécuter les blocs SQL éditoriaux** avant présentation puis validation explicite des 45 par lots de 5 à 8 (Point de contrôle A).
 
 **24 titres tronqués silencieusement** (défaut trouvé en cours de route, hors du diagnostic
-initial — voir `VALIDATION-titres-tronques.md`) : ✅ corrigés dans le fichier source (13 étaient
-dans les 45, 11 hors scope), ❌ **pas encore exécutés en base**.
+initial — voir `VALIDATION-titres-tronques.md`) : corrections proposées dans le fichier source
+(13 sont liées aux 45, 11 hors scope), mais **pas encore validées comme lot réglementaire complet**.
+Elles ne doivent être ni mergées, ni déployées, ni exécutées en base avant validation explicite.
 
 **Script SQL consolidé prêt** : `scripts/output/final-pass.sql` (8 blocs : migration additive,
 backfill questionTextSource pour les 171, 6 blocs de la passe éditoriale, correction des 24
@@ -71,9 +70,12 @@ fait).
 
 ## PROCHAINE ACTION
 
-**En attente de l'utilisateur** : exécution de `scripts/output/final-pass.sql` sur new-claude
-(sauvegarde d'abord). Trois options lui ont été proposées (merge-puis-SQL-résiduel / tout-SQL-
-manuel / sauvegarde-déjà-faite-merge-immédiat) — pas encore de réponse au moment de ce commit.
+**Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
+d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
+explicite lot par lot. **Ne pas demander l'exécution de `final-pass.sql` en l'état** : il mélange le
+backfill de traçabilité, les 45 reformulations non validées et les 24 titres. Le scinder d'abord en
+livrables indépendants. Le backfill `questionTextSource` doit rester idempotent (`IS NULL`) et être
+exécuté seulement après sauvegarde et contrôles de new-claude (Point de contrôle B).
 
 **Pendant ce temps, en autonomie complète** (aucun des deux points de contrôle n'est concerné) :
 commencer le cadrage des **141 groupes divergents** — préparer une proposition de traitement
