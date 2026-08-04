@@ -11221,7 +11221,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Qui a approuvé l’acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.",
+    "questionText": "Qui a approuvé l'acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
