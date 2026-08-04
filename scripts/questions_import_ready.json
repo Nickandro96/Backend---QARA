@@ -1733,7 +1733,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
+    "questionText": "Sous le QMSR actuel — 21 CFR 820.10 incorporant ISO 13485:2016 §8.5.2 et §8.5.3 (anciennement 21 CFR 820.100 sous la QSR) — prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
     "expectedEvidence": "procédure ou instruction applicable à Complaint→MDR→CAPA ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -1811,7 +1811,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
+    "questionText": "Sous le QMSR actuel — 21 CFR 820.10 incorporant ISO 13485:2016 §8.5.2 et §8.5.3 (anciennement 21 CFR 820.100 sous la QSR) — prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
     "expectedEvidence": "procédure ou instruction applicable à Complaint→MDR→CAPA ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -1889,7 +1889,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
+    "questionText": "Sous le QMSR actuel — 21 CFR 820.10 incorporant ISO 13485:2016 §8.5.2 et §8.5.3 (anciennement 21 CFR 820.100 sous la QSR) — prenez votre dernière action corrective. Montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
     "expectedEvidence": "procédure ou instruction applicable à Complaint→MDR→CAPA ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11221,7 +11221,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Qui a approuvé l’acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.",
+    "questionText": "Qui a approuvé l'acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
