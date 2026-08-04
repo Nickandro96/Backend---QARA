@@ -10426,7 +10426,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment la mesure de maîtrise retenue a fait l'objet des deux vérifications distinctes exigées par la norme : la vérification que la mesure a bien été mise en œuvre, et la vérification indépendante de son efficacité.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment la mesure de maîtrise retenue a fait l'objet des deux vérifications distinctes exigées par la norme : la vérification que la mesure a bien été mise en œuvre, et la vérification distincte de son efficacité.",
     "expectedEvidence": "procédure ou instruction applicable à Mise en œuvre contrôles ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
