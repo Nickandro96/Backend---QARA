@@ -44,7 +44,7 @@ UNION ALL SELECT 'Q-14971-RIC-1049' AS questionKey, 'Prenez une mesure mise en p
 UNION ALL SELECT 'Q-14971-RIC-7118' AS questionKey, 'Comment vérifiez-vous que les mesures prises pour réduire un risque n''en créent pas un autre ? Montrez-moi un exemple réel.' AS expectedText
 UNION ALL SELECT 'Q-14971-CM-1778' AS questionKey, 'Montrez-moi que tous les dangers identifiés ont été traités et que toutes les actions prévues ont été terminées et vérifiées.' AS expectedText
 UNION ALL SELECT 'Q-14971-RRG-7446' AS questionKey, 'Avant la mise sur le marché, comment avez-vous vérifié que le risque résiduel global du dispositif était acceptable ? Montrez le résultat de cette évaluation.' AS expectedText
-UNION ALL SELECT 'Q-14971-RRG-3515' AS questionKey, 'Qui a approuvé l’acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.' AS expectedText
+UNION ALL SELECT 'Q-14971-RRG-3515' AS questionKey, 'Qui a approuvé l''acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.' AS expectedText
 UNION ALL SELECT 'Q-14971-RGR-9160' AS questionKey, 'Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue.' AS expectedText
 UNION ALL SELECT 'Q-14971-RGR-3091' AS questionKey, 'Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l''approbation.' AS expectedText
 UNION ALL SELECT 'Q-14971-RIPP-2086' AS questionKey, 'Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ?' AS expectedText
