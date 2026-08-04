@@ -244,9 +244,9 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-MDR-S-3363' THEN 'Montrez-moi, sur un cas réel récent, comment le résumé des caractéristiques de sécurité et des performances cliniques (SSCP) de votre dispositif implantable ou de classe III est rédigé de manière compréhensible pour l''utilisateur prévu (et le grand public le cas échéant), validé par l''organisme notifié et téléversé dans Eudamed.'
-    WHEN 'Q-MDR-S-5062' THEN 'Déroulez un cas concret de SSCP pour un dispositif implantable ou de classe III : contenu, validation par l''organisme notifié, téléversement dans Eudamed — quelle décision, par qui, sur quelle preuve, avec quel contrôle d''efficacité ?'
-    WHEN 'Q-MDR-SM-0792' THEN 'Montrez-moi, sur un cas réel récent, comment vous avez répondu à une demande motivée d''une autorité compétente : fourniture de toute l''information et documentation démontrant la conformité (dans une langue officielle acceptée), accès donné et échantillons remis si demandés.'
+    WHEN 'Q-MDR-S-3363' THEN 'Pour un dispositif implantable ou de classe III, montrez que le résumé de sécurité et de performances est compréhensible, validé par l''organisme notifié et publié dans Eudamed.'
+    WHEN 'Q-MDR-S-5062' THEN 'Qui vérifie et met à jour le résumé de sécurité et de performances ? Montrez la dernière version et son approbation.'
+    WHEN 'Q-MDR-SM-0792' THEN 'Montrez la dernière demande reçue d''une autorité et votre réponse. Avez-vous fourni tous les documents et échantillons demandés dans la langue acceptée ?'
     ELSE questionText
   END
 WHERE questionKey IN ('Q-MDR-S-3363', 'Q-MDR-S-5062', 'Q-MDR-SM-0792');
@@ -259,9 +259,9 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-IVDR-MSMI-5641' THEN 'Montrez-moi, sur un cas réel récent, comment vous garantissez qu''un DIV n''est mis sur le marché que s''il respecte l''IVDR et sa destination, et où en est la preuve.'
-    WHEN 'Q-IVDR-PI-0993' THEN 'Montrez-moi, sur un cas réel récent, comment le PSUR (rapport périodique de sécurité), lorsqu''applicable à votre DIV, est actualisé et transmis conformément aux exigences de l''Art. 81, et où en est la preuve.'
-    WHEN 'Q-IVDR-GIUI-6261' THEN 'Montrez-moi, sur un cas réel récent, comment vous garantissez que l''étiquetage et la notice d''utilisation de votre DIV sont conformes, lisibles et validés, et où en est la preuve.'
+    WHEN 'Q-IVDR-MSMI-5641' THEN 'Avant de mettre un DIV sur le marché, quels contrôles réalisez-vous pour vérifier qu''il respecte l''IVDR et qu''il est utilisé comme prévu ? Montrez un dossier réel.'
+    WHEN 'Q-IVDR-PI-0993' THEN 'Pour votre dernier rapport périodique de sécurité applicable, montrez qu''il a été mis à jour, approuvé et transmis comme prévu.'
+    WHEN 'Q-IVDR-GIUI-6261' THEN 'Prenez un DIV commercialisé. Montrez que son étiquette et sa notice sont lisibles, conformes et approuvées avant utilisation.'
     ELSE questionText
   END
 WHERE questionKey IN ('Q-IVDR-MSMI-5641', 'Q-IVDR-PI-0993', 'Q-IVDR-GIUI-6261');
@@ -274,13 +274,13 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-FDA-5K-1069' THEN 'Montrez-moi, sur un cas réel récent de soumission 510(k), comment le choix de voie, la comparaison au predicate et la démonstration de substantial equivalence (FD&C 513(i)) ont été conduits — contenu de la soumission (§807.87) et résumé/déclaration SE (§807.92-93) — et où en est la preuve.'
-    WHEN 'Q-FDA-N-2561' THEN 'Choisissons un dossier De Novo réel (FD&C 513(f)(2), 21 CFR 860 Subpart D) pour un dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : déroulez le contenu du dossier, sa recevabilité, les délais respectés et les effets de l''ordre de classification obtenu (contrôles spéciaux applicables, base pour de futurs 510(k)).'
-    WHEN 'Q-FDA-N-1933' THEN 'Montrez-moi comment le choix de la voie De Novo pour un dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé relie votre analyse de risques à la décision de classification et aux contrôles spéciaux qui en découlent.'
-    WHEN 'Q-FDA-N-6492' THEN 'Déroulez un dossier De Novo réel du contenu de la demande jusqu''à l''ordre de classification obtenu : quelle décision, par qui, sur quelle preuve, avec quel contrôle d''efficacité sur les contrôles spéciaux applicables ?'
-    WHEN 'Q-FDA-SQ-5662' THEN 'Prenez un fournisseur critique : montrez-moi comment la maîtrise des achats et des fournisseurs (QMSR 21 CFR 820.10, via ISO 13485 §7.4 incorporée par référence au §820.7) est appliquée — critères d''évaluation/sélection/surveillance proportionnés au risque, informations d''achat, vérification du produit acheté, rapports de performance fournisseur — de la sélection à la surveillance des performances.'
-    WHEN 'Q-FDA-SC-6736' THEN 'Ouvrons le dernier dossier de conception concerné par les exigences de cybersécurité pour les « cyber devices » (FD&C 524B) — plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, nomenclature logicielle (SBOM), intégrés au design control (ISO 13485 §7.3) — : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.'
-    WHEN 'Q-FDA-SC-4677' THEN 'Montrez-moi, sur un cas réel récent, comment le plan de surveillance et de correction des vulnérabilités, le processus assurant la cybersécurité et la nomenclature logicielle (SBOM) exigés pour les « cyber devices » (FD&C 524B) sont intégrés à votre design control (ISO 13485 §7.3), et où en est la preuve.'
+    WHEN 'Q-FDA-5K-1069' THEN 'Pour un dossier 510(k) récent, pourquoi avez-vous choisi le dispositif de comparaison et quelles preuves montrent que votre dispositif est aussi sûr et efficace ?'
+    WHEN 'Q-FDA-N-2561' THEN 'Pour un dossier De Novo, pourquoi cette voie a-t-elle été choisie et pourquoi aucun dispositif de comparaison adapté n''existait-il ?'
+    WHEN 'Q-FDA-N-1933' THEN 'Qui a validé le choix de la voie De Novo ? Montrez l''analyse des risques et les preuves utilisées pour cette décision.'
+    WHEN 'Q-FDA-N-6492' THEN 'Pour un dossier De Novo accepté, montrez la décision de la FDA et les contrôles particuliers que vous devez maintenant respecter.'
+    WHEN 'Q-FDA-SQ-5662' THEN 'Prenez un fournisseur critique. Comment l''avez-vous choisi, contrôlé et suivi ? Montrez les résultats les plus récents.'
+    WHEN 'Q-FDA-SC-6736' THEN 'Pour un dispositif connecté récent, montrez comment la cybersécurité a été prise en compte depuis la conception jusqu''à la validation, y compris la liste des composants logiciels.'
+    WHEN 'Q-FDA-SC-4677' THEN 'Comment surveillez-vous et corrigez-vous les failles de cybersécurité après la mise sur le marché ? Montrez-moi un exemple réel.'
     ELSE questionText
   END
 WHERE questionKey IN ('Q-FDA-5K-1069', 'Q-FDA-N-2561', 'Q-FDA-N-1933', 'Q-FDA-N-6492', 'Q-FDA-SQ-5662', 'Q-FDA-SC-6736', 'Q-FDA-SC-4677');
@@ -293,7 +293,7 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-MDSAP-PL-3453' THEN 'Montrez-moi, sur un cas réel récent, comment des informations issues d''un processus (non-conformité, réclamation, donnée de surveillance) ont orienté l''échantillonnage et la profondeur d''audit d''un processus lié, conformément à l''approche d''audit MDSAP (AU P0002) — et où en est la preuve.'
+    WHEN 'Q-MDSAP-PL-3453' THEN 'Montrez-moi un exemple où un problème trouvé dans un processus a conduit à contrôler plus en détail un autre processus lié.'
     ELSE questionText
   END
 WHERE questionKey IN ('Q-MDSAP-PL-3453');
@@ -343,12 +343,12 @@ UPDATE questions
 SET
   questionTextSource = CASE WHEN questionTextSource IS NULL THEN questionText ELSE questionTextSource END,
   questionText = CASE questionKey
-    WHEN 'Q-9001-PI-3467' THEN 'Montrez-moi, sur un cas réel récent, comment vous déterminez et surveillez les parties intéressées pertinentes et leurs exigences — y compris, le cas échéant, des exigences liées aux changements climatiques (Amd.1:2024) — et où en est la preuve.'
-    WHEN 'Q-9001-RO-2538' THEN 'Choisissons un risque ou une opportunité réel(le) affectant votre SMQ : déroulez comment il/elle a été identifié(e) lors de la planification (6.1), quelles actions ont été engagées pour le traiter, et comment leur efficacité a été évaluée.'
-    WHEN 'Q-9001-RO-9521' THEN 'Montrez-moi, sur un cas réel récent, comment la planification des risques et opportunités affectant votre SMQ (6.1) débouche sur des actions proportionnées, intégrées à vos processus et dont l''efficacité est évaluée.'
-    WHEN 'Q-9001-CLO-5514' THEN 'Montrez-moi, sur un cas réel récent, comment vous déterminez et surveillez les enjeux externes et internes pertinents pour la finalité, l''orientation stratégique et les résultats attendus de votre SMQ — y compris, depuis l''Amendement 1:2024, la détermination de la pertinence des changements climatiques comme enjeu — et où en est la preuve.'
-    WHEN 'Q-9001-PS-7808' THEN 'Montrez-moi, sur un cas réel récent, comment vous avez déterminé le domaine d''application de votre SMQ (enjeux 4.1, parties intéressées 4.2, produits/services), et comment toute exigence jugée non applicable est justifiée par écrit, sans incidence sur la conformité des produits/services ni sur la satisfaction client.'
-    WHEN 'Q-9001-L-0975' THEN 'Montrez-moi, sur un cas réel récent, comment la direction démontre son leadership et son engagement envers le SMQ — responsabilité de son efficacité, intégration aux processus métiers, ressources allouées — y compris l''orientation client (5.1.2) : exigences client déterminées et satisfaites, risques et opportunités affectant la conformité traités.'
+    WHEN 'Q-9001-PI-3467' THEN 'Quelles personnes ou organisations peuvent influencer votre système qualité, et qu''attendent-elles de vous ? Montrez comment vous suivez l''évolution de leurs attentes.'
+    WHEN 'Q-9001-RO-2538' THEN 'Prenez un risque ou une opportunité pour votre système qualité. Qu''avez-vous décidé de faire et comment avez-vous vérifié que cela fonctionnait ?'
+    WHEN 'Q-9001-RO-9521' THEN 'Comment les actions liées aux risques et aux opportunités sont-elles intégrées au travail quotidien ? Montrez-moi un exemple.'
+    WHEN 'Q-9001-CLO-5514' THEN 'Quels changements internes ou externes peuvent affecter votre système qualité ? Montrez comment vous avez déterminé si le changement climatique est un sujet important pour votre activité.'
+    WHEN 'Q-9001-PS-7808' THEN 'Quels sites, activités, produits et services sont couverts par votre système qualité ? Montrez comment vous avez justifié ce qui n''est pas couvert.'
+    WHEN 'Q-9001-L-0975' THEN 'Comment la direction montre-t-elle qu''elle est responsable du système qualité ? Donnez un exemple de décision prise ou de ressource accordée.'
     ELSE questionText
   END
 WHERE questionKey IN ('Q-9001-PI-3467', 'Q-9001-RO-2538', 'Q-9001-RO-9521', 'Q-9001-CLO-5514', 'Q-9001-PS-7808', 'Q-9001-L-0975');
