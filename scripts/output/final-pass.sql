@@ -1,4 +1,7 @@
--- QARA — Script final consolidé : questionTextSource (171) + passe éditoriale (45) + titres tronqués (24)
+-- ATTENTION — NE PAS EXECUTER EN PRODUCTION EN L'ETAT.
+-- Ce fichier mélange un backfill technique avec 45 reformulations et 24 titres
+-- qui ne disposent pas d'une validation réglementaire globale explicite.
+-- QARA — Script préparatoire consolidé : questionTextSource (171) + passe éditoriale (45) + titres tronqués (24)
 -- Généré par scripts/final-pass-apply.mjs le 2026-08-04T09:09:19.535Z
 --
 -- CONTEXTE IMPORTANT : la passe mécanique (171 questions) a été mergée dans
