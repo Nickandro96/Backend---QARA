@@ -960,6 +960,18 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         try {
+          // Le générateur historique charge les données par auditId sans
+          // connaître l'utilisateur courant. Vérifier la propriété ici évite
+          // qu'un utilisateur authentifié puisse exporter l'audit d'un autre
+          // compte en devinant son identifiant.
+          const ownedAudit = await db.getAuditById(input.auditId, ctx.user.id);
+          if (!ownedAudit) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Audit not found or does not belong to the user",
+            });
+          }
+
           const pdfBuffer = await generateAuditReport(input);
 
           // Upload to S3
