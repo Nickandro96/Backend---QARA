@@ -203,7 +203,7 @@ Révision simple approuvée le 2026-08-04 et appliquée au JSON, aux données é
 
 ---
 
-## Lot 3 — ISO 14971 §8, §9 et §10.3 (6 questions)
+## Lot 3 — ISO 14971 §8, §9 et §10.3 (6 questions) — ✅ VALIDÉ LE 2026-08-04
 
 1. **Q-14971-RRG-7446 — §8 — critical**  
    Production tronquée : évaluation de l'acceptabilité du risque résiduel global.  
@@ -229,7 +229,37 @@ Révision simple approuvée le 2026-08-04 et appliquée au JSON, aux données é
    Production tronquée : même exigence.  
    Proposition simple : « Montrez-moi un exemple où une information venant du terrain a conduit à modifier le dossier de risques ou le dispositif. »
 
-### Décision attendue sur le lot 3
+### Décision du lot 3
+
+Validé le 2026-08-04 et appliqué au JSON, aux données éditoriales et aux SQL préparatoires. Aucun déploiement ni SQL de production.
+
+
+---
+
+## Lot 4 — ISO 14971 §10.4 et risques d'utilisation/logiciel (7 questions)
+
+1. **Q-14971-APP-5733 — §10.4 — high**  
+   « Prenez une information reçue après la production qui concernait la sécurité. Quelles actions avez-vous prises sur le dossier de risques et sur les dispositifs déjà sur le marché ? »
+
+2. **Q-14971-APP-7458 — §10.4 — high**  
+   « Montrez-moi un exemple où une information venant du terrain a conduit à une décision sur le dispositif. Qui a décidé et pourquoi ? »
+
+3. **Q-14971-APP-9033 — §10.4 — high**  
+   « Après une alerte de sécurité venant du terrain, comment avez-vous vérifié que les actions prises étaient efficaces ? Montrez-moi un cas réel. »
+
+4. **Q-14971-LRU-1486 — §5.4 avec §5.2 — high**  
+   « Prenez une erreur d'utilisation possible du dispositif. Comment l'avez-vous identifiée et comment avez-vous réduit le risque associé ? »
+
+5. **Q-14971-LRU-3545 — §5.4 avec §5.2 — high**  
+   « Comment prenez-vous en compte les mauvaises utilisations que vous pouvez raisonnablement prévoir ? Montrez-moi un exemple. »
+
+6. **Q-14971-LRL-8098 — §5.4 avec domaine d'application — high**  
+   « Prenez un risque lié au logiciel ou à la sécurité des données. Montrez comment vous l'avez identifié, évalué et réduit. »
+
+7. **Q-14971-LRL-4167 — §5.4 avec domaine d'application — high**  
+   « Comment vérifiez-vous que les risques liés au logiciel et à la cybersécurité sont inclus dans votre analyse des risques ? Montrez-moi un exemple. »
+
+### Décision attendue sur le lot 4
 
 - approuvé sans modification ;
 - corrections demandées par `questionKey`.
