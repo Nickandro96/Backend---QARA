@@ -70,7 +70,7 @@ fait).
 
 ## PROCHAINE ACTION
 
-**Lot 1 préparé** : `VALIDATION-passe-editoriale-lots.md` contient 6 questions ISO 14971 (§7.1–7.2), comparées entre la branche de production et la proposition. Point réglementaire ouvert sur `Q-14971-MŒC-8079` : préférer « vérification distincte » à « vérification indépendante » sauf confirmation explicite d'une exigence d'indépendance. Attendre la décision utilisateur sur ce lot (Point de contrôle A), puis préparer le lot 2 sans déployer.
+**Lot 1 validé le 2026-08-04** : 6 questions ISO 14971 (§7.1–7.2). Pour `Q-14971-MŒC-8079`, l'utilisateur a validé la correction « vérification distincte » ; elle est appliquée dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. **Lot 2 préparé** : 6 questions ISO 14971 (§7.4–7.6) dans `VALIDATION-passe-editoriale-lots.md`. Attendre la décision utilisateur sur le lot 2 (Point de contrôle A).
 
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
 d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
