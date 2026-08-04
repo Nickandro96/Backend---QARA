@@ -51,7 +51,8 @@ Dans l'éditeur Railway de **new-claude**, dans cet ordre :
 
 1. `scripts/output/backfill-question-text-source.sql` — archive les 171 originaux si la source est NULL ;
 2. `scripts/output/editorial-pass.sql` — archive l'ancien texte si nécessaire puis applique les 45 questions ;
-3. `scripts/output/title-fixes.sql` — applique les 24 titres validés.
+3. `scripts/output/regulatory-corrections.sql` — applique les 4 corrections réglementaires validées hors passe éditoriale ;
+4. `scripts/output/title-fixes.sql` — applique les 24 titres validés.
 
 Ne pas exécuter `final-pass.sql`, conservé uniquement comme artefact consolidé historique.
 
@@ -66,6 +67,7 @@ SELECT questionKey, COUNT(*) AS n FROM questions GROUP BY questionKey HAVING COU
 ```
 
 Attendu : 473 / 473, 0 question tronquée, 0 titre de longueur 250, aucune clé dupliquée.
+Vérifier aussi les 4 lignes de `regulatory-corrections.sql` et l’absence de référence CAPA à `820.100`.
 Le nombre de sources doit être documenté à partir de la valeur réelle avant/après ; ne pas écraser
 une source existante.
 
