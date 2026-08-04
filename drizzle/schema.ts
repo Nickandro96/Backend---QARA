@@ -277,7 +277,7 @@ export const questions = mysqlTable("questions", {
   questionKey: varchar("questionKey", { length: 255 }),
   article: varchar("article", { length: 255 }),
   annexe: varchar("annexe", { length: 255 }),
-  title: varchar("title", { length: 255 }),
+  title: varchar("title", { length: 1024 }),
 
   economicRole: varchar("economicRole", { length: 50 }),
 
