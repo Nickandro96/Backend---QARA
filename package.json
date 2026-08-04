@@ -15,7 +15,7 @@
     "import:questionnaires": "tsx scripts/import-questionnaires.ts",
     "start": "NODE_ENV=production node dist/index.js",
     "import:fda:questions": "tsx scripts/import-questionnaires.ts",
-    "release": "npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/import-corpus.mjs"
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
