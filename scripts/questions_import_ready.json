@@ -1457,7 +1457,7 @@
       "finished device manufacturer"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment choix de voie 510(k), comparaison predicate et preuves de substantial… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent de soumission 510(k), comment le choix de voie, la comparaison au predicate et la démonstration de substantial equivalence (FD&C 513(i)) ont été conduits — contenu de la soumission (§807.87) et résumé/déclaration SE (§807.92-93) — et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à 510(k) ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -1505,7 +1505,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par voie De Novo pour dispositif nouveau à risque faible/modéré sans… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un dossier De Novo réel (FD&C 513(f)(2), 21 CFR 860 Subpart D) pour un dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : déroulez le contenu du dossier, sa recevabilité, les délais respectés et les effets de l'ordre de classification obtenu (contrôles spéciaux applicables, base pour de futurs 510(k)).",
     "expectedEvidence": "procédure ou instruction applicable à De Novo ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -1565,7 +1565,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment voie De Novo pour dispositif nouveau à risque faible/modéré sans… relie votre analyse de risques à une décision concrète sur le produit.",
+    "questionText": "Montrez-moi comment le choix de la voie De Novo pour un dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé relie votre analyse de risques à la décision de classification et aux contrôles spéciaux qui en découlent.",
     "expectedEvidence": "procédure ou instruction applicable à De Novo ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -1625,7 +1625,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par voie De Novo pour dispositif nouveau à risque faible/modéré sans… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez un dossier De Novo réel du contenu de la demande jusqu'à l'ordre de classification obtenu : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité sur les contrôles spéciaux applicables ?",
     "expectedEvidence": "procédure ou instruction applicable à De Novo ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -2115,7 +2115,7 @@
       "finished device manufacturer"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Prenez un fournisseur critique : montrez-moi comment maîtrise fournisseurs critiques et preuves QMSR dans le système… est appliquée, de la sélection à la surveillance des performances.",
+    "questionText": "Prenez un fournisseur critique : montrez-moi comment la maîtrise des achats et des fournisseurs (QMSR 21 CFR 820.10, via ISO 13485 §7.4 incorporée par référence au §820.7) est appliquée — critères d'évaluation/sélection/surveillance proportionnés au risque, informations d'achat, vérification du produit acheté, rapports de performance fournisseur — de la sélection à la surveillance des performances.",
     "expectedEvidence": "procédure ou instruction applicable à Supplier/QMSR ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -2237,7 +2237,7 @@
       "repackager"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Ouvrons le dernier dossier de conception concerné par impact logiciel/cybersécurité sur design controls, risk management,… : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+    "questionText": "Ouvrons le dernier dossier de conception concerné par les exigences de cybersécurité pour les « cyber devices » (FD&C 524B) — plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, nomenclature logicielle (SBOM), intégrés au design control (ISO 13485 §7.3) — : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
     "expectedEvidence": "procédure ou instruction applicable à Software/Cybersecurity ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -2409,7 +2409,7 @@
       "repackager"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Ouvrons le dernier dossier de conception concerné par impact logiciel/cybersécurité sur design controls, risk management,… : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment le plan de surveillance et de correction des vulnérabilités, le processus assurant la cybersécurité et la nomenclature logicielle (SBOM) exigés pour les « cyber devices » (FD&C 524B) sont intégrés à votre design control (ISO 13485 §7.3), et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à Software/Cybersecurity ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10048,7 +10048,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par identification et sélection des mesures de maîtrise des risques :… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel concerné par l'analyse des options de maîtrise des risques et la détermination des mesures appropriées pour ramener ce risque à un niveau acceptable : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Maîtrise des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10174,7 +10174,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par identification et sélection des mesures de maîtrise des risques :… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment l'analyse des options de maîtrise des risques et la détermination des mesures appropriées pour ramener ce risque à un niveau acceptable relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Maîtrise des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10237,7 +10237,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par priorisation des options de maîtrise du risque selon approche… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel concerné par l'ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception et à la fabrication, puis mesures de protection, puis information pour la sécurité — : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Analyse options de maîtrise ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10300,7 +10300,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment priorisation des options de maîtrise du risque selon approche… relie votre analyse de risques à une décision concrète sur le produit.",
+    "questionText": "Montrez-moi comment l'ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception, mesures de protection, puis information pour la sécurité — relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Analyse options de maîtrise ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10363,7 +10363,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par priorisation des options de maîtrise du risque selon approche… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez un cas concret concerné par l'ordre de priorité des options de maîtrise du risque — sécurité inhérente à la conception et à la fabrication, mesures de protection, information pour la sécurité — : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
     "expectedEvidence": "procédure ou instruction applicable à Analyse options de maîtrise ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10426,7 +10426,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment mise en œuvre et vérification des mesures de maîtrise sélectionnées… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment la mesure de maîtrise retenue a fait l'objet des deux vérifications distinctes exigées par la norme : la vérification que la mesure a bien été mise en œuvre, et la vérification indépendante de son efficacité.",
     "expectedEvidence": "procédure ou instruction applicable à Mise en œuvre contrôles ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10666,7 +10666,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par analyse bénéfice-risque lorsque le risque résiduel n’est pas… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel dont le risque résiduel individuel n'est pas acceptable et pour lequel aucune réduction supplémentaire n'est réalisable : déroulez l'analyse bénéfice-risque menée, son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Analyse bénéfice-risque ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10729,7 +10729,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment analyse bénéfice-risque lorsque le risque résiduel n’est pas… relie votre analyse de risques à une décision concrète sur le produit.",
+    "questionText": "Montrez-moi comment l'analyse bénéfice-risque, menée lorsque le risque résiduel individuel n'est pas acceptable et qu'aucune réduction supplémentaire n'est réalisable, relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Analyse bénéfice-risque ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10792,7 +10792,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par analyse bénéfice-risque lorsque le risque résiduel n’est pas… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez un cas concret où le risque résiduel individuel n'a pas été jugé acceptable malgré l'impossibilité de réduction supplémentaire : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
     "expectedEvidence": "procédure ou instruction applicable à Analyse bénéfice-risque ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10855,7 +10855,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par évaluation des nouveaux risques introduits par les mesures de… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel concerné par l'examen des risques découlant des mesures de maîtrise retenues — nouveaux dangers ou situations dangereuses introduits, ou impact sur des risques déjà estimés : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Risques issus des contrôles ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -10981,7 +10981,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par évaluation des nouveaux risques introduits par les mesures de… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment l'examen des risques découlant des mesures de maîtrise retenues — nouveaux dangers ou impact sur des risques déjà estimés — relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Risques issus des contrôles ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11044,7 +11044,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment vérification que toutes les situations dangereuses identifiées sont… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous vérifiez que toutes les situations dangereuses identifiées ont été traitées et que toutes les activités de gestion des risques prévues sont achevées.",
     "expectedEvidence": "procédure ou instruction applicable à Complétude maîtrise ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "low",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11095,7 +11095,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par évaluation de l’acceptabilité du risque résiduel global : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment vous avez évalué l'acceptabilité du risque résiduel global du dispositif — l'ensemble des risques résiduels individuels combinés, pas seulement risque par risque — avant sa mise sur le marché.",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11221,7 +11221,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par évaluation de l’acceptabilité du risque résiduel global : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez, sur un audit récent, le raisonnement qui a permis de juger le risque résiduel global du dispositif acceptable : quelles données, quelle méthode d'agrégation, quelle décision et par qui ?",
     "expectedEvidence": "procédure ou instruction applicable à Risque résiduel global ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "critical",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11284,7 +11284,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par revue de gestion des risques avant libération commerciale : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi, sur la dernière libération commerciale d'un dispositif, la revue de gestion des risques réalisée avant libération : qui l'a menée, sur quelles preuves, et comment elle conclut que le processus a été correctement mis en œuvre et que le risque résiduel global est acceptable.",
     "expectedEvidence": "procédure ou instruction applicable à Revue gestion des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11410,7 +11410,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par revue de gestion des risques avant libération commerciale : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez un cas concret de revue de gestion des risques avant libération commerciale : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
     "expectedEvidence": "procédure ou instruction applicable à Revue gestion des risques ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11606,7 +11606,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par revue des informations de production et post-production pour impact… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons une information de production/post-production réelle (réclamation, retour terrain, littérature) : montrez-moi comment vous l'examinez pour sa pertinence en matière de sécurité — nouveau danger, risque devenu inacceptable, remise en cause du risque résiduel global, évolution de l'état de l'art — son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Revue des informations post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11756,7 +11756,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par revue des informations de production et post-production pour impact… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment l'examen des informations de production et post-production — nouveaux dangers, risque devenu inacceptable, remise en cause du risque résiduel global, évolution de l'état de l'art — relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Revue des informations post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11831,7 +11831,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par actions sur le dispositif, le dossier de risque ou le PMS lorsque de… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un cas réel où une information post-production s'est révélée pertinente pour la sécurité : déroulez les actions prises — réexamen du dossier de risques, réappréciation, impact sur les mesures de maîtrise, actions sur les dispositifs déjà sur le marché, remontée à la revue de direction.",
     "expectedEvidence": "procédure ou instruction applicable à Actions post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11906,7 +11906,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi comment actions sur le dispositif, le dossier de risque ou le PMS lorsque de… relie votre analyse de risques à une décision concrète sur le produit.",
+    "questionText": "Montrez-moi comment les actions prises face à une information post-production pertinente pour la sécurité — réexamen du dossier de risques, réappréciation, actions sur le marché, remontée à la revue de direction — relient votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Actions post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -11981,7 +11981,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par actions sur le dispositif, le dossier de risque ou le PMS lorsque de… : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Déroulez un cas concret d'information post-production jugée pertinente pour la sécurité : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité sur le dossier de risques et, si nécessaire, sur les dispositifs déjà sur le marché ?",
     "expectedEvidence": "procédure ou instruction applicable à Actions post-production ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12389,7 +12389,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par intégration des risques d’utilisation et erreurs d’usage dans… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel lié à une erreur d'utilisation ou une situation dangereuse d'usage : montrez-moi qu'il a bien été identifié à partir de l'utilisation prévue et de la mauvaise utilisation raisonnablement prévisible documentées (liaison IEC 62366-1), son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Lien risques-utilisabilité ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12527,7 +12527,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par intégration des risques d’utilisation et erreurs d’usage dans… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment l'identification des dangers liés aux erreurs d'utilisation — fondée sur l'utilisation prévue et la mauvaise utilisation raisonnablement prévisible documentées, en lien avec l'analyse d'utilisabilité IEC 62366-1 — relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Lien risques-utilisabilité ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12596,7 +12596,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par intégration des risques logiciel, cybersécurité et données lorsque… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un danger réel lié au logiciel ou à la sécurité des données/systèmes : montrez-moi qu'il est bien couvert par votre processus de gestion des risques, explicitement inclus dans son domaine d'application, son estimation, sa maîtrise et le risque résiduel retenu.",
     "expectedEvidence": "procédure ou instruction applicable à Lien risques-logiciel ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12722,7 +12722,7 @@
       "assembleur si impact risque"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par intégration des risques logiciel, cybersécurité et données lorsque… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi comment l'identification des dangers liés au logiciel et à la sécurité des données/systèmes — explicitement incluse dans le domaine d'application de votre gestion des risques — relie votre analyse de risques à une décision concrète sur le produit.",
     "expectedEvidence": "procédure ou instruction applicable à Lien risques-logiciel ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12782,7 +12782,7 @@
       "organisme"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment détermination des enjeux internes et externes influençant le SMQ est… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous déterminez et surveillez les enjeux externes et internes pertinents pour la finalité, l'orientation stratégique et les résultats attendus de votre SMQ — y compris, depuis l'Amendement 1:2024, la détermination de la pertinence des changements climatiques comme enjeu — et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à Contexte de l’organisme ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12830,7 +12830,7 @@
       "organisme"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment identification et suivi des besoins des parties intéressées… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous déterminez et surveillez les parties intéressées pertinentes et leurs exigences — y compris, le cas échéant, des exigences liées aux changements climatiques (Amd.1:2024) — et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à Parties intéressées ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12878,7 +12878,7 @@
       "organisme"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment définition du domaine d’application du système qualité et… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous avez déterminé le domaine d'application de votre SMQ (enjeux 4.1, parties intéressées 4.2, produits/services), et comment toute exigence jugée non applicable est justifiée par écrit, sans incidence sur la conformité des produits/services ni sur la satisfaction client.",
     "expectedEvidence": "procédure ou instruction applicable à Périmètre du SMQ ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -12974,7 +12974,7 @@
       "organisme"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment engagement démontré de la direction et intégration qualité dans la… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment la direction démontre son leadership et son engagement envers le SMQ — responsabilité de son efficacité, intégration aux processus métiers, ressources allouées — y compris l'orientation client (5.1.2) : exigences client déterminées et satisfaites, risques et opportunités affectant la conformité traités.",
     "expectedEvidence": "procédure ou instruction applicable à Leadership ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -13118,7 +13118,7 @@
       "organisme"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par planification des risques et opportunités affectant le SMQ : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Choisissons un risque ou une opportunité réel(le) affectant votre SMQ : déroulez comment il/elle a été identifié(e) lors de la planification (6.1), quelles actions ont été engagées pour le traiter, et comment leur efficacité a été évaluée.",
     "expectedEvidence": "procédure ou instruction applicable à Risques et opportunités ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -13238,7 +13238,7 @@
       "organisme"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Choisissons un danger réel concerné par planification des risques et opportunités affectant le SMQ : déroulez… estimation, sa maîtrise et le risque résiduel retenu.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment la planification des risques et opportunités affectant votre SMQ (6.1) débouche sur des actions proportionnées, intégrées à vos processus et dont l'efficacité est évaluée.",
     "expectedEvidence": "procédure ou instruction applicable à Risques et opportunités ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -15165,7 +15165,7 @@
       "laboratoire si applicable"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment iVD mis sur le marché uniquement s’il respecte l’IVDR et sa… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous garantissez qu'un DIV n'est mis sur le marché que s'il respecte l'IVDR et sa destination, et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à Mise sur le marché IVD ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -17680,7 +17680,7 @@
       "laboratoire si applicable"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment pSUR IVD lorsque applicable, actualisé et transmis selon exigences… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment le PSUR (rapport périodique de sécurité), lorsqu'applicable à votre DIV, est actualisé et transmis conformément aux exigences de l'Art. 81, et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à PSUR IVDR ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -18712,7 +18712,7 @@
       "laboratoire si applicable"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment étiquetage et notice IVD conformes, lisibles et validés est appliquée… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous garantissez que l'étiquetage et la notice d'utilisation de votre DIV sont conformes, lisibles et validés, et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à GSPR information utilisateur IVD ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -21262,7 +21262,7 @@
       "distributeur selon rôle"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment résumé des caractéristiques de sécurité et performances cliniques… est appliquée en pratique et où en est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment le résumé des caractéristiques de sécurité et des performances cliniques (SSCP) de votre dispositif implantable ou de classe III est rédigé de manière compréhensible pour l'utilisateur prévu (et le grand public le cas échéant), validé par l'organisme notifié et téléversé dans Eudamed.",
     "expectedEvidence": "procédure ou instruction applicable à SSCP ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -21313,7 +21313,7 @@
       "distributeur selon rôle"
     ],
     "questionType": "maturity_0_5",
-    "questionText": "Déroulez un cas concret concerné par résumé des caractéristiques de sécurité et performances cliniques… : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
+    "questionText": "Déroulez un cas concret de SSCP pour un dispositif implantable ou de classe III : contenu, validation par l'organisme notifié, téléversement dans Eudamed — quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
     "expectedEvidence": "procédure ou instruction applicable à SSCP ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises ; analyse d’impact patient/réglementaire ; preuve d’efficacité ou de vérification indépendante ; CAPA, mise à jour PMS/risques/dossier technique si applicable",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -23091,7 +23091,7 @@
       "distributeur selon rôle"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment préparation aux demandes autorités et actions de surveillance marché… est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment vous avez répondu à une demande motivée d'une autorité compétente : fourniture de toute l'information et documentation démontrant la conformité (dans une langue officielle acceptée), accès donné et échantillons remis si demandés.",
     "expectedEvidence": "procédure ou instruction applicable à Surveillance marché ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "high",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
@@ -29121,7 +29121,7 @@
       "fournisseur critique si inclus"
     ],
     "questionType": "yes_no_partial_na",
-    "questionText": "Montrez-moi, sur un cas réel récent, comment utilisation des informations d’un processus pour orienter… est appliquée en pratique et où en est la preuve.",
+    "questionText": "Montrez-moi, sur un cas réel récent, comment des informations issues d'un processus (non-conformité, réclamation, donnée de surveillance) ont orienté l'échantillonnage et la profondeur d'audit d'un processus lié, conformément à l'approche d'audit MDSAP (AU P0002) — et où en est la preuve.",
     "expectedEvidence": "procédure ou instruction applicable à Process Linkage ; enregistrement du cas réel sélectionné par l’auditeur ; preuve de revue/approbation avec date, rôle et justification ; éléments de traçabilité démontrant le lien avec les risques, la conformité produit et les décisions prises",
     "criticality": "medium",
     "risk": "L’attendu est de démontrer une maîtrise documentée, proportionnée au risque et reproductible. Cela protège le patient, évite les décisions non tracées et réduit les mauvaises surprises lors d’un audit externe.",
