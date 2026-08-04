@@ -173,7 +173,7 @@ Aucune approbation de ce lot ne vaut approbation des lots suivants.
 
 ---
 
-## Révision en langage simple du lot 1 — validation complémentaire requise
+## Révision en langage simple du lot 1 — ✅ VALIDÉE LE 2026-08-04
 
 Cette révision remplace les formulations longues précédemment approuvées. Elle ne sera appliquée
 qu'après accord explicite.
@@ -196,7 +196,40 @@ qu'après accord explicite.
 6. **Q-14971-MŒC-8079 — 7.2**  
    « Pour une mesure destinée à réduire un risque, montrez qu'elle a bien été mise en place et qu'elle réduit réellement ce risque. »
 
-### Décision attendue
+### Décision
 
-- révision simple du lot 1 approuvée ;
+Révision simple approuvée le 2026-08-04 et appliquée au JSON, aux données éditoriales et aux SQL préparatoires. Aucun déploiement ni SQL de production.
+
+
+---
+
+## Lot 3 — ISO 14971 §8, §9 et §10.3 (6 questions)
+
+1. **Q-14971-RRG-7446 — §8 — critical**  
+   Production tronquée : évaluation de l'acceptabilité du risque résiduel global.  
+   Proposition simple : « Avant la mise sur le marché, comment avez-vous vérifié que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez le résultat de cette évaluation. »
+
+2. **Q-14971-RRG-3515 — §8 — critical**  
+   Production tronquée : même exigence.  
+   Proposition simple : « Qui a validé que l'ensemble des risques restant sur le dispositif était acceptable ? Montrez les données utilisées et la décision prise. »
+
+3. **Q-14971-RGR-9160 — §9 — high**  
+   Production tronquée : revue de gestion des risques avant libération commerciale.  
+   Proposition simple : « Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue. »
+
+4. **Q-14971-RGR-3091 — §9 — high**  
+   Production tronquée : même exigence.  
+   Proposition simple : « Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l'approbation. »
+
+5. **Q-14971-RIPP-2086 — §10.3 — high**  
+   Production tronquée : examen des informations de production et post-production.  
+   Proposition simple : « Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ? »
+
+6. **Q-14971-RIPP-4764 — §10.3 — high**  
+   Production tronquée : même exigence.  
+   Proposition simple : « Montrez-moi un exemple où une information venant du terrain a conduit à modifier le dossier de risques ou le dispositif. »
+
+### Décision attendue sur le lot 3
+
+- approuvé sans modification ;
 - corrections demandées par `questionKey`.
