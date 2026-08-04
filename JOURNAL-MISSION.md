@@ -70,6 +70,8 @@ fait).
 
 ## PROCHAINE ACTION
 
+**Point de contrôle B** : la PR technique #5 et la PR corpus #6 sont ouvertes en brouillon. Procédure exacte dans `PROCEDURE-PRODUCTION-CORPUS.md`. Attendre confirmation d'une sauvegarde récupérable de new-claude et de `IMPORT_CORPUS_ON_RELEASE` absent/différent de `1` avant toute fusion. Ordre : sauvegarde → PR #5 → vérifier import ignoré → actualiser/fusionner PR #6 → vérifier import ignoré → SQL séparés backfill, éditorial, titres → contrôles finaux.
+
 **Passe éditoriale finalisée le 2026-08-04** : 45/45 questions validées en langage simple (ISO14971 25, ISO9001 6, IVDR 3, FDA_QMSR 7, MDR 3, MDSAP 1) et appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. Preuve : 473 lignes / 473 clés uniques ; 45/45 correspondances exactes JSON ↔ données ↔ SQL ; 0 troncature dans `questionText` ; 0 titre avec « … » ou longueur 250. **Point de contrôle A franchi pour les 45 reformulations et, le 2026-08-04, pour les 24 titres complétés. Tout le contenu de cette passe est validé. Point de contrôle B reste requis avant toute sauvegarde/exécution SQL/déploiement de corpus.**
 
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
