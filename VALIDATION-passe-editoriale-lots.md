@@ -342,6 +342,6 @@ Références officielles vérifiées : FDA 510(k), De Novo, FD&C Act §524B et d
 
 Références officielles vérifiées : MDR article 32 et article 10(14) ; MDSAP AU P0002, approche par processus et liens entre processus.
 
-## Validation finale attendue
+## Validation finale — ✅ OBTENUE LE 2026-08-04
 
-Ces 20 formulations constituent les quatre derniers lots de la passe éditoriale. Une validation globale explicite de ces lots clôt les 45 reformulations. Elle ne vaut pas autorisation de déploiement ni d'écriture en production.
+Les lots 5 à 8 ont été validés globalement par l'utilisateur. La passe éditoriale est donc clôturée : 45/45 formulations approuvées en langage simple. Contrôle après intégration : 473 lignes, 473 `questionKey` uniques, 45 correspondances exactes entre le JSON, `editorial-pass-data.mjs`, `editorial-pass.sql` et `final-pass.sql`, 0 `questionText` avec « … », 0 `title` avec « … » et 0 titre de longueur 250. Cette validation de contenu ne vaut pas autorisation de déploiement ni d'écriture en production.
