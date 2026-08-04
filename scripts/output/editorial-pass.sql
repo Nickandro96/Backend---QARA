@@ -114,8 +114,8 @@ SET
     WHEN 'Q-14971-RIC-1049' THEN 'Prenez une mesure mise en place pour réduire un risque. A-t-elle créé un nouveau risque ou modifié un risque déjà connu ? Montrez comment vous l''avez vérifié et traité.'
     WHEN 'Q-14971-RIC-7118' THEN 'Comment vérifiez-vous que les mesures prises pour réduire un risque n''en créent pas un autre ? Montrez-moi un exemple réel.'
     WHEN 'Q-14971-CM-1778' THEN 'Montrez-moi que tous les dangers identifiés ont été traités et que toutes les actions prévues ont été terminées et vérifiées.'
-    WHEN 'Q-14971-RRG-7446' THEN 'Avant la mise sur le marché, comment avez-vous vérifié que l''ensemble des risques restant sur le dispositif était acceptable ? Montrez le résultat de cette évaluation.'
-    WHEN 'Q-14971-RRG-3515' THEN 'Qui a validé que l''ensemble des risques restant sur le dispositif était acceptable ? Montrez les données utilisées et la décision prise.'
+    WHEN 'Q-14971-RRG-7446' THEN 'Avant la mise sur le marché, comment avez-vous vérifié que le risque résiduel global du dispositif était acceptable ? Montrez le résultat de cette évaluation.'
+    WHEN 'Q-14971-RRG-3515' THEN 'Qui a approuvé l''acceptabilité du risque résiduel global du dispositif ? Montrez les données utilisées et la décision prise.'
     WHEN 'Q-14971-RGR-9160' THEN 'Pour le dernier dispositif libéré, montrez la revue des risques réalisée avant sa libération et la conclusion obtenue.'
     WHEN 'Q-14971-RGR-3091' THEN 'Qui a autorisé la libération du dispositif après la revue des risques ? Montrez les preuves et l''approbation.'
     WHEN 'Q-14971-RIPP-2086' THEN 'Prenez une réclamation, un retour du terrain ou une nouvelle publication. Comment avez-vous vérifié si cette information révélait un nouveau risque ou modifiait un risque connu ?'
@@ -148,6 +148,11 @@ SET
     ELSE questionText
   END
 WHERE questionKey IN ('Q-9001-PI-3467', 'Q-9001-RO-2538', 'Q-9001-RO-9521', 'Q-9001-CLO-5514', 'Q-9001-PS-7808', 'Q-9001-L-0975');
+
+-- Correction réglementaire validée : ISO 9001 §6.1 reste dans le périmètre SMQ
+UPDATE questions
+SET expectedEvidence = 'Analyse des risques et opportunités du SMQ ; plan d’actions ; responsables et délais ; preuve d’intégration dans les processus ; suivi des résultats et évaluation de l’efficacité.'
+WHERE questionKey IN ('Q-9001-RO-2538', 'Q-9001-RO-9521');
 
 -- ============================================================
 -- VERIFICATION APRES
