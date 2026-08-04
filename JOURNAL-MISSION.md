@@ -70,7 +70,7 @@ fait).
 
 ## PROCHAINE ACTION
 
-**Passe éditoriale finalisée le 2026-08-04** : 45/45 questions validées en langage simple (ISO14971 25, ISO9001 6, IVDR 3, FDA_QMSR 7, MDR 3, MDSAP 1) et appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. Preuve : 473 lignes / 473 clés uniques ; 45/45 correspondances exactes JSON ↔ données ↔ SQL ; 0 troncature dans `questionText` ; 0 titre avec « … » ou longueur 250. **Point de contrôle A franchi pour les 45 reformulations. Point de contrôle B reste requis avant toute sauvegarde/exécution SQL/déploiement de corpus.**
+**Passe éditoriale finalisée le 2026-08-04** : 45/45 questions validées en langage simple (ISO14971 25, ISO9001 6, IVDR 3, FDA_QMSR 7, MDR 3, MDSAP 1) et appliquées dans le JSON, les données éditoriales et les SQL préparatoires, sans déploiement. Preuve : 473 lignes / 473 clés uniques ; 45/45 correspondances exactes JSON ↔ données ↔ SQL ; 0 troncature dans `questionText` ; 0 titre avec « … » ou longueur 250. **Point de contrôle A franchi pour les 45 reformulations et, le 2026-08-04, pour les 24 titres complétés. Tout le contenu de cette passe est validé. Point de contrôle B reste requis avant toute sauvegarde/exécution SQL/déploiement de corpus.**
 
 **Point de contrôle A en attente** : présenter les 45 reformulations par lots de 5 à 8 au format
 d'ancrage réglementaire, distinguer précisément le lot ISO 14971 déjà examiné et obtenir un accord
