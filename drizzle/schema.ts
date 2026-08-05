@@ -290,6 +290,7 @@ export const questions = mysqlTable("questions", {
   // 0030 et VALIDATION-passe-mecanique.md. NULL pour toute question non
   // touchée par cette passe.
   questionTextSource: text("questionTextSource"),
+  isActive: boolean("isActive").notNull().default(true),
   expectedEvidence: text("expectedEvidence"),
 
   criticality: varchar("criticality", { length: 50 }),
