@@ -294,7 +294,7 @@ export async function fetchAuditScopedQuestions(db: any, params: {
   // slug(s) -> IDs DB
   const processDbIds = await resolveProcessDbIds(db, normalizedProcessIds);
 
-  const whereParts: any[] = [];
+  const whereParts: any[] = [eq((questions as any).isActive, true)];
 
   // economicRole VARCHAR (or nullable) – accept generic questions too
   // NOTE: if this filter yields 0 results, we will fallback to "no role filter" (safe mode)
@@ -1303,7 +1303,7 @@ export const mdrRouter = router({
 
       // ---- DB-first ----
       try {
-        const whereParts: any[] = [];
+        const whereParts: any[] = [eq((questions as any).isActive, true)];
 
         // economicRole VARCHAR (or nullable) – accept generic questions too
         // NOTE: if this filter yields 0 results, we will fallback to "no role filter" (safe mode)
