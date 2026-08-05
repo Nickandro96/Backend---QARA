@@ -342,7 +342,7 @@ export const fdaRouter = router({
       const rows = await database
         .select()
         .from(questions)
-        .where(eq(questions.referentialId, refId))
+        .where(and(eq(questions.referentialId, refId), eq(questions.isActive, true)))
         .orderBy(asc(questions.displayOrder), asc(questions.id));
 
       const filtered = rows.filter((row: any) => {
@@ -382,7 +382,7 @@ export const fdaRouter = router({
         .limit(1);
       if (!audit) throw new Error("Audit not found");
 
-      const [question] = await database.select().from(questions).where(eq(questions.id, input.questionId)).limit(1);
+      const [question] = await database.select().from(questions).where(and(eq(questions.id, input.questionId), eq(questions.isActive, true))).limit(1);
       if (!question) throw new Error("Question not found");
 
       const questionKey = question.questionKey || stableHash(`${question.referentialId}|${question.article}|${question.title}|${question.questionText}`);
@@ -473,7 +473,7 @@ export const fdaRouter = router({
 
       const refIds = Array.isArray(audit.referentialIds) ? audit.referentialIds : [];
       const questionsRows = refIds.length
-        ? await database.select().from(questions).where(inArray(questions.referentialId, refIds as number[])).orderBy(asc(questions.displayOrder), asc(questions.id))
+        ? await database.select().from(questions).where(and(inArray(questions.referentialId, refIds as number[]), eq(questions.isActive, true))).orderBy(asc(questions.displayOrder), asc(questions.id))
         : [];
       const responseRows = await database.select().from(audit_responses).where(and(eq(audit_responses.auditId, input.auditId), eq(audit_responses.userId, ctx.user.id)));
       const actionsRows = await database
@@ -603,7 +603,7 @@ export const fdaRouter = router({
 
       const refIds = Array.isArray(audit.referentialIds) ? audit.referentialIds : [];
       const questionsRows = refIds.length
-        ? await database.select().from(questions).where(inArray(questions.referentialId, refIds as number[])).orderBy(asc(questions.displayOrder), asc(questions.id))
+        ? await database.select().from(questions).where(and(inArray(questions.referentialId, refIds as number[]), eq(questions.isActive, true))).orderBy(asc(questions.displayOrder), asc(questions.id))
         : [];
       const responseRows = await database.select().from(audit_responses).where(and(eq(audit_responses.auditId, input.auditId), eq(audit_responses.userId, ctx.user.id)));
 
