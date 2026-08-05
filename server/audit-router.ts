@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 3 seconds
-Output:
 // Backend---QARA-main/server/audit-router.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -26,13 +23,13 @@ const ResponseValueEnum = z.enum([
 ]);
 
 /**
- * Filtre en mÇ¸moire par referentialId : AuditSelector.tsx (frontend) passe
- * `referentialId` Çÿ `audit.list`, mais db.getAudits() ne filtre que par
- * status/siteId ƒ?" le paramÇùtre Ç¸tait silencieusement ignorÇ¸ (zod sans
- * .strict() ne rejette pas les clÇ¸s inconnues, donc aucune erreur, juste un
- * filtre qui ne filtrait rien). Le champ `referentialIds` est un JSON stockÇ¸
- * en chaÇ©ne (voir safeParseArray) ; filtrer en JS ici plutÇït qu'en SQL,
- * volumes par utilisateur trop faibles pour que Çõa compte.
+ * Filtre en mémoire par referentialId : AuditSelector.tsx (frontend) passe
+ * `referentialId` à `audit.list`, mais db.getAudits() ne filtre que par
+ * status/siteId — le paramètre était silencieusement ignoré (zod sans
+ * .strict() ne rejette pas les clés inconnues, donc aucune erreur, juste un
+ * filtre qui ne filtrait rien). Le champ `referentialIds` est un JSON stocké
+ * en chaîne (voir safeParseArray) ; filtrer en JS ici plutôt qu'en SQL,
+ * volumes par utilisateur trop faibles pour que ça compte.
  */
 function filterByReferentialId(rows: any[], referentialId?: number) {
   if (referentialId === undefined) return rows;
@@ -40,18 +37,18 @@ function filterByReferentialId(rows: any[], referentialId?: number) {
 }
 
 /**
- * AuditsList.tsx/AuditHistory.tsx lisent `audit.auditType` (colonne rÇ¸elle :
- * `type`) et `audit.conformityRate` (n'existe pas dans le schÇ¸ma `audits` ƒ?"
- * jamais Ç¸crit pour MDR/ISO, voir audit-scoring.ts). Enrichit chaque ligne
- * avec les noms de champs attendus par ces pages, score recalculÇ¸ Çÿ la volÇ¸e
- * via la mÇ¦me variante "safe" que le dashboard (null si audit sans rÇ¸ponse
- * exploitable, plutÇït que de faire Ç¸chouer toute la liste).
+ * AuditsList.tsx/AuditHistory.tsx lisent `audit.auditType` (colonne réelle :
+ * `type`) et `audit.conformityRate` (n'existe pas dans le schéma `audits` —
+ * jamais écrit pour MDR/ISO, voir audit-scoring.ts). Enrichit chaque ligne
+ * avec les noms de champs attendus par ces pages, score recalculé à la volée
+ * via la même variante "safe" que le dashboard (null si audit sans réponse
+ * exploitable, plutôt que de faire échouer toute la liste).
  */
 /**
  * AuditsList.tsx lit `audit.siteName`, absent de `getAudits()` (ligne brute
- * `audits`, pas de jointure) ƒ?" affichait "Non spÇ¸cifiÇ¸" pour des audits
- * ayant pourtant un site rÇ¸el (mÇ¦me famille de bug que BUG 2 sur
- * /audits/:id, trouvÇ¸e dans le balayage CORRECTIONS.md LOT 5).
+ * `audits`, pas de jointure) — affichait "Non spécifié" pour des audits
+ * ayant pourtant un site réel (même famille de bug que BUG 2 sur
+ * /audits/:id, trouvée dans le balayage CORRECTIONS.md LOT 5).
  */
 async function enrichWithDisplayFields(db: any, userId: number, rows: any[]) {
   const siteIds = Array.from(new Set(rows.map((a: any) => a.siteId).filter(Boolean)));
@@ -116,9 +113,9 @@ export const auditRouter = router({
         referentialIds: z.array(z.number()).default([]),
         siteId: z.number().int().positive().optional(),
         economicRole: z.string().optional(),
-        // z.union: accepte les ids numÇ¸riques ET les slugs canoniques
-        // (ex. "gov_strat") ƒ?" resolveProcessDbIds (server/shared/processResolution.ts)
-        // rÇ¸sout les deux formats Çÿ la lecture, comme pour MDR/ISO.
+        // z.union: accepte les ids numériques ET les slugs canoniques
+        // (ex. "gov_strat") — resolveProcessDbIds (server/shared/processResolution.ts)
+        // résout les deux formats à la lecture, comme pour MDR/ISO.
         processIds: z.array(z.union([z.number(), z.string()])).optional(),
         auditorName: z.string().optional(),
         auditorEmail: z.string().optional(),
@@ -149,9 +146,9 @@ export const auditRouter = router({
 
   /**
    * Frontend expects: trpc.audit.list() (AuditSelector.tsx) et
-   * trpc.audit.listAudits() (AuditsList.tsx) ƒ?" deux noms diffÇ¸rents pour le
-   * mÇ¦me besoin cÇïtÇ¸ frontend legacy. Alias, tous deux vers db.getAudits
-   * (dÇ¸jÇÿ utilisÇ¸e par audits.list, le routeur pluriel).
+   * trpc.audit.listAudits() (AuditsList.tsx) — deux noms différents pour le
+   * même besoin côté frontend legacy. Alias, tous deux vers db.getAudits
+   * (déjà utilisée par audits.list, le routeur pluriel).
    */
   list: protectedProcedure
     .input(
@@ -178,9 +175,9 @@ export const auditRouter = router({
           siteId: z.number().int().positive().optional(),
           referentialId: z.number().int().positive().optional(),
           // AuditsList.tsx envoie ce champ (barre de recherche) depuis le
-          // dÇ¸but, mais il n'Ç¸tait jamais dÇ¸clarÇ¸ ici : zod (non-strict)
+          // début, mais il n'était jamais déclaré ici : zod (non-strict)
           // le supprimait silencieusement, la recherche ne filtrait donc
-          // jamais rien (trouvÇ¸ pendant CORRECTIONS.md LOT 2).
+          // jamais rien (trouvé pendant CORRECTIONS.md LOT 2).
           search: z.string().optional(),
         })
         .optional()
@@ -196,12 +193,12 @@ export const auditRouter = router({
     }),
 
   /**
-   * Frontend expects: trpc.audit.getById({ id }) (AuditDetail.tsx) ƒ?" enrichi
+   * Frontend expects: trpc.audit.getById({ id }) (AuditDetail.tsx) — enrichi
    * avec siteName/referentialNames/auditors, absents de la ligne brute
    * `audits` (CORRECTIONS.md LOT 5, BUG 2 : la page affichait "Non
-   * spÇ¸cifiÇ¸" pour ces trois champs car ils n'existaient nulle part dans
-   * la rÇ¸ponse, pas parce que les donnÇ¸es Ç¸taient rÇ¸ellement manquantes en
-   * base). RÇ¸fÇ¸rentiels rÇ¸solus par `code`, jamais par ID en dur.
+   * spécifié" pour ces trois champs car ils n'existaient nulle part dans
+   * la réponse, pas parce que les données étaient réellement manquantes en
+   * base). Référentiels résolus par `code`, jamais par ID en dur.
    */
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
@@ -210,7 +207,7 @@ export const auditRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const audit = await getAuditById(input.id, ctx.user.id);
-      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvÇ¸" });
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
 
       const [site] = (audit as any).siteId
         ? await db.select({ name: sites.name }).from(sites).where(eq(sites.id, (audit as any).siteId)).limit(1)
@@ -242,9 +239,9 @@ export const auditRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const audit = await getAuditById(input.auditId, ctx.user.id);
-      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvÇ¸" });
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
       if ((audit as any).status === "closed") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Un audit clÇïturÇ¸ ne peut pas Ç¦tre rouvert" });
+        throw new TRPCError({ code: "FORBIDDEN", message: "Un audit clôturé ne peut pas être rouvert" });
       }
 
       if ((audit as any).status !== "in_progress") {
@@ -259,11 +256,11 @@ export const auditRouter = router({
 
   /**
    * Champs manquants pour un rapport conforme ISO 19011/17021-1/MDR Annexe IX
-   * (TÇ½che D.7, migration 0027, validÇ¸ par l'utilisateur le 2026-07-23).
-   * Tous facultatifs, Ç¸ditables Çÿ tout moment depuis la fiche d'audit
-   * (AuditDetail.tsx) ƒ?" n'allonge pas le parcours de crÇ¸ation. Un champ non
-   * renseignÇ¸ reste `null` ; le rapport affiche alors "Non renseignÇ¸",
-   * jamais de valeur par dÇ¸faut inventÇ¸e.
+   * (Tâche D.7, migration 0027, validé par l'utilisateur le 2026-07-23).
+   * Tous facultatifs, éditables à tout moment depuis la fiche d'audit
+   * (AuditDetail.tsx) — n'allonge pas le parcours de création. Un champ non
+   * renseigné reste `null` ; le rapport affiche alors "Non renseigné",
+   * jamais de valeur par défaut inventée.
    */
   updateReportFields: protectedProcedure
     .input(
@@ -286,7 +283,7 @@ export const auditRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const audit = await getAuditById(input.id, ctx.user.id);
-      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvÇ¸" });
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
 
       const { id, ...fields } = input;
       const patch: Record<string, any> = {};
@@ -301,23 +298,23 @@ export const auditRouter = router({
     }),
 
   /**
-   * Frontend expects: trpc.audit.delete({ id }) (AuditHistory.tsx). VÇ¸rifie
-   * la propriÇ¸tÇ¸ avant suppression (db.deleteAudit ne filtre pas par
-   * userId ƒ?" voir server/db.ts).
+   * Frontend expects: trpc.audit.delete({ id }) (AuditHistory.tsx). Vérifie
+   * la propriété avant suppression (db.deleteAudit ne filtre pas par
+   * userId — voir server/db.ts).
    */
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const audit = await getAuditById(input.id, ctx.user.id);
-      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvÇ¸" });
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
       await deleteAudit(input.id);
       return { success: true };
     }),
 
   /**
-   * Frontend expects: trpc.audit.get({ auditId }) (AuditResults.tsx) ƒ?" audit
-   * + score calculÇ¸ Çÿ la volÇ¸e (mÇ¦me barÇùme que mdr/iso getAuditDashboard),
-   * scopÇ¸ dynamiquement par rÇ¸fÇ¸rentiel/rÇïle (jamais d'ID en dur).
+   * Frontend expects: trpc.audit.get({ auditId }) (AuditResults.tsx) — audit
+   * + score calculé à la volée (même barème que mdr/iso getAuditDashboard),
+   * scopé dynamiquement par référentiel/rôle (jamais d'ID en dur).
    */
   get: protectedProcedure
     .input(z.object({ auditId: z.number() }))
@@ -341,13 +338,13 @@ export const auditRouter = router({
     }),
 
   /**
-   * Frontend expects: trpc.audit.getScore({ auditId }) (Reports.tsx) ƒ?"
-   * MAIS l'appel rÇ¸el (Reports.tsx:18) est `getScore.useQuery({}, ...)`,
-   * sans auditId : la page veut un score global agrÇ¸gÇ¸ (variable nommÇ¸e
+   * Frontend expects: trpc.audit.getScore({ auditId }) (Reports.tsx) —
+   * MAIS l'appel réel (Reports.tsx:18) est `getScore.useQuery({}, ...)`,
+   * sans auditId : la page veut un score global agrégé (variable nommée
    * `globalScore`, champs lus ensuite : `.score`, `.conforme`, `.nok`,
-   * `.na` ƒ?" voir Reports.tsx:95-107), pas le score d'un audit prÇ¸cis.
+   * `.na` — voir Reports.tsx:95-107), pas le score d'un audit précis.
    * auditId rendu optionnel : fourni -> score de cet audit ; omis -> moyenne
-   * sur tous les audits de l'utilisateur, agrÇ¸gÇ¸e avec les noms de champs
+   * sur tous les audits de l'utilisateur, agrégée avec les noms de champs
    * exacts attendus par cette page.
    */
   getScore: protectedProcedure
@@ -388,8 +385,8 @@ export const auditRouter = router({
           total += stats.totalQuestions;
           answered += stats.answered;
         } catch {
-          // audit sans scope rÇ¸solvable (ex. brouillon jamais rattachÇ¸ Çÿ un
-          // rÇ¸fÇ¸rentiel) : exclu de l'agrÇ¸gat plutÇït que de faire Ç¸chouer
+          // audit sans scope résolvable (ex. brouillon jamais rattaché à un
+          // référentiel) : exclu de l'agrégat plutôt que de faire échouer
           // toute la page.
         }
       }
@@ -400,13 +397,13 @@ export const auditRouter = router({
     }),
 
   /**
-   * Ç%tape C (routeur d'audit gÇ¸nÇ¸rique ƒ?" voir CORRECTIONS.md) : Ç¸quivalent
-   * rÇ¸fÇ¸rentiel-agnostique de mdr.getQuestionsForAudit/iso.getQuestionsForAudit.
-   * RÇ¸utilise fetchAuditScopedQuestions (dÇ¸jÇÿ gÇ¸nÇ¸rique : referentialIds,
-   * economicRole, processIds viennent de l'audit lui-mÇ¦me, jamais d'un
-   * rÇ¸fÇ¸rentiel en dur) ƒ?" mÇ¦me mÇ¸canique que celle qui alimente dÇ¸jÇÿ
+   * Étape C (routeur d'audit générique — voir CORRECTIONS.md) : équivalent
+   * référentiel-agnostique de mdr.getQuestionsForAudit/iso.getQuestionsForAudit.
+   * Réutilise fetchAuditScopedQuestions (déjà générique : referentialIds,
+   * economicRole, processIds viennent de l'audit lui-même, jamais d'un
+   * référentiel en dur) — même mécanique que celle qui alimente déjà
    * computeGenericAuditStats pour le score. Sert IVDR/MDSAP (aucun routeur
-   * dÇ¸diÇ¸ aujourd'hui) et, Çÿ terme, tous les rÇ¸fÇ¸rentiels via le futur
+   * dédié aujourd'hui) et, à terme, tous les référentiels via le futur
    * wizard unique. N'affecte pas les routeurs mdr/iso/fda existants.
    */
   getQuestionsForAudit: protectedProcedure
@@ -450,9 +447,9 @@ export const auditRouter = router({
     }),
 
   /**
-   * Ç%tape C : Ç¸quivalent rÇ¸fÇ¸rentiel-agnostique de mdr.saveResponse/
-   * iso.saveResponse ƒ?" la logique y Ç¸tait dÇ¸jÇÿ identique d'un routeur Çÿ
-   * l'autre (audit_responses n'a jamais Ç¸tÇ¸ spÇ¸cifique Çÿ un rÇ¸fÇ¸rentiel),
+   * Étape C : équivalent référentiel-agnostique de mdr.saveResponse/
+   * iso.saveResponse — la logique y était déjà identique d'un routeur à
+   * l'autre (audit_responses n'a jamais été spécifique à un référentiel),
    * seule la duplication changeait. N'affecte pas les routeurs mdr/iso existants.
    */
   saveResponse: protectedProcedure
@@ -524,4 +521,3 @@ export const auditRouter = router({
       return { success: true, mode: "created" as const };
     }),
 });
-
