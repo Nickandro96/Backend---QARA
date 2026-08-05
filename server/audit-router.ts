@@ -229,6 +229,32 @@ export const auditRouter = router({
     }),
 
   /**
+   * Reopen an audit before returning to its questionnaire. A formally closed
+   * audit is immutable; every other lifecycle state can return to in_progress.
+   */
+  reopen: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const audit = await getAuditById(input.auditId, ctx.user.id);
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
+      if ((audit as any).status === "closed") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Un audit clôturé ne peut pas être rouvert" });
+      }
+
+      if ((audit as any).status !== "in_progress") {
+        await db
+          .update(audits)
+          .set({ status: "in_progress", updatedAt: new Date() })
+          .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
+      }
+
+      return { success: true as const, status: "in_progress" as const };
+    }),
+
+  /**
    * Champs manquants pour un rapport conforme ISO 19011/17021-1/MDR Annexe IX
    * (Tâche D.7, migration 0027, validé par l'utilisateur le 2026-07-23).
    * Tous facultatifs, éditables à tout moment depuis la fiche d'audit
