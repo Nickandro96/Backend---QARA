@@ -795,9 +795,9 @@ createOrUpdateAuditDraft: protectedProcedure
         const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
         const whereParts: any[] = [
-        eq((questions as any).referentialId, referentialId),
-        eq((questions as any).isActive, true),
-      ];
+          eq((questions as any).referentialId, referentialId),
+          eq((questions as any).isActive, true),
+        ];
 
         if (processDbIds.length > 0) {
           whereParts.push(
@@ -1009,9 +1009,9 @@ createOrUpdateAuditDraft: protectedProcedure
         const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
         const whereParts: any[] = [
-        eq((questions as any).referentialId, referentialId),
-        eq((questions as any).isActive, true),
-      ];
+          eq((questions as any).referentialId, referentialId),
+          eq((questions as any).isActive, true),
+        ];
 
         if (processDbIds.length > 0) {
           whereParts.push(
