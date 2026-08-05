@@ -321,7 +321,10 @@ export const isoRouter = router({
       const rawProcessIds = (input.processes ?? []).map((p) => String(p).trim()).filter(Boolean);
       const processDbIds = await resolveProcessDbIds(db, rawProcessIds);
 
-      const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+      const whereParts: any[] = [
+        eq((questions as any).referentialId, referentialId),
+        eq((questions as any).isActive, true),
+      ];
 
       if (input.economicRole) {
         whereParts.push(or(isNull((questions as any).economicRole), eq((questions as any).economicRole, input.economicRole)));
@@ -447,10 +450,20 @@ export const isoRouter = router({
 
       let q: any = null;
       if ((input as any).questionId) {
-        const [row] = await db.select().from(questions).where(eq((questions as any).id, (input as any).questionId)).limit(1);
+        const [row] = await db.select().from(questions).where(
+          and(
+            eq((questions as any).id, (input as any).questionId),
+            eq((questions as any).isActive, true)
+          )
+        ).limit(1);
         q = row;
       } else {
-        const [row] = await db.select().from(questions).where(eq((questions as any).questionKey, (input as any).questionKey)).limit(1);
+        const [row] = await db.select().from(questions).where(
+          and(
+            eq((questions as any).questionKey, (input as any).questionKey),
+            eq((questions as any).isActive, true)
+          )
+        ).limit(1);
         q = row;
       }
       if (!q) throw new Error("Question introuvable");
@@ -625,7 +638,10 @@ createOrUpdateAuditDraft: protectedProcedure
         selectedProcessesRaw.map((p: any) => String(p))
       );
 
-      const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+      const whereParts: any[] = [
+        eq((questions as any).referentialId, referentialId),
+        eq((questions as any).isActive, true),
+      ];
 
       if (processDbIds.length > 0) {
         whereParts.push(
@@ -778,7 +794,10 @@ createOrUpdateAuditDraft: protectedProcedure
 
         const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
-        const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+        const whereParts: any[] = [
+          eq((questions as any).referentialId, referentialId),
+          eq((questions as any).isActive, true),
+        ];
 
         if (processDbIds.length > 0) {
           whereParts.push(
@@ -989,7 +1008,10 @@ createOrUpdateAuditDraft: protectedProcedure
 
         const processDbIds = await resolveProcessDbIds(db, processIds.map((p: any) => String(p)));
 
-        const whereParts: any[] = [eq((questions as any).referentialId, referentialId)];
+        const whereParts: any[] = [
+          eq((questions as any).referentialId, referentialId),
+          eq((questions as any).isActive, true),
+        ];
 
         if (processDbIds.length > 0) {
           whereParts.push(

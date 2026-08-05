@@ -54,7 +54,7 @@ export async function loadAuditScoringContext(
     });
   }
 
-  const questionRows = await db.select().from(questions).where(inArray(questions.referentialId, referentialIds));
+  const questionRows = await db.select().from(questions).where(and(inArray(questions.referentialId, referentialIds), eq(questions.isActive, true)));
   const processRows = await db.select().from(processus);
   const processNameById = new Map(processRows.map((p) => [p.id, p.name]));
 
