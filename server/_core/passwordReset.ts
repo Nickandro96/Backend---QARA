@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 1.1 seconds
+Wall time: 1.2 seconds
 Output:
 import { createHash, randomBytes } from "node:crypto";
 
@@ -48,12 +48,12 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "RÃ©initialisation de votre mot de passe QARA",
-      text: `Une rÃ©initialisation de votre mot de passe QARA a Ã©tÃ© demandÃ©e.\n\nChoisissez un nouveau mot de passe : ${resetUrl}\n\nCe lien expire dans 30 minutes et ne peut Ãªtre utilisÃ© qu'une seule fois.\n\nSi vous n'Ãªtes pas Ã  l'origine de cette demande, ignorez cet email.`,
-      html: `<p>Une rÃ©initialisation de votre mot de passe QARA a Ã©tÃ© demandÃ©e.</p>
+      subject: "Réinitialisation de votre mot de passe QARA",
+      text: `Une réinitialisation de votre mot de passe QARA a été demandée.\n\nChoisissez un nouveau mot de passe : ${resetUrl}\n\nCe lien expire dans 30 minutes et ne peut être utilisé qu'une seule fois.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez cet email.`,
+      html: `<p>Une réinitialisation de votre mot de passe QARA a été demandée.</p>
 <p><a href="${safeUrl}">Choisir un nouveau mot de passe</a></p>
-<p>Ce lien expire dans 30 minutes et ne peut Ãªtre utilisÃ© qu'une seule fois.</p>
-<p>Si vous n'Ãªtes pas Ã  l'origine de cette demande, ignorez cet email.</p>`,
+<p>Ce lien expire dans 30 minutes et ne peut être utilisé qu'une seule fois.</p>
+<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
     }),
   });
 
