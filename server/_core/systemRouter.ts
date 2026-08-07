@@ -7,6 +7,7 @@ import { sdk } from "./sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, verifyPassword, isBcryptHash } from "./passwordUtils";
+import { createResetToken, hashResetToken, sendPasswordResetEmail } from "./passwordReset";
 
 function errMsg(e: any) {
   if (!e) return "unknown";
@@ -18,6 +19,48 @@ export const systemRouter = router({
   health: publicProcedure
     .input(z.object({ timestamp: z.number().min(0) }))
     .query(() => ({ ok: true })),
+
+  requestPasswordReset: publicProcedure
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ input }) => {
+      const genericResult = {
+        success: true,
+        message: "Si un compte existe pour cet email, un lien de réinitialisation sera envoyé.",
+      } as const;
+      if (!(await db.getDb())) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Service temporairement indisponible." });
+      }
+      const user = await db.getUserByEmail(input.email.trim());
+
+      if (!user || user.loginMethod !== "local_password") return genericResult;
+
+      const { token, tokenHash, expiresAt } = createResetToken();
+      const created = await db.createPasswordResetToken(user.id, tokenHash, expiresAt);
+      if (!created) return genericResult;
+      try {
+        await sendPasswordResetEmail(user.email, token);
+      } catch (error) {
+        console.error("[PasswordReset] Email delivery failed:", error);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Impossible d'envoyer l'email pour le moment." });
+      }
+      return genericResult;
+    }),
+
+  resetPassword: publicProcedure
+    .input(z.object({ token: z.string().min(32).max(200), password: z.string().min(6).max(200) }))
+    .mutation(async ({ input }) => {
+      const changed = await db.resetPasswordWithToken(
+        hashResetToken(input.token),
+        () => hashPassword(input.password)
+      );
+      if (!changed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Ce lien de réinitialisation est invalide, expiré ou déjà utilisé.",
+        });
+      }
+      return { success: true, message: "Votre mot de passe a été réinitialisé." } as const;
+    }),
 
   /**
    * Route pour s'inscrire avec email et mot de passe
@@ -186,3 +229,4 @@ export const systemRouter = router({
       return { success: true };
     }),
 });
+

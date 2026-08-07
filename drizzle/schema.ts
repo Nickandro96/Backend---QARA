@@ -46,6 +46,23 @@ export const users = mysqlTable(
   })
 );
 
+export const passwordResetTokens = mysqlTable(
+  "password_reset_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenHashUq: uniqueIndex("password_reset_tokens_hash_uq").on(t.tokenHash),
+  })
+);
+
 /* =========================
    USER PROFILES
 ========================= */
@@ -855,3 +872,4 @@ export const auditResponses = audit_responses;
 export const evidenceFiles = mdrEvidenceFiles;
 export const auditChecklistAnswers = audit_responses;
 export const referentielsTable = referentiels;
+

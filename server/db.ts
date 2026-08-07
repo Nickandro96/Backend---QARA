@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 
@@ -10,6 +10,7 @@ import {
   evidenceFiles,
   referentials,
   processus,
+  passwordResetTokens,
 } from "../drizzle/schema";
 
 /**
@@ -732,6 +733,55 @@ export async function getPasswordHash(openId: string) {
   return result.length > 0 ? result[0].passwordHash : undefined;
 }
 
+export async function createPasswordResetToken(userId: number, tokenHash: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.transaction(async (tx) => {
+    const latest = await tx
+      .select({ createdAt: passwordResetTokens.createdAt })
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.userId, userId))
+      .orderBy(desc(passwordResetTokens.createdAt))
+      .limit(1)
+      .for("update");
+    if (latest[0] && Date.now() - latest[0].createdAt.getTime() < 60_000) return false;
+
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
+    await tx.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt });
+    return true;
+  });
+}
+
+export async function resetPasswordWithToken(
+  tokenHash: string,
+  makePasswordHash: () => Promise<string>
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.tokenHash, tokenHash))
+      .limit(1)
+      .for("update");
+    const token = rows[0];
+
+    if (!token || token.usedAt || token.expiresAt.getTime() <= Date.now()) return false;
+
+    const now = new Date();
+    const passwordHash = await makePasswordHash();
+    await tx.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, token.userId));
+    await tx.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.id, token.id));
+    return true;
+  });
+}
+
 export async function updateUserRole(userId: number, role: "user" | "admin") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -788,3 +838,4 @@ export async function upsertUserProfile(
     throw error;
   }
 }
+
