@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 import {
   mysqlTable,
   int,
@@ -43,6 +46,23 @@ export const users = mysqlTable(
   },
   (t) => ({
     emailUq: uniqueIndex("users_email_uq").on(t.email),
+  })
+);
+
+export const passwordResetTokens = mysqlTable(
+  "password_reset_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenHashUq: uniqueIndex("password_reset_tokens_hash_uq").on(t.tokenHash),
   })
 );
 
@@ -102,8 +122,8 @@ export const organisations = mysqlTable("organisations", {
   postalCode: varchar("postalCode", { length: 30 }),
   country: varchar("country", { length: 120 }),
 
-  // Profil réglementaire (Tâche D.7, migration 0027) — tous facultatifs,
-  // "Non renseigné" dans le rapport si absents plutôt qu'une valeur inventée.
+  // Profil rÃ©glementaire (TÃ¢che D.7, migration 0027) â€” tous facultatifs,
+  // "Non renseignÃ©" dans le rapport si absents plutÃ´t qu'une valeur inventÃ©e.
   srn: varchar("srn", { length: 50 }),
   logoUrl: varchar("logoUrl", { length: 2048 }),
   prrcName: varchar("prrcName", { length: 255 }),
@@ -119,7 +139,7 @@ export const organisations = mysqlTable("organisations", {
 });
 
 /* =========================
-   ORGANISATION CERTIFICATES (migration 0027, Tâche D.7)
+   ORGANISATION CERTIFICATES (migration 0027, TÃ¢che D.7)
 ========================= */
 export const organisationCertificates = mysqlTable("organisation_certificates", {
   id: int("id").autoincrement().primaryKey(),
@@ -175,11 +195,11 @@ export const referentiels = mysqlTable("referentiels", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 
-  // Migration 0029, additive. Contrôle la visibilité dans l'étape 0 du
-  // wizard générique (sélection du référentiel) — un référentiel désactivé
-  // reste en base (audits existants intacts), juste masqué du picker.
+  // Migration 0029, additive. ContrÃ´le la visibilitÃ© dans l'Ã©tape 0 du
+  // wizard gÃ©nÃ©rique (sÃ©lection du rÃ©fÃ©rentiel) â€” un rÃ©fÃ©rentiel dÃ©sactivÃ©
+  // reste en base (audits existants intacts), juste masquÃ© du picker.
   // N'affecte aucun autre chemin (referentials.list garde son comportement
-  // actuel par défaut — voir server/routers.ts).
+  // actuel par dÃ©faut â€” voir server/routers.ts).
   enabled: boolean("enabled").notNull().default(true),
 });
 
@@ -187,10 +207,10 @@ export const referentiels = mysqlTable("referentiels", {
    PROCESSUS
 ========================= */
 /**
- * ⚠️ IMPORTANT:
+ * âš ï¸ IMPORTANT:
  * La DB actuelle n'a PAS la colonne `updatedAt` sur la table `processus`.
  * Si on la laisse dans le schema Drizzle => "Unknown column 'updatedAt'".
- * On la retire donc ici pour que toutes les requêtes passent.
+ * On la retire donc ici pour que toutes les requÃªtes passent.
  *
  * (Option propre plus tard : ajouter la colonne via migration SQL.)
  */
@@ -228,12 +248,12 @@ export const audits = mysqlTable("audits", {
   status: varchar("status", { length: 50 }).default("draft").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
-  // ✅ JSON columns (store arrays directly in router; no stringify)
+  // âœ… JSON columns (store arrays directly in router; no stringify)
   processIds: json("processIds"),
   referentialIds: json("referentialIds"),
 
-  // Onboarding (Lot onboarding) : multi-valeurs, en complément de
-  // `economicRole` (singulier, legacy ISO/MDR wizards) — voir
+  // Onboarding (Lot onboarding) : multi-valeurs, en complÃ©ment de
+  // `economicRole` (singulier, legacy ISO/MDR wizards) â€” voir
   // docs/audit/12-onboarding.md.
   economicRoles: json("economicRoles"),
   markets: json("markets"),
@@ -245,15 +265,15 @@ export const audits = mysqlTable("audits", {
   auditorEmail: varchar("auditorEmail", { length: 255 }),
 
   // Champs manquants pour un rapport conforme ISO 19011/17021-1/MDR Annexe IX
-  // (Tâche D.7, migration 0027) — facultatifs, section éditable post-création
+  // (TÃ¢che D.7, migration 0027) â€” facultatifs, section Ã©ditable post-crÃ©ation
   // sur AuditDetail. `auditorName`/`auditorEmail` restent le repli mono-
-  // auditeur historique ; `auditTeam` porte l'équipe complète si renseignée.
+  // auditeur historique ; `auditTeam` porte l'Ã©quipe complÃ¨te si renseignÃ©e.
   auditNature: varchar("auditNature", { length: 50 }), // interne / fournisseur / blanc / revue_conformite
   auditTeam: json("auditTeam"), // [{ name, role, email }]
   auditeesRepresentatives: json("auditeesRepresentatives"), // [{ name, function }]
-  scopeExclusions: text("scopeExclusions"), // exclusions de périmètre + justification
-  plannedAgenda: json("plannedAgenda"), // [{ date, activity }] prévu
-  actualAgenda: json("actualAgenda"), // [{ date, activity }] réalisé
+  scopeExclusions: text("scopeExclusions"), // exclusions de pÃ©rimÃ¨tre + justification
+  plannedAgenda: json("plannedAgenda"), // [{ date, activity }] prÃ©vu
+  actualAgenda: json("actualAgenda"), // [{ date, activity }] rÃ©alisÃ©
 
   startDate: timestamp("startDate"),
   endDate: timestamp("endDate"),
@@ -270,8 +290,8 @@ export const questions = mysqlTable("questions", {
 
   referentialId: int("referentialId"),
   processId: int("processId"),
-  // Intitulé fin du processus du corpus (228 valeurs), distinct de processId
-  // qui référence l'une des 15 catégories canoniques — voir migration 0023.
+  // IntitulÃ© fin du processus du corpus (228 valeurs), distinct de processId
+  // qui rÃ©fÃ©rence l'une des 15 catÃ©gories canoniques â€” voir migration 0023.
   processDetail: varchar("processDetail", { length: 255 }),
 
   questionKey: varchar("questionKey", { length: 255 }),
@@ -285,10 +305,10 @@ export const questions = mysqlTable("questions", {
 
   questionType: varchar("questionType", { length: 50 }),
   questionText: text("questionText"),
-  // Valeur originale (pré-troncature) de questionText, préservée uniquement
-  // pour les questions réécrites par la passe mécanique — voir migration
+  // Valeur originale (prÃ©-troncature) de questionText, prÃ©servÃ©e uniquement
+  // pour les questions rÃ©Ã©crites par la passe mÃ©canique â€” voir migration
   // 0030 et VALIDATION-passe-mecanique.md. NULL pour toute question non
-  // touchée par cette passe.
+  // touchÃ©e par cette passe.
   questionTextSource: text("questionTextSource"),
   isActive: boolean("isActive").notNull().default(true),
   expectedEvidence: text("expectedEvidence"),
@@ -304,8 +324,8 @@ export const questions = mysqlTable("questions", {
   displayOrder: int("displayOrder"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 
-  // Champs riches du corpus vérifié (voir docs/audit/07-import-corpus.md) : préservent
-  // la profondeur d'auditeur et la pédagogie que le mapping vers les colonnes ci-dessus
+  // Champs riches du corpus vÃ©rifiÃ© (voir docs/audit/07-import-corpus.md) : prÃ©servent
+  // la profondeur d'auditeur et la pÃ©dagogie que le mapping vers les colonnes ci-dessus
   // seul ne peut pas porter.
   auditVerifies: text("auditVerifies"),
   relances: json("relances"),
@@ -317,16 +337,16 @@ export const questions = mysqlTable("questions", {
   referenceStatus: varchar("referenceStatus", { length: 255 }),
   officialSource: text("officialSource"),
 
-  // Onboarding (Lot onboarding) : normalisation de `economicRole` (libellés
-  // bruts mêlant FR/EN, rôles et non-rôles) vers les 4 opérateurs
-  // économiques réglementaires + situations particulières (Art. 16/22) —
+  // Onboarding (Lot onboarding) : normalisation de `economicRole` (libellÃ©s
+  // bruts mÃªlant FR/EN, rÃ´les et non-rÃ´les) vers les 4 opÃ©rateurs
+  // Ã©conomiques rÃ©glementaires + situations particuliÃ¨res (Art. 16/22) â€”
   // voir server/onboarding/scopeEngine.ts et docs/audit/12-onboarding.md.
   roleReglementaire: json("roleReglementaire"),
   situationTags: json("situationTags"),
 
-  // Préserve la valeur brute d'economicRole avant normalisation (migration
-  // 0028) — audit/rollback ligne par ligne sans restaurer la sauvegarde
-  // complète. Voir CORRECTIONS.md (table de correspondance des rôles).
+  // PrÃ©serve la valeur brute d'economicRole avant normalisation (migration
+  // 0028) â€” audit/rollback ligne par ligne sans restaurer la sauvegarde
+  // complÃ¨te. Voir CORRECTIONS.md (table de correspondance des rÃ´les).
   economicRoleSource: varchar("economicRoleSource", { length: 255 }),
 });
 
@@ -356,7 +376,7 @@ export const audit_responses = mysqlTable(
     role: varchar("role", { length: 50 }),
     processId: int("processId"),
 
-    // ✅ JSON column (store arrays directly in router; no stringify)
+    // âœ… JSON column (store arrays directly in router; no stringify)
     evidenceFiles: json("evidenceFiles"),
 
     answeredBy: int("answeredBy").references(() => users.id),
@@ -405,10 +425,10 @@ export const actions = mysqlTable("actions", {
 });
 
 /* =========================
-   CAPA — Plan d'action (Lot 3, voir server/capa/ et docs/audit/09-plan-action-capa.md)
-   Distinct de `actions`/`findings` ci-dessus (générique, lié à des `findings`
-   FDA) : ici le plan d'action est généré directement depuis les écarts du
-   moteur de scoring (server/scoring/), scopé par auditId+questionKey.
+   CAPA â€” Plan d'action (Lot 3, voir server/capa/ et docs/audit/09-plan-action-capa.md)
+   Distinct de `actions`/`findings` ci-dessus (gÃ©nÃ©rique, liÃ© Ã  des `findings`
+   FDA) : ici le plan d'action est gÃ©nÃ©rÃ© directement depuis les Ã©carts du
+   moteur de scoring (server/scoring/), scopÃ© par auditId+questionKey.
 ========================= */
 export const capa_actions = mysqlTable(
   "capa_actions",
@@ -453,9 +473,9 @@ export const capa_actions = mysqlTable(
     preuveEfficacite: text("preuveEfficacite"),
     resultatEfficacite: mysqlEnum("resultatEfficacite", ["efficace", "inefficace"]),
 
-    // Section 5/6 du rapport (migration 0027, Tâche D.7) — facultatifs.
+    // Section 5/6 du rapport (migration 0027, TÃ¢che D.7) â€” facultatifs.
     // `mdsapGrade`/`mdsapEscalation` uniquement pertinents quand le
-    // référentiel de l'audit est MDSAP (matrice AU P0002, grade 1-5).
+    // rÃ©fÃ©rentiel de l'audit est MDSAP (matrice AU P0002, grade 1-5).
     rootCauseMethod: varchar("rootCauseMethod", { length: 50 }), // 5_pourquoi / ishikawa / autre
     mdsapGrade: int("mdsapGrade"),
     mdsapEscalation: text("mdsapEscalation"),
@@ -470,7 +490,7 @@ export const capa_actions = mysqlTable(
   })
 );
 
-/** Historique immuable des modifications d'une action CAPA (traçabilité, §8 SPEC-2). */
+/** Historique immuable des modifications d'une action CAPA (traÃ§abilitÃ©, Â§8 SPEC-2). */
 export const capa_action_history = mysqlTable("capa_action_history", {
   id: int("id").autoincrement().primaryKey(),
   actionId: int("actionId")
@@ -556,8 +576,8 @@ export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
 });
 
 /* =========================
-   USER AUDIT SCOPE (Onboarding — source de vérité unique du périmètre,
-   remplace isoQualifications + mdrRoleQualifications fragmentés, voir
+   USER AUDIT SCOPE (Onboarding â€” source de vÃ©ritÃ© unique du pÃ©rimÃ¨tre,
+   remplace isoQualifications + mdrRoleQualifications fragmentÃ©s, voir
    docs/audit/12-onboarding.md)
 ========================= */
 export const userAuditScope = mysqlTable("user_audit_scope", {
@@ -605,7 +625,7 @@ export const auditReports = mysqlTable("audit_reports", {
   auditId: int("auditId").notNull(),
   reportUrl: varchar("reportUrl", { length: 2048 }),
 
-  // Page de garde / exigences de forme D.2-D.3 (migration 0027, Tâche D.7).
+  // Page de garde / exigences de forme D.2-D.3 (migration 0027, TÃ¢che D.7).
   reference: varchar("reference", { length: 50 }),
   version: int("version").notNull().default(1),
   status: mysqlEnum("status", ["draft", "final"]).notNull().default("draft"),
@@ -781,7 +801,7 @@ export const mdrEvidenceFilesRelations = relations(mdrEvidenceFiles, ({ one }) =
 /* =========================
    CONTACT MESSAGES
    Frontend expects trpc.contact.submit/list/updateStatus
-   (client/src/pages/Contact.tsx, AdminContacts.tsx) — voir
+   (client/src/pages/Contact.tsx, AdminContacts.tsx) â€” voir
    INVENTAIRE-BUGS.md #6/#8, table absente jusqu'ici (formulaire public,
    pas d'authentification requise pour soumettre).
 ========================= */
@@ -802,17 +822,17 @@ export const contact_messages = mysqlTable("contact_messages", {
 });
 
 /* =========================
-   Documents obligatoires (bibliothèque de conformité documentaire)
+   Documents obligatoires (bibliothÃ¨que de conformitÃ© documentaire)
 
    trpc.documents.{getAll,getById,getStats,getUserStatus,updateStatus,
-   checkCoherence,explainDocument} (client/src/pages/Documents.tsx) — voir
-   INVENTAIRE-BUGS.md #7, namespace absent jusqu'ici. Tables créées vides :
-   aucun contenu réglementaire (nom/objectif/contenu minimum attendu des
-   documents obligatoires MDR/ISO) n'existe dans ce dépôt ni sur l'ancienne
-   branche `main` sous une forme réutilisable (schéma incompatible, mêmes
-   champs manquants) — à peupler via un import de contenu réel ultérieur,
-   comme le corpus de 473 questions (scripts/import-corpus.mjs), plutôt que
-   d'inventer du contenu de conformité.
+   checkCoherence,explainDocument} (client/src/pages/Documents.tsx) â€” voir
+   INVENTAIRE-BUGS.md #7, namespace absent jusqu'ici. Tables crÃ©Ã©es vides :
+   aucun contenu rÃ©glementaire (nom/objectif/contenu minimum attendu des
+   documents obligatoires MDR/ISO) n'existe dans ce dÃ©pÃ´t ni sur l'ancienne
+   branche `main` sous une forme rÃ©utilisable (schÃ©ma incompatible, mÃªmes
+   champs manquants) â€” Ã  peupler via un import de contenu rÃ©el ultÃ©rieur,
+   comme le corpus de 473 questions (scripts/import-corpus.mjs), plutÃ´t que
+   d'inventer du contenu de conformitÃ©.
 ========================= */
 export const mandatoryDocuments = mysqlTable("mandatory_documents", {
   id: int("id").autoincrement().primaryKey(),
@@ -855,3 +875,4 @@ export const auditResponses = audit_responses;
 export const evidenceFiles = mdrEvidenceFiles;
 export const auditChecklistAnswers = audit_responses;
 export const referentielsTable = referentiels;
+
