@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 2 seconds
-Output:
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "./notification";
