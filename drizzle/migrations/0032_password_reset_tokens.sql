@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 1.1 seconds
+Wall time: 1.9 seconds
 Output:
 CREATE TABLE IF NOT EXISTS `password_reset_tokens` (
   `id` int NOT NULL AUTO_INCREMENT,
