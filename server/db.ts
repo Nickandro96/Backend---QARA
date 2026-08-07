@@ -1,4 +1,7 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+Exit code: 0
+Wall time: 1 seconds
+Output:
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 
@@ -10,11 +13,12 @@ import {
   evidenceFiles,
   referentials,
   processus,
+  passwordResetTokens,
 } from "../drizzle/schema";
 
 /**
  * ---------------------------------------------------------
- * ✅ DRIZZLE MYSQL2 CONNECTION (Railway-friendly + SSL)
+ * âœ… DRIZZLE MYSQL2 CONNECTION (Railway-friendly + SSL)
  * ---------------------------------------------------------
  * Supports multiple env styles:
  *
@@ -34,14 +38,14 @@ import {
  * 5) Generic DB_* split vars:
  *    - DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
  *
- * ✅ Important:
+ * âœ… Important:
  * - Public managed endpoints often require TLS.
  * - We enable ssl={ rejectUnauthorized:false } for managed/public URLs (Railway).
  */
 
 let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
-// ✅ Used to throttle keepalive pings and avoid spamming the DB
+// âœ… Used to throttle keepalive pings and avoid spamming the DB
 let _lastPingAt = 0;
 
 // Cache for schema checks to avoid hitting INFORMATION_SCHEMA on every request
@@ -105,28 +109,28 @@ function parseMysqlUrl(urlString: string, source: string): MysqlCfg | null {
 }
 
 function getMysqlConfigFromEnv(): MysqlCfg | null {
-  // ✅ Prefer private URL inside Railway network (most reliable)
+  // âœ… Prefer private URL inside Railway network (most reliable)
   const privateUrl = pickFirstEnv("MYSQL_PRIVATE_URL");
   if (privateUrl) {
     const parsed = parseMysqlUrl(privateUrl, "MYSQL_PRIVATE_URL");
     if (parsed) return parsed;
   }
 
-  // ✅ Then DATABASE_URL
+  // âœ… Then DATABASE_URL
   const dbUrl = pickFirstEnv("DATABASE_URL");
   if (dbUrl) {
     const parsed = parseMysqlUrl(dbUrl, "DATABASE_URL");
     if (parsed) return parsed;
   }
 
-  // ✅ Then public URL
+  // âœ… Then public URL
   const publicUrl = pickFirstEnv("MYSQL_PUBLIC_URL", "MYSQL_URL");
   if (publicUrl) {
     const parsed = parseMysqlUrl(publicUrl, "MYSQL_PUBLIC_URL");
     if (parsed) return parsed;
   }
 
-  // ✅ Railway split vars (no underscores)
+  // âœ… Railway split vars (no underscores)
   const rh = pickFirstEnv("MYSQLHOST");
   const ru = pickFirstEnv("MYSQLUSER");
   const rp = pickFirstEnv("MYSQLPASSWORD") ?? "";
@@ -144,7 +148,7 @@ function getMysqlConfigFromEnv(): MysqlCfg | null {
     };
   }
 
-  // ✅ Split vars with underscores
+  // âœ… Split vars with underscores
   const uh = pickFirstEnv("MYSQL_HOST");
   const uu = pickFirstEnv("MYSQL_USER");
   const up = pickFirstEnv("MYSQL_PASSWORD") ?? "";
@@ -162,7 +166,7 @@ function getMysqlConfigFromEnv(): MysqlCfg | null {
     };
   }
 
-  // ✅ Generic DB_* split vars (fallback)
+  // âœ… Generic DB_* split vars (fallback)
   const dh = pickFirstEnv("DB_HOST");
   const du = pickFirstEnv("DB_USER");
   const dp = pickFirstEnv("DB_PASSWORD") ?? "";
@@ -207,13 +211,13 @@ export async function getDb() {
         database: cfg.database,
         ...(cfg.ssl ? { ssl: cfg.ssl } : {}),
 
-        // ✅ Railway/proxy stability
+        // âœ… Railway/proxy stability
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         connectTimeout: 10_000,
 
         waitForConnections: true,
-        // ✅ Railway likes smaller pools (avoid "too many connections")
+        // âœ… Railway likes smaller pools (avoid "too many connections")
         connectionLimit: 5,
         queueLimit: 0,
       });
@@ -222,7 +226,7 @@ export async function getDb() {
       _lastPingAt = 0;
     }
 
-    // ✅ Periodic ping (prevents "stale pool" after PROTOCOL_CONNECTION_LOST)
+    // âœ… Periodic ping (prevents "stale pool" after PROTOCOL_CONNECTION_LOST)
     const now = Date.now();
     if (now - _lastPingAt > 30_000) {
       const conn = await _pool.getConnection();
@@ -240,7 +244,7 @@ export async function getDb() {
   } catch (error) {
     console.error("[Database] Failed to connect:", error);
 
-    // ✅ Ensure we can recover on next request
+    // âœ… Ensure we can recover on next request
     try {
       if (_pool) await _pool.end();
     } catch {
@@ -257,7 +261,7 @@ export async function getDb() {
 
 /**
  * ---------------------------------------------------------
- * ✅ Helpers
+ * âœ… Helpers
  * ---------------------------------------------------------
  */
 export function safeJsonParse<T>(value: unknown, fallback: T): T {
@@ -276,7 +280,7 @@ export function safeJsonParse<T>(value: unknown, fallback: T): T {
 
 /**
  * ---------------------------------------------------------
- * ✅ Schema helpers (Railway-safe)
+ * âœ… Schema helpers (Railway-safe)
  * ---------------------------------------------------------
  * Some deployments still have legacy columns (e.g. questions.risks vs questions.risk).
  * Drizzle schemas only expose declared columns, so we sometimes need to know if a
@@ -325,9 +329,9 @@ export async function getUserProfile(userId: number) {
 
   const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (result.length === 0) return undefined;
-  // Renvoyé directement par profile.get (server/routers.ts) au client
-  // authentifié — ne jamais y laisser passwordHash (même faille que
-  // auth.me/ctx.user, un endpoint séparé qui l'exposait indépendamment).
+  // RenvoyÃ© directement par profile.get (server/routers.ts) au client
+  // authentifiÃ© â€” ne jamais y laisser passwordHash (mÃªme faille que
+  // auth.me/ctx.user, un endpoint sÃ©parÃ© qui l'exposait indÃ©pendamment).
   const { passwordHash, ...safeUser } = result[0] as any;
   return { ...safeUser, userId: result[0].id };
 }
@@ -629,7 +633,7 @@ export async function getAllReferentials() {
 }
 
 /**
- * ✅ FIX: processes -> processus (sinon crash)
+ * âœ… FIX: processes -> processus (sinon crash)
  */
 export async function getAllProcesses() {
   const db = await getDb();
@@ -732,6 +736,55 @@ export async function getPasswordHash(openId: string) {
   return result.length > 0 ? result[0].passwordHash : undefined;
 }
 
+export async function createPasswordResetToken(userId: number, tokenHash: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.transaction(async (tx) => {
+    const latest = await tx
+      .select({ createdAt: passwordResetTokens.createdAt })
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.userId, userId))
+      .orderBy(desc(passwordResetTokens.createdAt))
+      .limit(1)
+      .for("update");
+    if (latest[0] && Date.now() - latest[0].createdAt.getTime() < 60_000) return false;
+
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
+    await tx.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt });
+    return true;
+  });
+}
+
+export async function resetPasswordWithToken(
+  tokenHash: string,
+  makePasswordHash: () => Promise<string>
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.tokenHash, tokenHash))
+      .limit(1)
+      .for("update");
+    const token = rows[0];
+
+    if (!token || token.usedAt || token.expiresAt.getTime() <= Date.now()) return false;
+
+    const now = new Date();
+    const passwordHash = await makePasswordHash();
+    await tx.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, token.userId));
+    await tx.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.id, token.id));
+    return true;
+  });
+}
+
 export async function updateUserRole(userId: number, role: "user" | "admin") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -752,9 +805,9 @@ export async function listAllUsers() {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(users).orderBy(desc(users.createdAt));
-  // Renvoyé par system.listUsers (adminProcedure, server/_core/systemRouter.ts)
-  // à l'admin connecté — même règle que ctx.user/profile.get : jamais de
-  // passwordHash dans une réponse API, admin ou non.
+  // RenvoyÃ© par system.listUsers (adminProcedure, server/_core/systemRouter.ts)
+  // Ã  l'admin connectÃ© â€” mÃªme rÃ¨gle que ctx.user/profile.get : jamais de
+  // passwordHash dans une rÃ©ponse API, admin ou non.
   return rows.map(({ passwordHash, ...safe }: any) => safe);
 }
 
@@ -788,3 +841,4 @@ export async function upsertUserProfile(
     throw error;
   }
 }
+
