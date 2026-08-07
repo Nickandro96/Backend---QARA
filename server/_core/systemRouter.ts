@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "./notification";
@@ -7,6 +10,7 @@ import { sdk } from "./sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, verifyPassword, isBcryptHash } from "./passwordUtils";
+import { createResetToken, hashResetToken, sendPasswordResetEmail } from "./passwordReset";
 
 function errMsg(e: any) {
   if (!e) return "unknown";
@@ -18,6 +22,48 @@ export const systemRouter = router({
   health: publicProcedure
     .input(z.object({ timestamp: z.number().min(0) }))
     .query(() => ({ ok: true })),
+
+  requestPasswordReset: publicProcedure
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ input }) => {
+      const genericResult = {
+        success: true,
+        message: "Si un compte existe pour cet email, un lien de rÃ©initialisation sera envoyÃ©.",
+      } as const;
+      if (!(await db.getDb())) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Service temporairement indisponible." });
+      }
+      const user = await db.getUserByEmail(input.email.trim());
+
+      if (!user || user.loginMethod !== "local_password") return genericResult;
+
+      const { token, tokenHash, expiresAt } = createResetToken();
+      const created = await db.createPasswordResetToken(user.id, tokenHash, expiresAt);
+      if (!created) return genericResult;
+      try {
+        await sendPasswordResetEmail(user.email, token);
+      } catch (error) {
+        console.error("[PasswordReset] Email delivery failed:", error);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Impossible d'envoyer l'email pour le moment." });
+      }
+      return genericResult;
+    }),
+
+  resetPassword: publicProcedure
+    .input(z.object({ token: z.string().min(32).max(200), password: z.string().min(6).max(200) }))
+    .mutation(async ({ input }) => {
+      const changed = await db.resetPasswordWithToken(
+        hashResetToken(input.token),
+        () => hashPassword(input.password)
+      );
+      if (!changed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Ce lien de rÃ©initialisation est invalide, expirÃ© ou dÃ©jÃ  utilisÃ©.",
+        });
+      }
+      return { success: true, message: "Votre mot de passe a Ã©tÃ© rÃ©initialisÃ©." } as const;
+    }),
 
   /**
    * Route pour s'inscrire avec email et mot de passe
@@ -39,13 +85,13 @@ export const systemRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
-            "DB indisponible. Vérifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
+            "DB indisponible. VÃ©rifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
         });
       }
 
       const existingUser = await db.getUserByEmail(input.email);
       if (existingUser) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Un utilisateur avec cet email existe déjà" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Un utilisateur avec cet email existe dÃ©jÃ " });
       }
 
       const openId = `local_${input.email}`;
@@ -70,7 +116,7 @@ export const systemRouter = router({
         maxAge: ONE_YEAR_MS,
       });
 
-      return { success: true, message: "Inscription réussie" };
+      return { success: true, message: "Inscription rÃ©ussie" };
     }),
 
   /**
@@ -79,13 +125,13 @@ export const systemRouter = router({
   login: publicProcedure
     .input(z.object({ email: z.string().email(), password: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // ✅ 1) DB check upfront (la cause la + fréquente du 500)
+      // âœ… 1) DB check upfront (la cause la + frÃ©quente du 500)
       const dbConn = await db.getDb();
       if (!dbConn) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
-            "DB indisponible. Vérifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
+            "DB indisponible. VÃ©rifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
         });
       }
 
@@ -101,15 +147,15 @@ export const systemRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
-        // Migration transparente : si le mot de passe stocké n'est pas encore un hash
-        // bcrypt (compte créé avant ce correctif), on le remplace maintenant qu'on a
-        // confirmé le mot de passe en clair — voir passwordUtils.ts.
+        // Migration transparente : si le mot de passe stockÃ© n'est pas encore un hash
+        // bcrypt (compte crÃ©Ã© avant ce correctif), on le remplace maintenant qu'on a
+        // confirmÃ© le mot de passe en clair â€” voir passwordUtils.ts.
         if (!isBcryptHash(storedHash)) {
           await db.storePasswordHash(user.openId, await hashPassword(input.password));
         }
 
-        // Ne met à jour que lastSignedIn : un appel à upsertUser ici sans email/name
-        // enverrait `email: null` sur une colonne NOT NULL et ferait échouer CHAQUE
+        // Ne met Ã  jour que lastSignedIn : un appel Ã  upsertUser ici sans email/name
+        // enverrait `email: null` sur une colonne NOT NULL et ferait Ã©chouer CHAQUE
         // reconnexion (voir docs/audit/02-audit-technique.md, C-06).
         await db.upsertUser({
           openId: user.openId,
@@ -126,7 +172,7 @@ export const systemRouter = router({
         if (!ctx.res || typeof (ctx.res as any).cookie !== "function") {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Réponse HTTP indisponible pour définir le cookie de session (ctx.res.cookie).",
+            message: "RÃ©ponse HTTP indisponible pour dÃ©finir le cookie de session (ctx.res.cookie).",
           });
         }
 
@@ -135,9 +181,9 @@ export const systemRouter = router({
           maxAge: ONE_YEAR_MS,
         });
 
-        return { success: true, message: "Connexion réussie" };
+        return { success: true, message: "Connexion rÃ©ussie" };
       } catch (e: any) {
-        // ✅ 2) Ne plus masquer l’erreur réelle
+        // âœ… 2) Ne plus masquer lâ€™erreur rÃ©elle
         console.error("[Login] ERROR:", e);
         if (e instanceof TRPCError) throw e;
 
@@ -186,3 +232,4 @@ export const systemRouter = router({
       return { success: true };
     }),
 });
+
