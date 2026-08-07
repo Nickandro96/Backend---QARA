@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.2 seconds
-Output:
 import { createHash, randomBytes } from "node:crypto";
 
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
