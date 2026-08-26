@@ -9,6 +9,7 @@ import {
   mdrRoleQualifications,
   sites,
   auditResponses,
+  referentiels,
 } from "../drizzle/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
@@ -257,8 +258,8 @@ async function applyOnboardingScopeFilter(
       .filter((r: any) =>
         matchesScope(
           {
-            roleReglementaire: typeof r.roleReglementaire === "string" ? JSON.parse(r.roleReglementaire) : r.roleReglementaire,
-            situationTags: typeof r.situationTags === "string" ? JSON.parse(r.situationTags) : r.situationTags,
+            roleReglementaire: safeParseArray(r.roleReglementaire),
+            situationTags: safeParseArray(r.situationTags),
           },
           scope
         )
@@ -393,6 +394,23 @@ export async function fetchAuditScopedQuestions(db: any, params: {
   return rows || [];
 }
 
+async function resolveMdrReferentialId(db: any): Promise<number> {
+  const [mdr] = await db
+    .select({ id: referentiels.id })
+    .from(referentiels)
+    .where(eq(referentiels.code, "MDR"))
+    .limit(1);
+
+  if (!mdr?.id) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Le référentiel MDR n'est pas installé dans la base de données.",
+    });
+  }
+
+  return Number(mdr.id);
+}
+
 
 // shared zod enum used by frontend buttons. Les niveaux "0".."5" couvrent les
 // questions questionType=maturity_0_5 (voir server/scoring/types.ts) — sans
@@ -484,6 +502,33 @@ export const mdrRouter = router({
       const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
       const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
+      // Numeric ids are environment-specific. Resolve MDR from its stable code
+      // instead of trusting the frontend's historical `referentialIds: [1]`.
+      const resolvedReferentialIds = [await resolveMdrReferentialId(db)];
+
+      // Do not create an orphan draft or start an audit whose scope contains no
+      // question. The mutation remains atomic from the caller's perspective:
+      // validation happens before any INSERT/UPDATE.
+      if (!input.auditId || input.status === "in_progress") {
+        const availableQuestions = await fetchAuditScopedQuestions(db, {
+          auditId: input.auditId ?? 0,
+          userId: ctx.user.id,
+          economicRole: normalizeEconomicRole(input.economicRole),
+          processIds: input.processIds ?? [],
+          referentialIds: resolvedReferentialIds,
+          select: { id: (questions as any).id },
+        });
+
+        if (availableQuestions.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              `Aucune question MDR ne correspond au profil ${normalizeEconomicRole(input.economicRole)}. ` +
+              "Vérifiez l'import du corpus et le périmètre sélectionné.",
+          });
+        }
+      }
+
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
@@ -492,7 +537,7 @@ export const mdrRouter = router({
         type: resolvedType,
         status: input.status,
 
-        referentialIds: input.referentialIds ?? [],
+        referentialIds: resolvedReferentialIds,
         processIds: input.processIds ?? [],
 
         clientOrganization: input.clientOrganization ?? null,
