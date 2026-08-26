@@ -99,12 +99,16 @@ async function runImport(conn) {
   // FDA_QMSR) — mécanisme différent, sans risque de récurrence : ne
   // s'exécute que si ces codes existent encore comme référentiels distincts,
   // devient définitivement un no-op une fois nettoyé une première fois.
-  for (const code of OLD_FDA_CODES) {
-    const [oldRef] = await db.select().from(referentiels).where(eq(referentiels.code, code));
-    if (oldRef) {
-      console.log(`[REPLACE] Suppression de l'ancien référentiel ${code} (id=${oldRef.id}) et de ses questions...`);
-      await conn.execute("DELETE FROM questions WHERE referentialId = ?", [oldRef.id]);
-      await conn.execute("DELETE FROM referentiels WHERE id = ?", [oldRef.id]);
+  // The standard import is strictly non-destructive. Legacy cleanup requires
+  // an explicit, separately reviewed opt-in.
+  if (process.env.CLEANUP_LEGACY_FDA === "1") {
+    for (const code of OLD_FDA_CODES) {
+      const [oldRef] = await db.select().from(referentiels).where(eq(referentiels.code, code));
+      if (oldRef) {
+        console.log(`[CLEANUP] Suppression de l'ancien référentiel ${code} (id=${oldRef.id}) et de ses questions...`);
+        await conn.execute("DELETE FROM questions WHERE referentialId = ?", [oldRef.id]);
+        await conn.execute("DELETE FROM referentiels WHERE id = ?", [oldRef.id]);
+      }
     }
   }
 
