@@ -406,6 +406,56 @@ export const auditRouter = router({
    * dédié aujourd'hui) et, à terme, tous les référentiels via le futur
    * wizard unique. N'affecte pas les routeurs mdr/iso/fda existants.
    */
+  getAuditContext: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const [audit] = await db
+        .select()
+        .from(audits)
+        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)))
+        .limit(1);
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+      return {
+        auditId: audit.id,
+        auditName: audit.name,
+        userId: audit.userId,
+        siteId: audit.siteId,
+        status: audit.status,
+        economicRole: audit.economicRole,
+        processIds: safeParseArray(audit.processIds).map(String),
+        referentialIds: safeParseArray(audit.referentialIds).map(Number),
+        startDate: audit.startDate,
+        endDate: audit.endDate,
+      };
+    }),
+
+  getResponses: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      return db
+        .select()
+        .from(auditResponses)
+        .where(and(eq(auditResponses.auditId, input.auditId), eq(auditResponses.userId, ctx.user.id)))
+        .orderBy(auditResponses.id);
+    }),
+
+  completeAudit: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await db
+        .update(audits)
+        .set({ status: "completed", updatedAt: new Date() })
+        .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
+      return { success: true as const };
+    }),
+
   getQuestionsForAudit: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
