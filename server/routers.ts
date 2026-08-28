@@ -48,7 +48,7 @@ import { findingsRouter, actionsRouter } from "./findings-router";
 import { contactRouter } from "./contact-router";
 import { documentsRouter } from "./documents-router";
 
-import { storagePut as uploadToS3 } from "./storage";
+import { storageGetSignedUrl, storagePut as uploadToS3 } from "./storage";
 
 // -----------------------------
 // Helpers
@@ -1000,13 +1000,13 @@ export const appRouter = router({
 
         const fileName = `audit-report-${input.auditId}-${input.language}-${Date.now()}.${extension}`;
         const fileKey = `reports/${ctx.user.id}/${fileName}`;
-        const { url: fileUrl } = await uploadToS3(fileKey, buffer, mimeType);
+        const { storageReference } = await uploadToS3(fileKey, buffer, mimeType);
 
         const database = await db.requireDb();
         const insertResult: any = await database.insert(auditReports).values({
           auditId: input.auditId,
           userId: ctx.user.id,
-          reportUrl: fileUrl,
+          reportUrl: storageReference,
           reference: reportData.reportReference,
           version: reportData.reportVersion,
           status: "draft",
@@ -1016,9 +1016,25 @@ export const appRouter = router({
         return {
           success: true,
           reportId: insertResult?.[0]?.insertId ?? insertResult?.insertId,
-          fileUrl,
           fileName,
         };
+      }),
+
+    download: protectedProcedure
+      .input(z.object({ reportId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await db.requireDb();
+        const [report] = await database
+          .select({ reportUrl: auditReports.reportUrl })
+          .from(auditReports)
+          .where(and(eq(auditReports.id, input.reportId), eq(auditReports.userId, ctx.user.id)))
+          .limit(1);
+
+        if (!report?.reportUrl) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Rapport introuvable" });
+        }
+
+        return { url: await storageGetSignedUrl(report.reportUrl), expiresIn: 900 };
       }),
 
     list: protectedProcedure
@@ -1043,7 +1059,10 @@ export const appRouter = router({
           .orderBy(desc(auditReports.createdAt))
           .limit(input.limit);
 
-        return reports;
+        return reports.map(({ reportUrl: storageReference, ...report }) => ({
+          ...report,
+          fileFormat: storageReference?.split(".").pop()?.toLowerCase() ?? null,
+        }));
       }),
 
     get: protectedProcedure

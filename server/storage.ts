@@ -1,52 +1,58 @@
-// server/storage.ts
-//
-// Était un stub vide (`export const storagePut = async () => {};`) — tout
-// appelant qui destructure `{ url }` du résultat plante immédiatement
-// (`Cannot destructure property 'url' of undefined`), confirmé en test réel
-// sur reports.generate (voir INVENTAIRE-BUGS.md #3, second blocage après le
-// correctif processes/processus dans report-generator.ts). Les dépendances
-// @aws-sdk/client-s3 étaient déjà installées (package.json) — l'intention
-// d'un vrai stockage S3 était là, jamais implémentée.
-//
-// Utilise S3 si les variables d'environnement standard sont présentes,
-// sinon retombe sur un stockage disque local (répertoire /tmp) pour que la
-// fonctionnalité ne plante plus en environnement de développement/test —
-// dégradation explicite, pas une solution de production.
-import { writeFile, mkdir } from "node:fs/promises";
-import path from "node:path";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const S3_BUCKET = process.env.AWS_S3_BUCKET;
-const S3_REGION = process.env.AWS_REGION;
+const SIGNED_URL_TTL_SECONDS = 15 * 60;
+
+/**
+ * Required: AWS_S3_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID and
+ * AWS_SECRET_ACCESS_KEY. The AWS SDK reads credentials from its standard
+ * provider chain.
+ */
+function getS3Config() {
+  const bucket = process.env.AWS_S3_BUCKET;
+  const region = process.env.AWS_REGION;
+  if (!bucket || !region) {
+    const suffix = process.env.NODE_ENV === "production" ? " in production" : "";
+    throw new Error(`S3 not configured — cannot store report${suffix}`);
+  }
+  return { bucket, region };
+}
+
+export function buildStoredObjectReference(bucket: string, key: string): string {
+  return `s3://${bucket}/${key}`;
+}
+
+export function parseStoredObjectReference(reference: string, expectedBucket: string): string {
+  const prefix = `s3://${expectedBucket}/`;
+  if (reference.startsWith(prefix)) return reference.slice(prefix.length);
+
+  const globalPrefix = `https://${expectedBucket}.s3.amazonaws.com/`;
+  if (reference.startsWith(globalPrefix)) return decodeURIComponent(reference.slice(globalPrefix.length));
+
+  const regionalPrefix = `https://${expectedBucket}.s3.`;
+  if (reference.startsWith(regionalPrefix)) {
+    const pathStart = reference.indexOf("/", regionalPrefix.length);
+    if (pathStart >= 0) return decodeURIComponent(reference.slice(pathStart + 1));
+  }
+  throw new Error("Unsupported report storage reference");
+}
 
 export async function storagePut(
   key: string,
   body: Buffer,
   contentType: string
-): Promise<{ url: string }> {
-  if (S3_BUCKET && S3_REGION) {
-    const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
-    const client = new S3Client({ region: S3_REGION });
-    await client.send(
-      new PutObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-      })
-    );
-    return { url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}` };
-  }
+): Promise<{ storageReference: string }> {
+  const { bucket, region } = getS3Config();
+  const client = new S3Client({ region });
+  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+  return { storageReference: buildStoredObjectReference(bucket, key) };
+}
 
-  // Dégradation locale : AWS_S3_BUCKET/AWS_REGION non configurés (dev/test,
-  // ou pas encore provisionné en production) — écrit sur disque plutôt que
-  // de planter, avec un avertissement explicite dans les logs serveur.
-  console.warn(
-    `[storage] AWS_S3_BUCKET/AWS_REGION non configurés — stockage local de secours pour "${key}". ` +
-      `Configurer ces variables d'environnement pour un stockage S3 réel en production.`
-  );
-  const localDir = path.join("/tmp", "qara-local-storage", path.dirname(key));
-  await mkdir(localDir, { recursive: true });
-  const localPath = path.join("/tmp", "qara-local-storage", key);
-  await writeFile(localPath, body);
-  return { url: `file://${localPath}` };
+export async function storageGetSignedUrl(reference: string): Promise<string> {
+  const { bucket, region } = getS3Config();
+  const key = parseStoredObjectReference(reference, bucket);
+  const client = new S3Client({ region });
+  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+    expiresIn: SIGNED_URL_TTL_SECONDS,
+  });
 }
