@@ -223,7 +223,7 @@ export const appRouter = router({
    */
   sites: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      const database = await db.getDb();
+      const database = await db.requireDb();
 
       const rows = await database
         .select()
@@ -258,7 +258,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const database = await db.getDb();
+        const database = await db.requireDb();
 
         const values = {
           userId: ctx.user.id,
@@ -292,7 +292,7 @@ export const appRouter = router({
       }),
 
     getDefaultOrCreate: protectedProcedure.query(async ({ ctx }) => {
-      const database = await db.getDb();
+      const database = await db.requireDb();
 
       const [existing] = await database
         .select()
@@ -381,7 +381,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const database = await db.getDb();
+        const database = await db.requireDb();
         if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
         const org = await db.getOrganisationByIdAndUserId(input.id, ctx.user.id);
@@ -405,7 +405,7 @@ export const appRouter = router({
       list: protectedProcedure
         .input(z.object({ organisationId: z.number() }))
         .query(async ({ ctx, input }) => {
-          const database = await db.getDb();
+          const database = await db.requireDb();
           if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
           const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
@@ -431,7 +431,7 @@ export const appRouter = router({
           })
         )
         .mutation(async ({ ctx, input }) => {
-          const database = await db.getDb();
+          const database = await db.requireDb();
           if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
           const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
@@ -462,7 +462,7 @@ export const appRouter = router({
       delete: protectedProcedure
         .input(z.object({ id: z.number(), organisationId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          const database = await db.getDb();
+          const database = await db.requireDb();
           if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
           const org = await db.getOrganisationByIdAndUserId(input.organisationId, ctx.user.id);
@@ -1002,7 +1002,7 @@ export const appRouter = router({
         const fileKey = `reports/${ctx.user.id}/${fileName}`;
         const { url: fileUrl } = await uploadToS3(fileKey, buffer, mimeType);
 
-        const database = await db.getDb();
+        const database = await db.requireDb();
         const insertResult: any = await database.insert(auditReports).values({
           auditId: input.auditId,
           userId: ctx.user.id,
@@ -1029,7 +1029,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const database = await db.getDb();
+        const database = await db.requireDb();
 
         const conditions = [eq(auditReports.userId, ctx.user.id)];
         if (input.auditId) {
@@ -1049,7 +1049,7 @@ export const appRouter = router({
     get: protectedProcedure
       .input(z.object({ reportId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const database = await db.getDb();
+        const database = await db.requireDb();
         const [report] = await database
           .select()
           .from(auditReports)
@@ -1065,7 +1065,7 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ reportId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const database = await db.getDb();
+        const database = await db.requireDb();
         await database
           .delete(auditReports)
           .where(and(eq(auditReports.id, input.reportId), eq(auditReports.userId, ctx.user.id)));
@@ -1081,11 +1081,10 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const comparison = await db.compareAudits(input.audit1Id, input.audit2Id, ctx.user.id);
-        if (!comparison) {
-          throw new Error("Unable to compare audits. Make sure both audits exist and belong to you.");
-        }
-        return comparison;
+        throw new TRPCError({
+          code: "METHOD_NOT_SUPPORTED",
+          message: "La comparaison de rapports n'est pas encore disponible dans le générateur V2",
+        });
       }),
   }),
 });

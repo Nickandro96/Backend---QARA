@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
-import { getDb, hasColumn, listAuditsByUserId } from "./db";
+import { getDb, requireDb, hasColumn, listAuditsByUserId } from "./db";
 
 import {
   audits,
@@ -207,12 +207,12 @@ export const isoRouter = router({
   }),
 
   getProcesses: protectedProcedure.query(async () => {
-    const db = await getDb();
+    const db = await requireDb();
     return db.select().from(processus).orderBy((processus as any).name ?? sql`name`);
   }),
 
   getSites: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
+    const db = await requireDb();
     return db
       .select()
       .from(sites)
@@ -224,7 +224,7 @@ export const isoRouter = router({
   // Qualification (persisted)
   // ---------------------------------------------------------------------------
   getQualification: protectedProcedure.input(z.object({}).optional()).query(async ({ ctx }) => {
-    const db = await getDb();
+    const db = await requireDb();
     const [row] = await db
       .select()
       .from(isoQualifications)
@@ -275,7 +275,7 @@ export const isoRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
+      const db = await requireDb();
 
       const values: any = {
         userId: ctx.user.id,
@@ -315,7 +315,7 @@ export const isoRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const db = await getDb();
+      const db = await requireDb();
       const referentialId = await resolveReferentialId(db, input.standard);
 
       const rawProcessIds = (input.processes ?? []).map((p) => String(p).trim()).filter(Boolean);
@@ -340,7 +340,7 @@ export const isoRouter = router({
       }
 
       const rows = await db
-        .select(questionSelect)
+        .select()
         .from(questions)
         .where(and(...whereParts))
         .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
@@ -354,7 +354,7 @@ export const isoRouter = router({
   getAuditContext: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
+      const db = await requireDb();
       const [a] = await db
         .select()
         .from(audits)
@@ -379,7 +379,7 @@ export const isoRouter = router({
   getResponses: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
+      const db = await requireDb();
 
       // ✅ Ownership check via audits table (robust even if schema evolves)
       const [audit] = await db
@@ -400,7 +400,7 @@ export const isoRouter = router({
   completeAudit: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
+      const db = await requireDb();
       await db
         .update(audits)
         .set({ status: "completed", updatedAt: new Date() } as any)
@@ -439,7 +439,7 @@ export const isoRouter = router({
       ])
     )
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
+      const db = await requireDb();
 
       const [a] = await db
         .select({ id: (audits as any).id })
@@ -538,7 +538,7 @@ createOrUpdateAuditDraft: protectedProcedure
     })
   )
   .mutation(async ({ ctx, input }) => {
-    const db = await getDb();
+    const db = await requireDb();
     const referentialId = await resolveReferentialId(db, input.standardCode);
 
     const inputProcessIdsRaw = Array.isArray(input.processIds) ? input.processIds : [];

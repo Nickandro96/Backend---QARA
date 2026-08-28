@@ -41,7 +41,8 @@ import {
  */
 
 let _pool: mysql.Pool | null = null;
-let _db: ReturnType<typeof drizzle> | null = null;
+type Database = ReturnType<typeof drizzle<Record<string, never>, mysql.Pool>>;
+let _db: Database | null = null;
 // ✅ Used to throttle keepalive pings and avoid spamming the DB
 let _lastPingAt = 0;
 
@@ -236,7 +237,7 @@ export async function getDb() {
       console.log("[Database] MySQL ping OK");
     }
 
-    _db = drizzle(_pool);
+    _db = drizzle<Record<string, never>, mysql.Pool>(_pool);
     return _db;
   } catch (error) {
     console.error("[Database] Failed to connect:", error);
@@ -253,6 +254,12 @@ export async function getDb() {
 
     return null;
   }
+}
+
+export async function requireDb(): Promise<NonNullable<Awaited<ReturnType<typeof getDb>>>> {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  return database;
 }
 
 

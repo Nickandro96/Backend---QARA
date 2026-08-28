@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { TRPCError } from "@trpc/server";
-import { legacyReportGenerationDisabled } from "./legacyGeneration.ts";
+import { legacyReportGenerationDisabled } from "./legacyGeneration";
 
 test("legacy report generation is rejected before an audit id can be read", () => {
   assert.throws(

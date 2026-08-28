@@ -135,7 +135,7 @@ export const systemRouter = router({
       try {
         const user = await db.getUserByEmail(input.email);
 
-        if (!user) {
+        if (!user || !user.openId || !user.email) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 

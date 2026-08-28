@@ -12,7 +12,7 @@
  */
 
 import PDFDocument from "pdfkit";
-import { getDb } from "./db";
+import { requireDb } from "./db";
 import { audits, findings, actions, auditResponses, questions, referentials, processus, sites, evidenceFiles, users } from "../drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { generateRadarChart, generateHistogramChart, generateHeatmapChart, generateTimelineChart } from './report-charts';
@@ -95,7 +95,7 @@ export async function generateAuditReport(options: ReportOptions): Promise<Buffe
 // ============================================================================
 
 async function fetchAuditData(auditId: number): Promise<AuditData> {
-  const db = await getDb();
+  const db = await requireDb();
   
   // Fetch audit
   const [audit] = await db.select().from(audits).where(eq(audits.id, auditId));
@@ -211,8 +211,16 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     : null;
 
   // Fetch referentials and processes
-  const referentialIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
-  const processIds = audit.processIds ? JSON.parse(audit.processIds) : [];
+  const parseIds = (value: unknown): number[] => {
+    const raw = Array.isArray(value)
+      ? value
+      : typeof value === "string" && value.length > 0
+        ? JSON.parse(value)
+        : [];
+    return Array.isArray(raw) ? raw.map(Number).filter(Number.isFinite) : [];
+  };
+  const referentialIds = parseIds(audit.referentialIds);
+  const processIds = parseIds(audit.processIds);
 
   const auditReferentials = referentialIds.length > 0
     ? await db.select().from(referentials).where(inArray(referentials.id, referentialIds))
@@ -316,7 +324,7 @@ async function generateCompleteReport(
   const buffers: Buffer[] = [];
 
   // Collect PDF data chunks
-  doc.on("data", (chunk) => buffers.push(chunk));
+  doc.on("data", (chunk: Buffer) => buffers.push(chunk));
 
   // SECTION 1: Cover Page
   generateCoverPage(doc, data, options);
