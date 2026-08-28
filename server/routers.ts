@@ -33,6 +33,7 @@ import { assembleReportData } from "./report/reportData";
 import { renderReportPdf } from "./report/pdfRenderer";
 import { renderReportWord } from "./report/wordRenderer";
 import { renderReportExcel } from "./report/excelRenderer";
+import { legacyReportGenerationDisabled } from "./report/legacyGeneration";
 import {
   auditReports,
   sites as sitesTable,
@@ -958,52 +959,7 @@ export const appRouter = router({
           language: z.enum(["fr", "en"]).optional().default("fr"),
         })
       )
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const pdfBuffer = await generateAuditReport(input);
-
-          // Upload to S3
-          const fileName = `audit-report-${input.auditId}-${Date.now()}.pdf`;
-          const fileKey = `reports/${ctx.user.id}/${fileName}`;
-          const { url: fileUrl } = await uploadToS3(fileKey, pdfBuffer, "application/pdf");
-
-          // Save report metadata to database.
-          //
-          // ⚠️ CAUSE RACINE (CORRECTIONS.md, audit des colonnes fantômes) :
-          // cet insert visait reportType/reportTitle/reportVersion/fileKey/
-          // fileFormat/generatedBy/metadata — aucune de ces colonnes n'existe
-          // sur `audit_reports` (5 colonnes réelles seulement : id/userId/
-          // auditId/reportUrl/createdAt, voir drizzle/schema.ts). Drizzle
-          // ignore silencieusement les clés qui ne correspondent à aucune
-          // colonne définie — aucune erreur, mais `reportUrl` (la seule
-          // colonne qui compte : l'URL du fichier réel) n'était JAMAIS
-          // renseigné. Vérifié en direct : les 6 rapports générés
-          // pendant les tests de cette session ont tous `reportUrl = NULL`
-          // en base, rendant l'historique (/reports/history) inutilisable
-          // — impossible de retélécharger un rapport déjà généré.
-          // Corrigé a minima ici (insert sur les seules colonnes réelles) ;
-          // une vraie table d'historique multi-format (PDF/Word/Excel,
-          // langue, type) nécessite une migration additive, proposée
-          // séparément pour D.5.
-          const database = await db.getDb();
-          const insertResult: any = await database.insert(auditReports).values({
-            auditId: input.auditId,
-            userId: ctx.user.id,
-            reportUrl: fileUrl,
-          });
-          const report = { id: insertResult?.[0]?.insertId ?? insertResult?.insertId };
-
-          return {
-            success: true,
-            reportId: report.id,
-            fileUrl,
-            fileName,
-          };
-        } catch (error: any) {
-          console.error("[Reports] Generate error:", error);
-          throw new Error(`Failed to generate report: ${error.message}`);
-        }
-      }),
+      .mutation(() => legacyReportGenerationDisabled()),
 
     /**
      * Tâche D — nouveau générateur (PDF/Word/Excel, bilingue), consomme
