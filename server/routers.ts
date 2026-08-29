@@ -972,8 +972,8 @@ export const appRouter = router({
           evidenceCount: reportData.evidenceIndex.length,
         };
         const suggestion = await callAssistant(
-          "Tu aides un auditeur qualité à rédiger une conclusion. Utilise exclusivement les faits fournis, n'invente aucune conformité, preuve ou action. Rédige 2 à 4 paragraphes sobres, précis et présentables, en signalant les réserves et éléments manquants. Le texte restera modifiable et soumis à validation humaine.",
-          [{ role: "user", content: `Rédige la conclusion en ${input.language === "fr" ? "français" : "anglais"}. Faits: ${JSON.stringify(facts)}` }]
+          "Tu aides un auditeur qualit\u00e9 \u00e0 r\u00e9diger une conclusion. Utilise exclusivement les faits fournis, n'invente aucune conformit\u00e9, preuve ou action. R\u00e9dige 2 \u00e0 4 paragraphes sobres, pr\u00e9cis et pr\u00e9sentables, en signalant les r\u00e9serves et \u00e9l\u00e9ments manquants. Le texte restera modifiable et soumis \u00e0 validation humaine.",
+          [{ role: "user", content: `R\u00e9dige la conclusion en ${input.language === "fr" ? "fran\u00e7ais" : "anglais"}. Faits: ${JSON.stringify(facts)}` }]
         );
         return { suggestion };
       }),
