@@ -269,9 +269,9 @@ export async function renderReportWord(data: ReportData): Promise<Buffer> {
     sub(L("systemAptitude")),
     body(data.verdictPhrase),
     sub(L("recommendation")),
-    body(data.verdictPhrase),
+    body(data.conclusion),
     sub(L("nextSteps")),
-    body(notProvided()),
+    body(data.nextSteps ?? notProvided()),
   ];
 
   // ---- Section 8 — annexes ----
@@ -288,7 +288,12 @@ export async function renderReportWord(data: ReportData): Promise<Buffer> {
   if (data.auditeesRepresentatives.length === 0) section8.push(body(notProvided()));
   else data.auditeesRepresentatives.forEach((rp) => section8.push(body(`• ${rp.name}${rp.function ? ` — ${rp.function}` : ""}`)));
 
-  section8.push(sub(L("annexAgenda")), body(notProvided()));
+  section8.push(sub(L("annexAgenda")));
+  if (data.plannedAgenda.length === 0 && data.actualAgenda.length === 0) section8.push(body(notProvided()));
+  else {
+    data.plannedAgenda.forEach((item) => section8.push(body(`Prévu - ${item.date}: ${item.activity}`)));
+    data.actualAgenda.forEach((item) => section8.push(body(`Réalisé - ${item.date}: ${item.activity}`)));
+  }
   section8.push(sub(L("annexGlossary")), body("SMQ / QMS, NC, CAPA, PRRC, MDR, IVDR, MDSAP, ISO, OFI"));
   section8.push(sub(L("annexVersions")));
   if (data.reportVersionHistory.length === 0) section8.push(body(notProvided()));

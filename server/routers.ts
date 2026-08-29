@@ -23,7 +23,7 @@ import { scoringRouter } from "./scoring/scoringRouter";
 import { capaRouter } from "./capa/capaRouter";
 import { reportRouter } from "./report/reportRouter";
 import { onboardingRouter } from "./onboarding/onboardingRouter";
-import { assistantRouter } from "./assistant/assistant-router";
+import { assistantRouter, callAssistant } from "./assistant/assistant-router";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
@@ -34,6 +34,7 @@ import { renderReportPdf } from "./report/pdfRenderer";
 import { renderReportWord } from "./report/wordRenderer";
 import { renderReportExcel } from "./report/excelRenderer";
 import { legacyReportGenerationDisabled } from "./report/legacyGeneration";
+import { assessReportCompleteness } from "./report/completeness";
 import {
   auditReports,
   sites as sitesTable,
@@ -944,6 +945,39 @@ export const appRouter = router({
   // Reports
   // --------------------------------------------
   reports: router({
+    prepare: requireCapability("canExportReports")
+      .input(z.object({ auditId: z.number(), language: z.enum(["fr", "en"]).default("fr") }))
+      .query(async ({ ctx, input }) => {
+        const reportData = await assembleReportData(input.auditId, ctx.user.id, input.language);
+        return assessReportCompleteness(reportData);
+      }),
+
+    suggestConclusion: requireCapability("canExportReports")
+      .input(z.object({ auditId: z.number(), language: z.enum(["fr", "en"]).default("fr") }))
+      .mutation(async ({ ctx, input }) => {
+        const reportData = await assembleReportData(input.auditId, ctx.user.id, input.language);
+        const assessment = assessReportCompleteness(reportData);
+        if (assessment.blocking.length) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: assessment.blocking.join(". ") });
+        }
+        const facts = {
+          audit: reportData.auditName,
+          referentials: reportData.referentialNames,
+          scope: reportData.processScope,
+          score: reportData.globalScore,
+          responses: reportData.breakdown,
+          gaps: reportData.gapsByGravite,
+          gapCount: reportData.gapRegister.length,
+          capaCount: reportData.capaPlan.length,
+          evidenceCount: reportData.evidenceIndex.length,
+        };
+        const suggestion = await callAssistant(
+          "Tu aides un auditeur qualité à rédiger une conclusion. Utilise exclusivement les faits fournis, n'invente aucune conformité, preuve ou action. Rédige 2 à 4 paragraphes sobres, précis et présentables, en signalant les réserves et éléments manquants. Le texte restera modifiable et soumis à validation humaine.",
+          [{ role: "user", content: `Rédige la conclusion en ${input.language === "fr" ? "français" : "anglais"}. Faits: ${JSON.stringify(facts)}` }]
+        );
+        return { suggestion };
+      }),
+
     // Front expects: trpc.reports.generate(...) - gaté client-side par
     // hasCapability("canExportReports", ...) dans Reports.tsx. Jamais
     // contrôlé côté serveur jusqu'ici (voir server/plans/capabilities.ts).
@@ -976,10 +1010,28 @@ export const appRouter = router({
           auditId: z.number(),
           format: z.enum(["pdf", "word", "excel"]),
           language: z.enum(["fr", "en"]).default("fr"),
+          conclusion: z.string().trim().min(20).max(8000).optional(),
+          nextSteps: z.string().trim().max(8000).optional(),
+          distributionList: z.string().trim().max(2000).optional(),
+          allowIncomplete: z.boolean().default(false),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const reportData = await assembleReportData(input.auditId, ctx.user.id, input.language);
+        const assessment = assessReportCompleteness(reportData);
+        if (assessment.blocking.length) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: assessment.blocking.join(". ") });
+        }
+        if (assessment.missingCritical.length && !input.allowIncomplete) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Rapport incomplet : ${assessment.missingCritical.join(", ")}`,
+          });
+        }
+        reportData.conclusion = input.conclusion || assessment.defaultConclusion;
+        reportData.nextSteps = input.nextSteps || assessment.defaultNextSteps;
+        reportData.distributionList = input.distributionList || null;
+        reportData.reportStatus = assessment.missingCritical.length ? "draft" : "final";
 
         let buffer: Buffer;
         let mimeType: string;
@@ -1009,7 +1061,7 @@ export const appRouter = router({
           reportUrl: storageReference,
           reference: reportData.reportReference,
           version: reportData.reportVersion,
-          status: "draft",
+          status: reportData.reportStatus,
           language: input.language,
         });
 

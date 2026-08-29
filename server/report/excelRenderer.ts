@@ -62,6 +62,8 @@ export async function renderReportExcel(data: ReportData): Promise<Buffer> {
   summary.addRow([L("criticalityObservation"), data.gapsByGravite.observation]);
   summary.addRow([]);
   summary.addRow([L("verdict"), data.verdictPhrase]);
+  summary.addRow([L("recommendation"), data.conclusion]);
+  summary.addRow([L("nextSteps"), data.nextSteps ?? notProvided()]);
   summary.getColumn(1).font = { bold: true };
 
   // ---------------- Onglet Détail Q-R ----------------

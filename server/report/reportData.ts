@@ -135,6 +135,10 @@ export interface ReportData {
   reportVersion: number;
   reportStatus: "draft" | "final";
   distributionList: string | null;
+  conclusion: string;
+  nextSteps: string | null;
+  plannedAgenda: Array<{ date: string; activity: string }>;
+  actualAgenda: Array<{ date: string; activity: string }>;
 
   // Section 1
   scopeExclusions: string | null;
@@ -488,6 +492,10 @@ export async function assembleReportData(
     reportVersion: reportRows.length + 1,
     reportStatus: "draft",
     distributionList: null,
+    conclusion: computeVerdictPhrase(dashboardStats.score, built.syntheseExecutive.ecartsCritiques, language),
+    nextSteps: null,
+    plannedAgenda: safeJsonParse((audit as any).plannedAgenda, []),
+    actualAgenda: safeJsonParse((audit as any).actualAgenda, []),
 
     scopeExclusions: (audit as any).scopeExclusions ?? null,
 

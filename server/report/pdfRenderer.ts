@@ -329,10 +329,10 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
   p(data.verdictPhrase);
   doc.moveDown(0.5);
   h2(L("recommendation"));
-  p(data.verdictPhrase);
+  p(data.conclusion);
   doc.moveDown(0.5);
   h2(L("nextSteps"));
-  p(notProvided());
+  p(data.nextSteps ?? notProvided());
 
   // ============================================================
   // SECTION 8 — ANNEXES
@@ -370,7 +370,11 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
 
   doc.moveDown(0.5);
   h2(L("annexAgenda"));
-  p(notProvided());
+  if (data.plannedAgenda.length === 0 && data.actualAgenda.length === 0) p(notProvided());
+  else {
+    data.plannedAgenda.forEach((item) => p(`Prévu - ${item.date}: ${item.activity}`));
+    data.actualAgenda.forEach((item) => p(`Réalisé - ${item.date}: ${item.activity}`));
+  }
 
   doc.moveDown(0.5);
   h2(L("annexGlossary"));
@@ -397,11 +401,12 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       `${data.reportReference} — ${L("version")} ${data.reportVersion} — ${L("confidential")}`,
       PAGE_MARGIN,
       bottom,
-      { width: doc.page.width - 2 * PAGE_MARGIN - 80, align: "left" }
+      { width: doc.page.width - 2 * PAGE_MARGIN - 80, align: "left", lineBreak: false }
     );
     doc.text(`${L("page")} ${i + 1} ${L("of")} ${total}`, doc.page.width - PAGE_MARGIN - 100, bottom, {
       width: 100,
       align: "right",
+      lineBreak: false,
     });
     doc.fillColor("black");
   }
