@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "esbuild server/_core/index.ts --platform=node --bundle --format=esm --outfile=dist/index.js --external:./node_modules/* && esbuild server/services/watch/watchWorker.ts --platform=node --bundle --format=esm --outfile=dist/watchWorker.js --external:./node_modules/* && node scripts/verify-build.mjs",
@@ -29,6 +32,7 @@
     "docx": "^9.7.1",
     "dotenv": "^17.2.2",
     "drizzle-orm": "^0.44.7",
+    "esbuild": "^0.25.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "jose": "6.1.0",
@@ -38,6 +42,7 @@
     "pdfkit": "^0.17.2",
     "stripe": "^20.2.0",
     "superjson": "^1.13.3",
+    "tsx": "^4.19.1",
     "xlsx": "^0.18.5",
     "zod": "^4.1.12"
   },
@@ -48,9 +53,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.7.0",
     "drizzle-kit": "^0.31.4",
-    "esbuild": "^0.25.0",
     "ts-node": "^10.9.2",
-    "tsx": "^4.19.1",
     "typescript": "5.9.3"
   }
 }
