@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm run build"
 
 [deploy]
-startCommand = "pnpm start"
-preDeployCommand = "pnpm release"
+startCommand = "node dist/watchWorker.js"
+cronSchedule = "0 */6 * * *"
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 1
