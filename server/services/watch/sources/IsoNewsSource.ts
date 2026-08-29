@@ -38,7 +38,8 @@ export const IsoNewsSource: UpdateSource = {
       const filtered = parsed.filter((it) => /\bISO\s*(9001|13485)\b/i.test(it.title) || /quality\s+management/i.test(it.title));
 
       const items = filtered.slice(0, 50).map((it) => {
-        const publishedAt = it.pubDate ?? nowUtc();
+        const publishedAt = it.pubDate ?? null;
+        if (!publishedAt) console.warn("[Watch][ISO] publication date absent; preserving null", { sourceUrl: it.link });
         const title = it.title;
         return {
           type: "QUALITY" as const,

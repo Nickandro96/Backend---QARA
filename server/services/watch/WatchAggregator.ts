@@ -15,6 +15,7 @@ import { EurLexMdrSource } from "./sources/EurLexMdrSource";
 import { MdcgSource } from "./sources/MdcgSource";
 import { HarmonisedStandardsSource } from "./sources/HarmonisedStandardsSource";
 import { IsoNewsSource } from "./sources/IsoNewsSource";
+import { FederalRegisterSource } from "./sources/FederalRegisterSource";
 
 import {
   createRefreshRun,
@@ -24,13 +25,17 @@ import {
   upsertUpdates,
   getCompanyProfile,
   upsertCompanyProfile,
+  upsertSourceRegistry,
+  updateSourceCollectionState,
 } from "./WatchStore";
+import { REGULATORY_SOURCE_REGISTRY } from "./registry";
 
 const DEFAULT_SOURCES: UpdateSource[] = [
   EurLexMdrSource,
   MdcgSource,
   HarmonisedStandardsSource,
   IsoNewsSource,
+  FederalRegisterSource,
 ];
 
 const STALE_HOURS = Number(process.env.WATCH_STALE_HOURS ?? "6");
@@ -131,7 +136,7 @@ export async function triggerRefresh(
   return { started: true };
 }
 
-async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void> {
+export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void> {
   const startedAt = nowUtc();
 
   // 1) Create refresh run (may fail if tables not migrated)
@@ -157,6 +162,11 @@ async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void
   const errors: string[] = [];
   const sources = DEFAULT_SOURCES;
 
+  for (const source of REGULATORY_SOURCE_REGISTRY) {
+    try { await upsertSourceRegistry({ ...source, createdAt: new Date(), updatedAt: new Date() }); }
+    catch (error) { errors.push(`[${source.name}] registry sync failed: ${asErrorMessage(error)}`); }
+  }
+
   // 2) Fetch sources in parallel, but isolate failures per source.
   const results = await Promise.all(
     sources.map(async (s) => {
@@ -180,6 +190,12 @@ async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void
   );
 
   const health = results.map((r) => r.health);
+  await Promise.all(health.map(async (item) => {
+    const id = sourceRegistryIdFor(item.name);
+    if (!id) return;
+    try { await updateSourceCollectionState({ id, ok: item.ok, error: item.message }); }
+    catch (error) { errors.push(`[${item.name}] health persistence failed: ${asErrorMessage(error)}`); }
+  }));
   lastHealth = health;
   lastDegraded = health.some((h) => !h.ok) || errors.length > 0;
 
@@ -193,6 +209,19 @@ async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void
       id,
       ...b,
       ...enrichment,
+      officialId: b.sourceId,
+      rawContent: null,
+      contentHash: b.hash,
+      dueDate: null,
+      languageSource: null,
+      referentialsImpacted: [],
+      marketsImpacted: [b.jurisdiction],
+      rolesImpacted: enrichment.impactedRoles,
+      aiAnalyzed: false,
+      aiAnalysisDate: null,
+      aiModelVersion: null,
+      licenceVerified: null,
+      sourceRegistryId: sourceRegistryIdFor(b.sourceName),
     } as RegulatoryUpdate;
   });
 
@@ -254,6 +283,17 @@ async function runRefresh(trigger: "page_open" | "job" | "manual"): Promise<void
       console.error("[Watch] finishRefreshRun failed:", err);
     }
   }
+}
+
+function sourceRegistryIdFor(sourceName: string): string | null {
+  const value = sourceName.toLowerCase();
+  if (value.includes("eur-lex")) return "eur-lex-mdr";
+  if (value.includes("mdcg")) return "mdcg";
+  if (value.includes("harmonised")) return "harmonised-standards";
+  if (value === "iso") return "iso-news";
+  if (value.includes("federal register")) return "federal-register";
+  if (value.includes("federalregister")) return "federal-register";
+  return null;
 }
 
 export async function getOrDefaultCompanyProfile(userId: number): Promise<CompanyProfile> {

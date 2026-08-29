@@ -8,6 +8,8 @@ import {
   json,
   uniqueIndex,
   mysqlEnum,
+  date,
+  mediumtext,
 } from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 
@@ -641,12 +643,12 @@ export const regulatoryUpdates = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(), // uuid
 
-    type: mysqlEnum("type", ["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]).notNull(),
+    type: mysqlEnum("type", ["REGULATION", "GUIDANCE", "STANDARD", "QUALITY", "NOTICE", "CONSULTATION"]).notNull(),
     title: varchar("title", { length: 1024 }).notNull(),
     summaryShort: text("summaryShort").notNull(),
     summaryLong: text("summaryLong").notNull(),
 
-    publishedAt: timestamp("publishedAt").notNull(),
+    publishedAt: timestamp("publishedAt"),
     effectiveAt: timestamp("effectiveAt"),
 
     status: mysqlEnum("status", ["NEW", "UPDATED", "REPEALED", "CORRIGENDUM"]).notNull(),
@@ -654,6 +656,19 @@ export const regulatoryUpdates = mysqlTable(
     sourceName: varchar("sourceName", { length: 255 }).notNull(),
     sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
     sourceId: varchar("sourceId", { length: 255 }),
+    officialId: varchar("official_id", { length: 255 }),
+    rawContent: mediumtext("raw_content"),
+    contentHash: varchar("content_hash", { length: 64 }),
+    dueDate: date("due_date"),
+    languageSource: varchar("language_source", { length: 16 }),
+    referentialsImpacted: json("referentials_impacted"),
+    marketsImpacted: json("markets_impacted"),
+    rolesImpacted: json("roles_impacted"),
+    aiAnalyzed: boolean("ai_analyzed").notNull().default(false),
+    aiAnalysisDate: timestamp("ai_analysis_date"),
+    aiModelVersion: varchar("ai_model_version", { length: 100 }),
+    licenceVerified: boolean("licence_verified"),
+    sourceRegistryId: varchar("source_id", { length: 64 }),
 
     jurisdiction: mysqlEnum("jurisdiction", ["EU", "UK", "CH", "US"]).notNull().default("EU"),
 
@@ -675,8 +690,27 @@ export const regulatoryUpdates = mysqlTable(
   },
   (t) => ({
     hashUq: uniqueIndex("regulatory_updates_hash_uq").on(t.hash),
+    sourceOfficialUq: uniqueIndex("regulatory_updates_source_official_uq").on(t.sourceRegistryId, t.officialId),
   })
 );
+
+export const regulatorySources = mysqlTable("regulatory_sources", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  urlBase: varchar("url_base", { length: 2048 }).notNull(),
+  type: mysqlEnum("type", ["rss", "rest", "odata", "sparql", "html", "pdf"]).notNull(),
+  active: boolean("active").notNull().default(true),
+  lastCollectedAt: timestamp("last_collected_at"),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastError: text("last_error"),
+  lastErrorAt: timestamp("last_error_at"),
+  frequency: varchar("frequency", { length: 100 }).notNull(),
+  accessType: varchar("access_type", { length: 100 }).notNull(),
+  commercialUseAllowed: boolean("commercial_use_allowed"),
+  licenceNotes: text("licence_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
 
 export const regulatoryUpdateVersions = mysqlTable("regulatory_update_versions", {
   id: varchar("id", { length: 36 }).primaryKey(),

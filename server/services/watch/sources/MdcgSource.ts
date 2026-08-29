@@ -12,7 +12,7 @@ import { nowUtc, safeText, isUrlAllowed } from "../utils";
 const DEFAULT_URL =
   "https://health.ec.europa.eu/medical-devices-sector/new-regulations/guidance-mdcg-documents_en";
 
-function extractLinks(html: string): { href: string; text: string }[] {
+export function extractMdcgLinks(html: string): { href: string; text: string }[] {
   const links: { href: string; text: string }[] = [];
   const re = /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
@@ -33,7 +33,7 @@ function absolutize(base: string, href: string): string {
   }
 }
 
-function parseDateFromText(text: string): Date | null {
+export function parseDateFromText(text: string): Date | null {
   // Typical patterns: 2024-03-12, 12/03/2024, March 12 2024.
   const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
   if (iso) {
@@ -64,7 +64,7 @@ export const MdcgSource: UpdateSource = {
       const url = process.env.WATCH_MDCG_URL ?? DEFAULT_URL;
       if (!isUrlAllowed(url)) throw new Error("MDCG URL not allowed");
       const html = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
-      const links = extractLinks(html)
+      const links = extractMdcgLinks(html)
         .map((l) => ({ ...l, href: absolutize(url, l.href) }))
         .filter((l) => /\.pdf(\?|$)/i.test(l.href) || /guidance|mdcg/i.test(l.text));
 
@@ -72,7 +72,8 @@ export const MdcgSource: UpdateSource = {
       const items = links
         .map((l) => {
           const code = extractDocCode(l.text);
-          const publishedAt = parseDateFromText(l.text) ?? nowUtc();
+          const publishedAt = parseDateFromText(l.text);
+          if (!publishedAt) console.warn("[Watch][MDCG] publication date absent; preserving null", { sourceUrl: l.href });
           const title = code ? `${code} — ${l.text}` : l.text;
           const sourceId = code;
 

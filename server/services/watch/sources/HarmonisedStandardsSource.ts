@@ -23,15 +23,14 @@ function extractEnIsoTokens(html: string): string[] {
   return Array.from(set);
 }
 
-function parsePublishedAt(html: string): Date {
-  // fallback: today
+function parsePublishedAt(html: string): Date | null {
   // Some pages include "Last update".
   const m = html.match(/Last\s+update\s*:?\s*(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})/i);
   if (m) {
     const d = new Date(`${m[1]} ${m[2]} ${m[3]} UTC`);
     if (!isNaN(d.getTime())) return d;
   }
-  return nowUtc();
+  return null;
 }
 
 export const HarmonisedStandardsSource: UpdateSource = {
@@ -44,6 +43,7 @@ export const HarmonisedStandardsSource: UpdateSource = {
       const html = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
       const tokens = extractEnIsoTokens(html);
       const publishedAt = parsePublishedAt(html);
+      if (!publishedAt) console.warn("[Watch][HarmonisedStandards] publication date absent; preserving null");
 
       const items = tokens.slice(0, 250).map((token) => {
         const title = `${token} — Harmonised standard (MDR)`;

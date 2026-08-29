@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeUpdateHash, dedupeByHash } from "../enrichment/Dedupe";
+import { computeOfficialDedupeKey, computeUpdateHash, dedupeByHash } from "../enrichment/Dedupe";
+
+test("official dedupe key uses source registry and official id", () => {
+  const a = computeOfficialDedupeKey({ sourceRegistryId: "mdcg", officialId: "MDCG-2024-1", hash: "a" });
+  const b = computeOfficialDedupeKey({ sourceRegistryId: "mdcg", officialId: "MDCG-2024-1", hash: "b" });
+  assert.equal(a, b);
+  assert.equal(computeOfficialDedupeKey({ sourceRegistryId: null, officialId: null, hash: "legacy" }), "legacy::legacy");
+});
 
 test("computeUpdateHash is stable for same inputs", () => {
   const d = new Date("2026-02-01T00:00:00Z");

@@ -1,0 +1,11 @@
+[build]
+buildCommand = "npm run build"
+
+[[services]]
+name = "qara-api"
+startCommand = "node dist/index.js"
+
+[[services]]
+name = "qara-watch-cron"
+startCommand = "node dist/watchWorker.js"
+cronSchedule = "0 */6 * * *"

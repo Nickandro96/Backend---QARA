@@ -1,0 +1,16 @@
+ALTER TABLE `regulatory_updates`
+  MODIFY COLUMN `type` enum('REGULATION','GUIDANCE','STANDARD','QUALITY','NOTICE','CONSULTATION') NOT NULL,
+  MODIFY COLUMN `publishedAt` timestamp NULL,
+  ADD COLUMN `official_id` varchar(255) NULL,
+  ADD COLUMN `raw_content` mediumtext NULL,
+  ADD COLUMN `content_hash` varchar(64) NULL,
+  ADD COLUMN `due_date` date NULL,
+  ADD COLUMN `language_source` varchar(16) NULL,
+  ADD COLUMN `referentials_impacted` json NULL,
+  ADD COLUMN `markets_impacted` json NULL,
+  ADD COLUMN `roles_impacted` json NULL,
+  ADD COLUMN `ai_analyzed` boolean NOT NULL DEFAULT false,
+  ADD COLUMN `ai_analysis_date` timestamp NULL,
+  ADD COLUMN `ai_model_version` varchar(100) NULL,
+  ADD COLUMN `licence_verified` boolean NULL,
+  ADD COLUMN `source_id` varchar(64) NULL;

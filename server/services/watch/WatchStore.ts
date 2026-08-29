@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import type { RegulatoryUpdate, CompanyProfile } from "./types";
 import crypto from "crypto";
 import * as db from "../../db";
@@ -7,13 +7,14 @@ import {
   watchRefreshRuns,
   regulatoryUpdateVersions,
   watchCompanyProfiles,
+  regulatorySources,
 } from "../../../drizzle/schema";
 
 export async function getLastRefresh(): Promise<Date | null> {
   const database = await db.getDb();
   if (!database) return null;
 
-  const [row] = await database.select().from(watchRefreshRuns).orderBy(desc(watchRefreshRuns.startedAt)).limit(1);
+  const [row] = await database.select().from(watchRefreshRuns).where(eq(watchRefreshRuns.success, true)).orderBy(desc(watchRefreshRuns.finishedAt)).limit(1);
   return row?.finishedAt ?? row?.startedAt ?? null;
 }
 
@@ -55,12 +56,25 @@ export async function listUpdates(opts: {
     title: r.title,
     summaryShort: r.summaryShort,
     summaryLong: r.summaryLong,
-    publishedAt: new Date(r.publishedAt),
+    publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
     effectiveAt: r.effectiveAt ? new Date(r.effectiveAt) : null,
     status: r.status,
     sourceName: r.sourceName,
     sourceUrl: r.sourceUrl,
     sourceId: r.sourceId,
+    officialId: r.officialId ?? null,
+    rawContent: r.rawContent ?? null,
+    contentHash: r.contentHash ?? null,
+    dueDate: r.dueDate ?? null,
+    languageSource: r.languageSource ?? null,
+    referentialsImpacted: r.referentialsImpacted ?? [],
+    marketsImpacted: r.marketsImpacted ?? [],
+    rolesImpacted: r.rolesImpacted ?? [],
+    aiAnalyzed: Boolean(r.aiAnalyzed),
+    aiAnalysisDate: r.aiAnalysisDate ? new Date(r.aiAnalysisDate) : null,
+    aiModelVersion: r.aiModelVersion ?? null,
+    licenceVerified: r.licenceVerified ?? null,
+    sourceRegistryId: r.sourceRegistryId ?? null,
     jurisdiction: r.jurisdiction,
     tags: r.tags ?? [],
     impactedMdr: r.impactedMdr ?? { articles: [], annexes: [] },
@@ -83,11 +97,11 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
   let updated = 0;
 
   for (const it of items) {
-    const [existing] = await database
-      .select()
-      .from(regulatoryUpdates)
-      .where(eq(regulatoryUpdates.hash, it.hash))
-      .limit(1);
+    const [existing] = await database.select().from(regulatoryUpdates).where(
+      it.sourceRegistryId && it.officialId
+        ? and(eq(regulatoryUpdates.sourceRegistryId, it.sourceRegistryId), eq(regulatoryUpdates.officialId, it.officialId))
+        : eq(regulatoryUpdates.hash, it.hash),
+    ).limit(1);
 
     if (!existing) {
       await database.insert(regulatoryUpdates).values({
@@ -102,6 +116,12 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
         sourceName: it.sourceName,
         sourceUrl: it.sourceUrl,
         sourceId: it.sourceId,
+        officialId: it.officialId, rawContent: it.rawContent, contentHash: it.contentHash,
+        dueDate: it.dueDate, languageSource: it.languageSource,
+        referentialsImpacted: it.referentialsImpacted, marketsImpacted: it.marketsImpacted,
+        rolesImpacted: it.rolesImpacted, aiAnalyzed: it.aiAnalyzed,
+        aiAnalysisDate: it.aiAnalysisDate, aiModelVersion: it.aiModelVersion,
+        licenceVerified: it.licenceVerified, sourceRegistryId: it.sourceRegistryId,
         jurisdiction: it.jurisdiction,
         tags: it.tags,
         impactedMdr: it.impactedMdr,
@@ -126,7 +146,7 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
       });
 
       inserted++;
-    } else {
+    } else if ((existing.contentHash ?? existing.hash) !== (it.contentHash ?? it.hash)) {
       // Update fields if changed
       await database
         .update(regulatoryUpdates)
@@ -140,6 +160,11 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
           sourceName: it.sourceName,
           sourceUrl: it.sourceUrl,
           sourceId: it.sourceId,
+          officialId: it.officialId, rawContent: it.rawContent, contentHash: it.contentHash,
+          dueDate: it.dueDate, languageSource: it.languageSource,
+          referentialsImpacted: it.referentialsImpacted, marketsImpacted: it.marketsImpacted,
+          rolesImpacted: it.rolesImpacted, licenceVerified: it.licenceVerified,
+          sourceRegistryId: it.sourceRegistryId, hash: it.hash,
           jurisdiction: it.jurisdiction,
           tags: it.tags,
           impactedMdr: it.impactedMdr,
@@ -152,7 +177,7 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
           retrievedAt: it.retrievedAt,
           updatedAt: new Date(),
         })
-        .where(eq(regulatoryUpdates.hash, it.hash));
+        .where(eq(regulatoryUpdates.id, existing.id));
 
       await database.insert(regulatoryUpdateVersions).values({
         id: cryptoRandomUuid(),
@@ -167,6 +192,24 @@ export async function upsertUpdates(runId: string, items: RegulatoryUpdate[]): P
   }
 
   return { inserted, updated };
+}
+
+export async function upsertSourceRegistry(source: typeof regulatorySources.$inferInsert): Promise<void> {
+  const database = await db.getDb();
+  if (!database) return;
+  const [existing] = await database.select().from(regulatorySources).where(eq(regulatorySources.id, source.id)).limit(1);
+  if (existing) await database.update(regulatorySources).set({ ...source, updatedAt: new Date() }).where(eq(regulatorySources.id, source.id));
+  else await database.insert(regulatorySources).values(source);
+}
+
+export async function updateSourceCollectionState(input: { id: string; ok: boolean; error?: string }): Promise<void> {
+  const database = await db.getDb();
+  if (!database) return;
+  const now = new Date();
+  await database.update(regulatorySources).set(input.ok
+    ? { lastCollectedAt: now, lastSuccessAt: now, lastError: null, lastErrorAt: null }
+    : { lastCollectedAt: now, lastError: input.error ?? "Unknown collection error", lastErrorAt: now }
+  ).where(eq(regulatorySources.id, input.id));
 }
 
 export async function createRefreshRun(input: {
@@ -190,6 +233,19 @@ export async function createRefreshRun(input: {
     createdAt: new Date(),
   });
   return runId;
+}
+
+export function isRefreshRunActive(startedAt: Date, finishedAt: Date | null, now = new Date()): boolean {
+  return !finishedAt && now.getTime() - startedAt.getTime() < 30 * 60 * 1000;
+}
+
+export async function hasActiveRefreshRun(now = new Date()): Promise<boolean> {
+  const database = await db.getDb();
+  if (!database) return false;
+  const cutoff = new Date(now.getTime() - 30 * 60 * 1000);
+  const [row] = await database.select({ id: watchRefreshRuns.id }).from(watchRefreshRuns)
+    .where(and(isNull(watchRefreshRuns.finishedAt), gte(watchRefreshRuns.startedAt, cutoff))).limit(1);
+  return Boolean(row);
 }
 
 export async function finishRefreshRun(input: {

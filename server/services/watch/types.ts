@@ -4,7 +4,9 @@ export type RegulatoryUpdateType =
   | "REGULATION"
   | "GUIDANCE"
   | "STANDARD"
-  | "QUALITY";
+  | "QUALITY"
+  | "NOTICE"
+  | "CONSULTATION";
 
 export type RegulatoryUpdateStatus =
   | "NEW"
@@ -75,7 +77,7 @@ export type RegulatoryUpdate = {
   summaryShort: string;
   summaryLong: string;
 
-  publishedAt: Date;
+  publishedAt: Date | null;
   effectiveAt: Date | null;
 
   status: RegulatoryUpdateStatus;
@@ -83,6 +85,19 @@ export type RegulatoryUpdate = {
   sourceName: string;
   sourceUrl: string;
   sourceId: string | null;
+  officialId: string | null;
+  rawContent: string | null;
+  contentHash: string | null;
+  dueDate: Date | null;
+  languageSource: string | null;
+  referentialsImpacted: string[];
+  marketsImpacted: string[];
+  rolesImpacted: EconomicRole[];
+  aiAnalyzed: boolean;
+  aiAnalysisDate: Date | null;
+  aiModelVersion: string | null;
+  licenceVerified: boolean | null;
+  sourceRegistryId: string | null;
 
   jurisdiction: Jurisdiction;
 
@@ -111,7 +126,7 @@ export type UpdateSourceHealth = {
 export type UpdateSource = {
   name: string;
   fetchUpdates: (ctx: { timeoutMs: number }) => Promise<{
-    items: Omit<RegulatoryUpdate, "id" | "summaryShort" | "summaryLong" | "impactedMdr" | "impactedDomains" | "impactedRoles" | "impactLevel" | "risks" | "recommendedActions" | "expectedEvidence">[];
+    items: Omit<RegulatoryUpdate, "id" | "summaryShort" | "summaryLong" | "impactedMdr" | "impactedDomains" | "impactedRoles" | "impactLevel" | "risks" | "recommendedActions" | "expectedEvidence" | "officialId" | "rawContent" | "contentHash" | "dueDate" | "languageSource" | "referentialsImpacted" | "marketsImpacted" | "rolesImpacted" | "aiAnalyzed" | "aiAnalysisDate" | "aiModelVersion" | "licenceVerified" | "sourceRegistryId">[];
     health: UpdateSourceHealth;
   }>;
 };
