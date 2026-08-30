@@ -76,6 +76,8 @@ export type RegulatoryUpdate = {
   title: string;
   summaryShort: string;
   summaryLong: string;
+  summaryFr?: string | null;
+  summaryEn?: string | null;
 
   publishedAt: Date | null;
   effectiveAt: Date | null;

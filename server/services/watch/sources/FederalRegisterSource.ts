@@ -18,6 +18,7 @@ export function parseFederalRegisterPayload(raw: string) {
       effectiveAt: row.effective_on ? new Date(`${row.effective_on}T00:00:00Z`) : null,
       status: "NEW" as const, sourceName: "US Federal Register", sourceUrl, sourceId: officialId,
       jurisdiction: "US" as const, tags: [{ key: "agency", value: (row.agencies ?? []).map((a: any) => a.name).join(", ") }],
+      rawContent: JSON.stringify(row),
       hash: computeUpdateHash({ type, title, sourceName: "US Federal Register", sourceId: officialId, sourceUrl, publishedAt }),
       retrievedAt: nowUtc(),
     };

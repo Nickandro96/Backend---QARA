@@ -14,6 +14,7 @@ export function parseCellarSparqlXml(xml: string) {
     const title = safeText(value("title") || `EUR-Lex ${officialId}`);
     return { type: "REGULATION" as const, title, publishedAt, effectiveAt: null, status: "NEW" as const,
       sourceName: "EUR-Lex CELLAR", sourceUrl, sourceId: officialId, jurisdiction: "EU" as const,
+      rawContent: block,
       tags: [{ key: "celex", value: officialId }], hash: computeUpdateHash({ type: "REGULATION", title, sourceName: "EUR-Lex CELLAR", sourceId: officialId, sourceUrl, publishedAt }), retrievedAt: nowUtc() };
   }).filter((item) => item.sourceId && item.sourceUrl);
 }

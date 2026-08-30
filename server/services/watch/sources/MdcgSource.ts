@@ -87,6 +87,7 @@ export const MdcgSource: UpdateSource = {
             sourceUrl: l.href,
             sourceId,
             jurisdiction: "EU" as const,
+            rawContent: l.text,
             tags: code ? [{ key: "mdcg", value: code }] : [{ key: "mdcg" }],
             hash: computeUpdateHash({
               type: "GUIDANCE",

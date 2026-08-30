@@ -210,7 +210,7 @@ export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promi
       ...b,
       ...enrichment,
       officialId: b.sourceId,
-      rawContent: null,
+      rawContent: (b as any).rawContent ?? null,
       contentHash: b.hash,
       dueDate: null,
       languageSource: null,

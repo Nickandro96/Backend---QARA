@@ -647,6 +647,8 @@ export const regulatoryUpdates = mysqlTable(
     title: varchar("title", { length: 1024 }).notNull(),
     summaryShort: text("summaryShort").notNull(),
     summaryLong: text("summaryLong").notNull(),
+    summaryFr: text("summary_fr"),
+    summaryEn: text("summary_en"),
 
     publishedAt: timestamp("publishedAt"),
     effectiveAt: timestamp("effectiveAt"),

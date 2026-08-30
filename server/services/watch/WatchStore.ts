@@ -56,6 +56,8 @@ export async function listUpdates(opts: {
     title: r.title,
     summaryShort: r.summaryShort,
     summaryLong: r.summaryLong,
+    summaryFr: r.summaryFr ?? null,
+    summaryEn: r.summaryEn ?? null,
     publishedAt: r.publishedAt ? new Date(r.publishedAt) : null,
     effectiveAt: r.effectiveAt ? new Date(r.effectiveAt) : null,
     status: r.status,
