@@ -16,6 +16,11 @@ import { MdcgSource } from "./sources/MdcgSource";
 import { HarmonisedStandardsSource } from "./sources/HarmonisedStandardsSource";
 import { IsoNewsSource } from "./sources/IsoNewsSource";
 import { FederalRegisterSource } from "./sources/FederalRegisterSource";
+import { AnsmSource } from "./sources/AnsmSource";
+import { FdaMedwatchSource } from "./sources/FdaMedwatchSource";
+import { HealthCanadaSource } from "./sources/HealthCanadaSource";
+import { TgaSource } from "./sources/TgaSource";
+import { MhraSource } from "./sources/MhraSource";
 
 import {
   createRefreshRun,
@@ -36,6 +41,11 @@ const DEFAULT_SOURCES: UpdateSource[] = [
   HarmonisedStandardsSource,
   IsoNewsSource,
   FederalRegisterSource,
+  AnsmSource,
+  FdaMedwatchSource,
+  HealthCanadaSource,
+  TgaSource,
+  MhraSource,
 ];
 
 const STALE_HOURS = Number(process.env.WATCH_STALE_HOURS ?? "6");
@@ -209,11 +219,11 @@ export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promi
       id,
       ...b,
       ...enrichment,
-      officialId: b.sourceId,
+      officialId: (b as any).officialId ?? b.sourceId,
       rawContent: (b as any).rawContent ?? null,
       contentHash: b.hash,
       dueDate: null,
-      languageSource: null,
+      languageSource: (b as any).languageSource ?? null,
       referentialsImpacted: [],
       marketsImpacted: [b.jurisdiction],
       rolesImpacted: enrichment.impactedRoles,
@@ -221,7 +231,7 @@ export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promi
       aiAnalysisDate: null,
       aiModelVersion: null,
       licenceVerified: null,
-      sourceRegistryId: sourceRegistryIdFor(b.sourceName),
+      sourceRegistryId: (b as any).sourceRegistryId ?? sourceRegistryIdFor(b.sourceName),
     } as RegulatoryUpdate;
   });
 
@@ -293,6 +303,11 @@ function sourceRegistryIdFor(sourceName: string): string | null {
   if (value === "iso") return "iso-news";
   if (value.includes("federal register")) return "federal-register";
   if (value.includes("federalregister")) return "federal-register";
+  if (value.includes("ansm")) return "ansm";
+  if (value.includes("medwatch") || value.includes("openfda")) return "fda-medwatch";
+  if (value.includes("health canada")) return "health-canada";
+  if (value.includes("tga") || value.includes("therapeutic goods")) return "tga";
+  if (value.includes("mhra")) return "mhra";
   return null;
 }
 

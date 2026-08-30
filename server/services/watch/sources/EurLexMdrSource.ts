@@ -15,7 +15,10 @@ export function parseCellarSparqlXml(xml: string) {
     return { type: "REGULATION" as const, title, publishedAt, effectiveAt: null, status: "NEW" as const,
       sourceName: "EUR-Lex CELLAR", sourceUrl, sourceId: officialId, jurisdiction: "EU" as const,
       rawContent: block,
-      tags: [{ key: "celex", value: officialId }], hash: computeUpdateHash({ type: "REGULATION", title, sourceName: "EUR-Lex CELLAR", sourceId: officialId, sourceUrl, publishedAt }), retrievedAt: nowUtc() };
+      tags: [{ key: "celex", value: officialId }],
+      hash: computeUpdateHash({ type: "REGULATION", title, sourceName: "EUR-Lex CELLAR", sourceId: officialId, sourceUrl, publishedAt }),
+      retrievedAt: nowUtc(),
+    };
   }).filter((item) => item.sourceId && item.sourceUrl);
 }
 export const EurLexMdrSource: UpdateSource = { name: "EUR-Lex CELLAR", async fetchUpdates(ctx) {
