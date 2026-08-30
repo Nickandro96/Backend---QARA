@@ -8,6 +8,7 @@ import {
   regulatoryUpdateVersions,
   watchCompanyProfiles,
   regulatorySources,
+  regulatoryUserReads,
 } from "../../../drizzle/schema";
 
 export async function getLastRefresh(): Promise<Date | null> {
@@ -291,6 +292,10 @@ export async function getCompanyProfile(userId: number): Promise<CompanyProfile 
     deviceClass: row.deviceClass as any,
     deviceFamilies: (row.deviceFamilies ?? []) as any,
     markets: (row.markets ?? ["EU"]) as any,
+    preferredReferentials: (row.preferredReferentials ?? []) as string[],
+    preferredSources: (row.preferredSources ?? []) as string[],
+    notificationEnabled: Boolean(row.notificationEnabled),
+    notificationFrequency: row.notificationFrequency ?? "weekly",
   };
 }
 
@@ -310,6 +315,10 @@ export async function upsertCompanyProfile(userId: number, profile: CompanyProfi
     deviceClass: profile.deviceClass,
     deviceFamilies: profile.deviceFamilies,
     markets: profile.markets,
+    preferredReferentials: profile.preferredReferentials ?? [],
+    preferredSources: profile.preferredSources ?? [],
+    notificationEnabled: profile.notificationEnabled ?? false,
+    notificationFrequency: profile.notificationFrequency ?? "weekly",
     updatedAt: new Date(),
   };
 
@@ -321,6 +330,36 @@ export async function upsertCompanyProfile(userId: number, profile: CompanyProfi
   } else {
     await database.update(watchCompanyProfiles).set(values).where(eq(watchCompanyProfiles.userId, userId));
   }
+}
+
+export async function listActiveSources() {
+  const database = await db.getDb(); if (!database) return [];
+  return database.select().from(regulatorySources).where(eq(regulatorySources.active, true)).orderBy(regulatorySources.name);
+}
+
+export async function markItemRead(userId: number, itemId: string): Promise<boolean> {
+  const database = await db.getDb(); if (!database) return false;
+  const [item] = await database.select({ id: regulatoryUpdates.id }).from(regulatoryUpdates).where(eq(regulatoryUpdates.id, itemId)).limit(1);
+  if (!item) return false;
+  await database.insert(regulatoryUserReads).values({ id: cryptoRandomUuid(), userId: String(userId), itemId }).onDuplicateKeyUpdate({ set: { readAt: new Date() } });
+  return true;
+}
+
+export async function markItemUnread(userId: number, itemId: string): Promise<void> {
+  const database = await db.getDb(); if (!database) return;
+  await database.delete(regulatoryUserReads).where(and(eq(regulatoryUserReads.userId, String(userId)), eq(regulatoryUserReads.itemId, itemId)));
+}
+
+export async function getReadItemIds(userId: number): Promise<Set<string>> {
+  const database = await db.getDb(); if (!database) return new Set();
+  const rows = await database.select({ itemId: regulatoryUserReads.itemId }).from(regulatoryUserReads).where(eq(regulatoryUserReads.userId, String(userId)));
+  return new Set(rows.map((row) => row.itemId));
+}
+
+export async function getUnreadItemCount(userId: number): Promise<number> {
+  const database = await db.getDb(); if (!database) return 0;
+  const rows = await database.select({ id: regulatoryUpdates.id }).from(regulatoryUpdates);
+  const read = await getReadItemIds(userId); return rows.filter((row) => !read.has(row.id)).length;
 }
 
 function cryptoRandomUuid(): string {

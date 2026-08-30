@@ -151,6 +151,10 @@ export type CompanyProfile = {
   deviceClass: CompanyClass;
   deviceFamilies: DeviceFamily[];
   markets: Jurisdiction[];
+  preferredReferentials?: string[];
+  preferredSources?: string[];
+  notificationEnabled?: boolean;
+  notificationFrequency?: "realtime" | "daily" | "weekly" | "never";
 };
 
 export type PersonalizedImpact = {

@@ -311,6 +311,7 @@ export async function getOrDefaultCompanyProfile(userId: number): Promise<Compan
     deviceClass: "IIa",
     deviceFamilies: ["non_active"],
     markets: ["EU"],
+    preferredReferentials: [], preferredSources: [], notificationEnabled: false, notificationFrequency: "weekly",
   };
 }
 

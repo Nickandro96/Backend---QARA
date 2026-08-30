@@ -735,6 +735,13 @@ export const watchRefreshRuns = mysqlTable("watch_refresh_runs", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
+export const regulatoryUserReads = mysqlTable("regulatory_user_reads", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  itemId: varchar("item_id", { length: 36 }).notNull(),
+  readAt: timestamp("read_at").notNull().defaultNow(),
+}, (t) => ({ userItemUq: uniqueIndex("uq_user_item").on(t.userId, t.itemId) }));
+
 export const watchCompanyProfiles = mysqlTable(
   "watch_company_profiles",
   {
@@ -746,6 +753,10 @@ export const watchCompanyProfiles = mysqlTable(
     deviceClass: mysqlEnum("deviceClass", ["I", "IIa", "IIb", "III"]).notNull(),
     deviceFamilies: json("deviceFamilies"),
     markets: json("markets"),
+    preferredReferentials: json("preferred_referentials"),
+    preferredSources: json("preferred_sources"),
+    notificationEnabled: boolean("notification_enabled").notNull().default(false),
+    notificationFrequency: mysqlEnum("notification_frequency", ["realtime", "daily", "weekly", "never"]).notNull().default("weekly"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
