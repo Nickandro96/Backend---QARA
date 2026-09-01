@@ -718,6 +718,22 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function recordLegalConsent(
+  openId: string,
+  input: { cguVersion: string; marketingConsent: boolean }
+) {
+  const db = await requireDb();
+  await db
+    .update(users)
+    .set({
+      cguAcceptedAt: new Date(),
+      cguVersion: input.cguVersion,
+      marketingConsent: input.marketingConsent,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.openId, openId));
+}
+
 export async function storePasswordHash(openId: string, hash: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

@@ -74,9 +74,14 @@ export const systemRouter = router({
         company: z.string().optional(),
         role: z.string().optional(),
         phone: z.string().optional(),
+        cguAccepted: z.literal(true, { error: "Vous devez accepter les CGU" }),
+        marketingConsent: z.boolean().optional().default(false),
       })
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.cguAccepted !== true) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Vous devez accepter les CGU pour créer un compte" });
+      }
       const dbConn = await db.getDb();
       if (!dbConn) {
         throw new TRPCError({
@@ -104,6 +109,10 @@ export const systemRouter = router({
       });
 
       await db.storePasswordHash(openId, hashedPassword);
+      await db.recordLegalConsent(openId, {
+        cguVersion: process.env.CGU_VERSION || "2026-09-01",
+        marketingConsent: input.marketingConsent,
+      });
 
       const sessionToken = await sdk.createSessionToken(openId, { name: input.name });
 

@@ -40,6 +40,10 @@ export const users = mysqlTable(
 
     role: varchar("role", { length: 50 }).default("user").notNull(),
 
+    cguAcceptedAt: timestamp("cgu_accepted_at"),
+    cguVersion: varchar("cgu_version", { length: 20 }),
+    marketingConsent: boolean("marketing_consent").notNull().default(false),
+
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
