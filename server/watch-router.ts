@@ -125,6 +125,26 @@ export const watchRouter = router({
     return { items: critical.slice(0, 30), meta };
   }),
 
+  details: protectedProcedure
+    .input(z.object({ itemId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
+      const item = items.find((candidate) => candidate.id === input.itemId);
+      if (!item) throw new Error("Item de veille introuvable");
+      return {
+        ...item,
+        provenance: {
+          sourceName: item.sourceName,
+          sourceUrl: item.sourceUrl,
+          officialId: item.officialId,
+          publishedAt: item.publishedAt,
+          retrievedAt: item.retrievedAt,
+          languageSource: item.languageSource,
+          licenceVerified: item.licenceVerified,
+        },
+      };
+    }),
+
   refresh: adminProcedure
     .input(z.object({ trigger: z.enum(["manual"]).default("manual") }))
     .mutation(async ({ input }) => {
