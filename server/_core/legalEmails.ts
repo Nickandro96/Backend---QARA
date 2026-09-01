@@ -41,3 +41,12 @@ export function buildCguUpdateEmail(input: { appUrl: string; effectiveDate: stri
     html: `<p>Bonjour,</p><p>Nous avons mis à jour nos Conditions Générales d'Utilisation.</p><p>Les changements principaux : ${escapeHtml(input.changes)}</p><p><a href="${escapeHtml(cguUrl)}">Consulter les nouvelles CGU</a></p><p>Elles entrent en vigueur le ${escapeHtml(input.effectiveDate)}. La poursuite de l'utilisation de QARA vaut acceptation, dans les limites prévues par la loi.</p><p>L'équipe QARA</p>`,
   };
 }
+
+export async function sendAccountDeletionEmail(email: string) {
+  await sendEmail({
+    to: email,
+    subject: "Confirmation de suppression de votre compte QARA",
+    text: "Bonjour,\n\nVotre compte QARA a été anonymisé. Les données qui doivent être conservées à des fins de traçabilité réglementaire ou comptable ne permettent plus de vous identifier directement.\n\nL'équipe QARA",
+    html: "<p>Bonjour,</p><p>Votre compte QARA a été anonymisé. Les données qui doivent être conservées à des fins de traçabilité réglementaire ou comptable ne permettent plus de vous identifier directement.</p><p>L'équipe QARA</p>",
+  });
+}

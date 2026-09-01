@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { createHash } from "node:crypto";
 
 // Fix: Replace @shared/const alias with relative path
 import { COOKIE_NAME } from "../shared/const";
@@ -42,7 +43,11 @@ import {
   audits as auditsTable,
   organisations as organisationsTable,
   organisationCertificates,
+  users,
+  audit_responses,
+  capa_actions,
 } from "../drizzle/schema";
+import { sendAccountDeletionEmail } from "./_core/legalEmails";
 import { computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray } from "./mdr-router";
 import { findingsRouter, actionsRouter } from "./findings-router";
@@ -185,6 +190,59 @@ export const appRouter = router({
 
       return { success: true } as const;
     }),
+  }),
+
+  users: router({
+    exportMyData: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.requireDb();
+      const [userRows, userAudits, responses, reports, capaActions] = await Promise.all([
+        database.select({ email: users.email, name: users.name, createdAt: users.createdAt }).from(users).where(eq(users.id, ctx.user.id)),
+        database.select().from(auditsTable).where(eq(auditsTable.userId, ctx.user.id)),
+        database.select().from(audit_responses).where(eq(audit_responses.userId, ctx.user.id)),
+        database.select({ id: auditReports.id, auditId: auditReports.auditId, reference: auditReports.reference, version: auditReports.version, status: auditReports.status, language: auditReports.language, createdAt: auditReports.createdAt }).from(auditReports).where(eq(auditReports.userId, ctx.user.id)),
+        database.select().from(capa_actions).where(eq(capa_actions.userId, ctx.user.id)),
+      ]);
+
+      return {
+        export_date: new Date().toISOString(),
+        user: userRows[0] ?? null,
+        audits: userAudits,
+        responses,
+        reports,
+        capa_actions: capaActions,
+      };
+    }),
+
+    deleteMyAccount: protectedProcedure
+      .input(z.object({ confirmation: z.literal("SUPPRIMER") }))
+      .mutation(async ({ ctx }) => {
+        const database = await db.requireDb();
+        const [account] = await database.select({ email: users.email }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
+        if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Compte introuvable" });
+
+        const anonymizedEmail = `${createHash("sha256").update(account.email).digest("hex")}@deleted.qara.invalid`;
+        await database.transaction(async (tx) => {
+          await tx.update(audit_responses).set({ responseComment: null }).where(eq(audit_responses.userId, ctx.user.id));
+          await tx.update(users).set({
+            email: anonymizedEmail,
+            openId: `deleted_${createHash("sha256").update(`openId:${account.email}`).digest("hex")}`,
+            passwordHash: null,
+            loginMethod: "deleted",
+            name: "Utilisateur supprimé",
+            firstName: null,
+            lastName: null,
+            companyName: null,
+            marketingConsent: false,
+            updatedAt: new Date(),
+          }).where(eq(users.id, ctx.user.id));
+        });
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+        try { await sendAccountDeletionEmail(account.email); }
+        catch (error) { console.error("[AccountDeletion] Confirmation email failed:", error); }
+        return { success: true } as const;
+      }),
   }),
 
   profile: router({
