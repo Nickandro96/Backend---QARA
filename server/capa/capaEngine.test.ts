@@ -6,7 +6,15 @@ import {
   isValidStatusTransition,
   validateTransitionFields,
   sortByPriority,
+  classifyNonConformityResponse,
 } from "./capaEngine";
+
+test("classifyNonConformityResponse exclut explicitement les réponses non applicables", () => {
+  assert.equal(classifyNonConformityResponse("non_compliant"), "non_conforme");
+  assert.equal(classifyNonConformityResponse("partial"), "partiel");
+  assert.equal(classifyNonConformityResponse("non_applicable"), null);
+  assert.equal(classifyNonConformityResponse("compliant"), null);
+});
 import type { Ecart } from "../scoring/types";
 
 function makeEcart(overrides: Partial<Ecart> = {}): Ecart {
