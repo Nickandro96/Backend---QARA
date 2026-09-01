@@ -6,7 +6,7 @@ import { getDb, safeJsonParse } from "../db";
 import { audits, audit_responses, capa_actions, capa_action_history, questions, referentiels, regulatoryUpdates } from "../../drizzle/schema";
 import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
-import { buildActionDraft, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
+import { buildActionDraft, classifyNonConformityResponse, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
 import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
 
@@ -110,11 +110,15 @@ export const capaRouter = router({
     const questionByKey = new Map(questionRows.map((q) => [q.questionKey, q]));
     const actionKeys = new Set(actionRows.map((a) => `${a.auditId}:${a.questionKey}`));
     const auditIds = new Set(auditRows.map((a) => a.id));
-    const unplanned = responseRows.flatMap((r) => {
-      const value = String(r.responseValue ?? "").toLowerCase().replace(/[ -]/g, "_");
-      if (!auditIds.has(r.auditId) || (!value.includes("non") && !value.includes("part")) || actionKeys.has(`${r.auditId}:${r.questionKey}`)) return [];
+    const ncResponseRows = responseRows.filter((r) => {
+      return auditIds.has(r.auditId) && classifyNonConformityResponse(r.responseValue) !== null;
+    });
+    const occurrencesByQuestionKey = new Map<string, number>();
+    for (const response of ncResponseRows) occurrencesByQuestionKey.set(response.questionKey, (occurrencesByQuestionKey.get(response.questionKey) ?? 0) + 1);
+    const unplanned = ncResponseRows.flatMap((r) => {
+      if (actionKeys.has(`${r.auditId}:${r.questionKey}`)) return [];
       const q = questionByKey.get(r.questionKey);
-      return [{ auditId: r.auditId, auditName: auditNameById.get(r.auditId) ?? `Audit ${r.auditId}`, questionKey: r.questionKey, questionText: q?.questionText ?? q?.title ?? r.questionKey, criticality: q?.criticality ?? "medium", processName: q?.processDetail ?? null, articleReference: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, responseComment: r.responseComment, objectiveEvidence: r.note }];
+      return [{ id: `NC-${r.auditId}-${r.id}`, auditId: r.auditId, auditName: auditNameById.get(r.auditId) ?? `Audit ${r.auditId}`, questionKey: r.questionKey, questionText: q?.questionText ?? q?.title ?? r.questionKey, criticality: q?.criticality ?? "medium", processName: q?.processDetail ?? null, articleReference: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, responseComment: r.responseComment, objectiveEvidence: r.note, detectedAt: (r.answeredAt ?? r.updatedAt ?? r.createdAt).toISOString(), status: "a_qualifier" as const, recurrenceCount: occurrencesByQuestionKey.get(r.questionKey) ?? 1 }];
     });
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -124,17 +128,68 @@ export const capaRouter = router({
     const watchById = new Map(watchRows.filter((row) => watchIds.includes(row.id)).map((row) => [row.id, row]));
     const actions = sortByPriority(actionRows.map(toCapaAction)).map((a) => {
       const raw = rawById.get(a.id)!;
-      return { ...a, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
+      const year = raw.createdAt.getUTCFullYear();
+      const phase = raw.statut.startsWith("cloturee") ? "cloture" : raw.statut === "a_verifier" ? "verification" : raw.analyseCauseRacine ? "mise_en_oeuvre" : raw.ai5Pourquoi ? "cause_racine" : "qualification";
+      const completedFields = [raw.analyseCauseRacine, raw.actionRetenue, raw.responsible, raw.dueDate, raw.preuveRealisation, raw.preuveEfficacite].filter(Boolean).length;
+      return { ...a, capaIdentifier: `CAPA-${year}-${String(a.id).padStart(4, "0")}`, actionIdentifier: `ACT-${year}-${String(a.id).padStart(4, "0")}`, phase, progress: Math.round((completedFields / 6) * 100), hasAIAnalysis: Boolean(raw.ai5Pourquoi), correctionImmediate: raw.correctionImmediate, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
     });
+    const closedRows = actionRows.filter((a) => a.statut.startsWith("cloturee"));
+    const closedWithDueDate = closedRows.filter((a) => a.dueDate);
+    const closedOnTime = closedWithDueDate.filter((a) => a.dueDate && a.updatedAt <= a.dueDate).length;
+    const checkedEffectiveness = actionRows.filter((a) => a.resultatEfficacite);
+    const effective = checkedEffectiveness.filter((a) => a.resultatEfficacite === "efficace").length;
+    const resolvedDurations = closedRows.map((a) => a.updatedAt.getTime() - a.createdAt.getTime()).filter((duration) => duration >= 0);
+    const averageResolutionDays = resolvedDurations.length ? Math.round(resolvedDurations.reduce((sum, duration) => sum + duration, 0) / resolvedDurations.length / 86_400_000) : null;
+    const monthBuckets = Array.from({ length: 6 }, (_, offset) => {
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - offset), 1));
+      const next = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+      return { month: date.toISOString().slice(0, 7), opened: ncResponseRows.filter((r) => r.createdAt >= date && r.createdAt < next).length, closed: closedRows.filter((a) => a.updatedAt >= date && a.updatedAt < next).length };
+    });
+    const processCounts = new Map<string, number>();
+    for (const item of [...unplanned.map((nc) => nc.processName), ...actionRows.map((action) => action.processName)]) {
+      const label = item || "Non renseigné";
+      processCounts.set(label, (processCounts.get(label) ?? 0) + 1);
+    }
+    const nonConformities = [
+      ...unplanned.map((nc) => ({ ...nc, capaIdentifier: null })),
+      ...actions.map((action) => ({
+        id: `NC-${action.auditId}-${action.id}`,
+        auditId: action.auditId,
+        auditName: action.auditName,
+        questionKey: action.questionKey,
+        questionText: action.ecartIdentifie,
+        criticality: action.criticality,
+        processName: action.processName,
+        articleReference: action.referentialCode,
+        responseComment: null,
+        objectiveEvidence: null,
+        detectedAt: action.createdAt,
+        status: String(action.statut).startsWith("cloturee") ? "cloturee" as const : "en_traitement" as const,
+        recurrenceCount: occurrencesByQuestionKey.get(action.questionKey) ?? 1,
+        capaIdentifier: action.capaIdentifier,
+      })),
+    ].sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
     return {
       stats: {
-        ncOuvertes: unplanned.length,
+        ncOuvertes: unplanned.length + actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
+        ncSansCapa: unplanned.length,
+        ncRecurrentes: unplanned.filter((nc) => nc.recurrenceCount > 1).length,
+        capaOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
+        actionsOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
         enCours: actionRows.filter((a) => ["ouverte", "en_cours", "a_verifier"].includes(a.statut)).length,
+        aVerifier: actionRows.filter((a) => a.statut === "a_verifier").length,
         enRetard: actionRows.filter((a) => a.dueDate && a.dueDate < now && !a.statut.startsWith("cloturee")).length,
         clotureesCeMois: actionRows.filter((a) => a.statut.startsWith("cloturee") && a.updatedAt >= monthStart).length,
+        tauxClotureDansLesDelais: closedWithDueDate.length ? Math.round((closedOnTime / closedWithDueDate.length) * 100) : null,
+        tauxEfficacite: checkedEffectiveness.length ? Math.round((effective / checkedEffectiveness.length) * 100) : null,
+        delaiMoyenResolutionJours: averageResolutionDays,
       },
       unplanned,
+      nonConformities,
       actions,
+      trends: monthBuckets,
+      processBreakdown: Array.from(processCounts, ([process, count]) => ({ process, count })).sort((a, b) => b.count - a.count),
+      upcomingDeadlines: actions.filter((action) => action.dueDate && !String(action.statut).startsWith("cloturee")).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 8),
     };
   }),
 
@@ -148,8 +203,7 @@ export const capaRouter = router({
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
       const [response] = await db.select().from(audit_responses).where(and(eq(audit_responses.auditId, input.auditId), eq(audit_responses.userId, ctx.user.id), eq(audit_responses.questionKey, input.questionKey))).limit(1);
       if (!response) throw new TRPCError({ code: "NOT_FOUND", message: "Réponse d'audit introuvable" });
-      const normalized = String(response.responseValue ?? "").toLowerCase().replace(/[ -]/g, "_");
-      const responseValue = normalized.includes("part") ? "partiel" : normalized.includes("non") ? "non_conforme" : null;
+      const responseValue = classifyNonConformityResponse(response.responseValue);
       if (!responseValue) throw new TRPCError({ code: "BAD_REQUEST", message: "Cette réponse n'est pas une non-conformité ou une réponse partielle" });
       const [question] = await db.select().from(questions).where(eq(questions.questionKey, input.questionKey)).limit(1);
       if (!question) throw new TRPCError({ code: "NOT_FOUND", message: "Question introuvable" });
