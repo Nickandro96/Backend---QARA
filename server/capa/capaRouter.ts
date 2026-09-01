@@ -141,6 +141,7 @@ export const capaRouter = router({
   generateAnalysis: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive(), questionKey: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
+      console.info("[CAPA AI] generateAnalysis requested", { userId: ctx.user.id, auditId: input.auditId, questionKey: input.questionKey });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const [audit] = await db.select().from(audits).where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id))).limit(1);
@@ -172,6 +173,7 @@ export const capaRouter = router({
         processName: question.processDetail ?? null,
       });
       if (!result) throw new TRPCError({ code: "UNPROCESSABLE_CONTENT", message: "L'analyse IA n'a pas produit une réponse validée. Aucune donnée n'a été enregistrée." });
+      console.info("[CAPA AI] generateAnalysis completed", { userId: ctx.user.id, auditId: input.auditId, questionKey: input.questionKey, proposedActions: result.actionsCorrectivesProposees.length, confidence: result.niveauConfiance });
       return { analysis: result, context: { questionText: question.questionText, articleReference: [question.article, question.annexe].filter(Boolean).join(" / ") || null, criticality: question.criticality, responseComment: response.responseComment, objectiveEvidence: evidence ?? null } };
     }),
 
