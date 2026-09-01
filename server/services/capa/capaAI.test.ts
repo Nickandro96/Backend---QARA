@@ -23,6 +23,12 @@ test("CAPA prompt contains mandatory anti-hallucination safeguards",()=>{
   assert.match(CAPA_SYSTEM_PROMPT,/n'inventes/); assert.match(CAPA_SYSTEM_PROMPT,/UNIQUEMENT les données fournies/);
   assert.match(buildCapaPrompt({questionText:"Gestion des risques ?",questionKey:"RISK-1",criticality:"high",processSlug:"risques",referentialCode:"ISO14971",articleReference:"§4.4",responseValue:"non_conforme",responseComment:"Aucune preuve présentée",objectiveEvidence:null},{organisationName:"Medtech",economicRole:"fabricant",referentialCode:"ISO14971",processName:"Gestion des risques"}),/Aucune preuve présentée/);
 });
+test("prompt without auditor comment forces regulatory-only analysis and low confidence",()=>{
+  const prompt=buildCapaPrompt({questionText:"Le fabricant maîtrise-t-il son SMQ ?",questionKey:"MDR-1",criticality:"high",processSlug:"smq",referentialCode:"MDR",articleReference:"MDR Art. 10(9)",responseValue:"non_conforme",responseComment:"   ",objectiveEvidence:null},{organisationName:"Medtech",economicRole:"fabricant",referentialCode:"MDR",processName:"SMQ"});
+  assert.match(prompt,/Aucun commentaire d'auditeur disponible/);
+  assert.match(prompt,/uniquement sur l'exigence réglementaire/);
+  assert.match(prompt,/niveauConfiance à 'faible'/);
+});
 test("CapaAIResult schema validates a grounded ISO 14971 result",()=>assert.equal(CapaAIResultSchema.safeParse(valid).success,true));
 test("invalid AI response is never returned",async()=>{
   const client:any={messages:{create:async()=>({content:[{type:"text",text:'{"invented":true}'}]})}};
