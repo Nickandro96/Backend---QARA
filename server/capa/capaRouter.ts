@@ -3,11 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, safeJsonParse } from "../db";
-import { audits, capa_actions, capa_action_history } from "../../drizzle/schema";
+import { audits, audit_responses, capa_actions, capa_action_history, questions, referentiels } from "../../drizzle/schema";
 import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
+import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis } from "../services/capa/capaAI";
 
 const CapaStatusEnum = z.enum([
   "ouverte",
@@ -73,6 +74,77 @@ async function recordHistory(
 }
 
 export const capaRouter = router({
+  generateAnalysis: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive(), questionKey: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const [audit] = await db.select().from(audits).where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id))).limit(1);
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+      const [response] = await db.select().from(audit_responses).where(and(eq(audit_responses.auditId, input.auditId), eq(audit_responses.userId, ctx.user.id), eq(audit_responses.questionKey, input.questionKey))).limit(1);
+      if (!response) throw new TRPCError({ code: "NOT_FOUND", message: "Réponse d'audit introuvable" });
+      const normalized = String(response.responseValue ?? "").toLowerCase().replace(/[ -]/g, "_");
+      const responseValue = normalized.includes("part") ? "partiel" : normalized.includes("non") ? "non_conforme" : null;
+      if (!responseValue) throw new TRPCError({ code: "BAD_REQUEST", message: "Cette réponse n'est pas une non-conformité ou une réponse partielle" });
+      const [question] = await db.select().from(questions).where(eq(questions.questionKey, input.questionKey)).limit(1);
+      if (!question) throw new TRPCError({ code: "NOT_FOUND", message: "Question introuvable" });
+      const [ref] = question.referentialId ? await db.select().from(referentiels).where(eq(referentiels.id, question.referentialId)).limit(1) : [];
+      const referentialCode = ref?.code ?? audit.type ?? "Non renseigné";
+      const evidence = Array.isArray(response.evidenceFiles) && response.evidenceFiles.length ? JSON.stringify(response.evidenceFiles) : response.note;
+      const result = await generateCapaAnalysis({
+        questionText: question.questionText ?? question.title ?? input.questionKey,
+        questionKey: input.questionKey,
+        criticality: question.criticality ?? "medium",
+        processSlug: question.processDetail ?? null,
+        referentialCode,
+        articleReference: [question.article, question.annexe].filter(Boolean).join(" / ") || null,
+        responseValue,
+        responseComment: response.responseComment,
+        objectiveEvidence: evidence ?? null,
+      }, {
+        organisationName: audit.clientOrganization,
+        economicRole: audit.economicRole,
+        referentialCode,
+        processName: question.processDetail ?? null,
+      });
+      if (!result) throw new TRPCError({ code: "UNPROCESSABLE_CONTENT", message: "L'analyse IA n'a pas produit une réponse validée. Aucune donnée n'a été enregistrée." });
+      return { analysis: result, context: { questionText: question.questionText, articleReference: [question.article, question.annexe].filter(Boolean).join(" / ") || null, criticality: question.criticality, responseComment: response.responseComment, objectiveEvidence: evidence ?? null } };
+    }),
+
+  saveAnalysis: protectedProcedure
+    .input(z.object({
+      auditId: z.number().int().positive(), questionKey: z.string().min(1),
+      analysis: CapaAIResultSchema,
+      selectedActions: z.array(CapaAIActionSchema).min(1).max(5),
+      responsible: z.string().max(255).optional(), dueDate: z.string().datetime().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await assertAuditOwnership(db, input.auditId, ctx.user.id);
+      const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id), eq(capa_actions.questionKey, input.questionKey))).limit(1);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Créez d'abord la fiche CAPA depuis les écarts de l'audit" });
+      const actionRetenue = input.selectedActions.map((a) => `${a.titre} — ${a.description}`).join("\n\n");
+      await db.update(capa_actions).set({
+        aiContexte: input.analysis.contexteSituation,
+        aiNonConformite: input.analysis.nonConformiteIdentifiee,
+        ai5Pourquoi: input.analysis.analyse5Pourquoi,
+        aiActionsProposees: input.analysis.actionsCorrectivesProposees,
+        aiNiveauConfiance: input.analysis.niveauConfiance,
+        selectedActionIds: input.selectedActions.map((a) => a.id),
+        analyseCauseRacine: input.analysis.analyse5Pourquoi.causeRacineIdentifiee,
+        correctionImmediate: input.analysis.correctionImmediate,
+        actionRetenue,
+        rootCauseMethod: "5_pourquoi",
+        responsible: input.responsible,
+        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+        progressUpdatedAt: new Date(), progressUpdatedBy: ctx.user.id,
+      }).where(eq(capa_actions.id, existing.id));
+      await recordHistory(db, existing.id, ctx.user.id, [{ champ: "analyse_ia_validee", ancienneValeur: null, nouvelleValeur: `Actions sélectionnées : ${input.selectedActions.map((a) => a.id).join(", ")}` }]);
+      const [saved] = await db.select().from(capa_actions).where(eq(capa_actions.id, existing.id)).limit(1);
+      return toCapaAction(saved);
+    }),
+
   /**
    * Génère (ou complète) le plan d'action d'un audit à partir des écarts
    * actuels du moteur de scoring. Idempotent : n'insère que les questions
