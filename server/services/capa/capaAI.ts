@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 export const CapaAIActionSchema = z.object({
@@ -72,10 +73,15 @@ export async function generateCapaAnalysis(
     if (!client && !apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
     const sdk = client ?? new Anthropic({ apiKey, timeout: 120_000 });
     const response: any = await sdk.messages.create({
-      model: "claude-sonnet-4-6", max_tokens: 2000, temperature: 0,
+      model: "claude-sonnet-4-6", max_tokens: 4000, temperature: 0,
       system: CAPA_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildCapaPrompt(nc, auditContext) }],
+      output_config: { format: zodOutputFormat(CapaAIResultSchema) },
     });
+    if (response.stop_reason === "max_tokens") {
+      console.error("[CAPA AI] Response truncated at max_tokens", { maxTokens: 4000 });
+      return null;
+    }
     const raw = (response.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
       .replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
     const validated = CapaAIResultSchema.safeParse(JSON.parse(raw));

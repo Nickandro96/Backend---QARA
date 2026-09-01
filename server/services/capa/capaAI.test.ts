@@ -37,12 +37,18 @@ test("CAPA prompt limits question and auditor comment lengths",()=>{
   assert.doesNotMatch(prompt,/C{301}/);
 });
 test("CapaAIResult schema validates a grounded ISO 14971 result",()=>assert.equal(CapaAIResultSchema.safeParse(valid).success,true));
-test("Anthropic request allows 2000 output tokens",async()=>{
+test("Anthropic request uses structured JSON with enough output tokens",async()=>{
   let request:any;
   const client:any={messages:{create:async(input:any)=>{request=input;return {content:[{type:"text",text:JSON.stringify(valid)}]};}}};
   const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);
-  assert.equal(request.max_tokens,2000);
+  assert.equal(request.max_tokens,4000);
+  assert.equal(request.output_config.format.type,"json_schema");
   assert.deepEqual(result,valid);
+});
+test("truncated Anthropic response is rejected before JSON parsing",async()=>{
+  const client:any={messages:{create:async()=>({stop_reason:"max_tokens",content:[{type:"text",text:'{"contexteSituation":"incomplet"'}]})}};
+  const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);
+  assert.equal(result,null);
 });
 test("invalid AI response is never returned",async()=>{
   const client:any={messages:{create:async()=>({content:[{type:"text",text:'{"invented":true}'}]})}};
