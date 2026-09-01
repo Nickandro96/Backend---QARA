@@ -495,6 +495,8 @@ export const capa_actions = mysqlTable(
     progressUpdatedAt: timestamp("progressUpdatedAt"),
     progressUpdatedBy: int("progressUpdatedBy"),
     correctionImmediate: text("correctionImmediate"),
+    watchItemId: varchar("watchItemId", { length: 36 }),
+    source: mysqlEnum("source", ["audit", "veille_reglementaire", "manuel"]).notNull().default("audit"),
 
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),

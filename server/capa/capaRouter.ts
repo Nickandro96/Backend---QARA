@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, safeJsonParse } from "../db";
-import { audits, audit_responses, capa_actions, capa_action_history, questions, referentiels } from "../../drizzle/schema";
+import { audits, audit_responses, capa_actions, capa_action_history, questions, referentiels, regulatoryUpdates } from "../../drizzle/schema";
 import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
@@ -74,6 +74,31 @@ async function recordHistory(
 }
 
 export const capaRouter = router({
+  createFromWatchItem: protectedProcedure
+    .input(z.object({ auditId: z.number().int().positive(), watchItemId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await assertAuditOwnership(db, input.auditId, ctx.user.id);
+      const [item] = await db.select().from(regulatoryUpdates).where(eq(regulatoryUpdates.id, input.watchItemId)).limit(1);
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Alerte réglementaire introuvable" });
+      const questionKey = `watch:${item.id}`;
+      await db.insert(capa_actions).values({
+        userId: ctx.user.id,
+        auditId: input.auditId,
+        questionKey,
+        referentialCode: ((item.referentialsImpacted as string[] | null)?.[0] ?? item.jurisdiction),
+        processName: "Veille réglementaire",
+        gravite: item.impactLevel === "Critical" || item.impactLevel === "High" ? "majeur" : "mineur",
+        criticality: item.impactLevel.toLowerCase(),
+        ecartIdentifie: item.summaryFr || item.summaryLong || item.title,
+        actionRecommandee: (item.recommendedActions as Array<{ title?: string }> | null)?.[0]?.title || "Évaluer l'impact réglementaire et définir les mesures applicables",
+        watchItemId: item.id,
+        source: "veille_reglementaire",
+      }).onDuplicateKeyUpdate({ set: { watchItemId: item.id, source: "veille_reglementaire" } });
+      const [created] = await db.select().from(capa_actions).where(and(eq(capa_actions.userId, ctx.user.id), eq(capa_actions.auditId, input.auditId), eq(capa_actions.questionKey, questionKey))).limit(1);
+      return created;
+    }),
   dashboard: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
