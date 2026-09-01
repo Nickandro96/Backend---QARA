@@ -8,6 +8,7 @@ import {
   personalizeUpdate,
 } from "./services/watch/WatchAggregator";
 import { getReadItemIds, getUnreadItemCount, listActiveSources, markItemRead, markItemUnread } from "./services/watch/WatchStore";
+import { renderWatchReportPdf } from "./services/watch/watchReport";
 
 const zUpdateType = z.enum(["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]);
 const zImpactLevel = z.enum(["Low", "Medium", "High", "Critical"]);
@@ -157,6 +158,14 @@ export const watchRouter = router({
     .input(z.object({ trigger: z.enum(["manual"]).default("manual") }))
     .mutation(async ({ input }) => {
       return await triggerRefresh(input.trigger);
+    }),
+
+  exportReport: protectedProcedure
+    .input(z.object({ organisation: z.string().min(1).max(255), period: z.string().min(1).max(100) }))
+    .mutation(async ({ input }) => {
+      const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
+      const pdf = await renderWatchReportPdf({ ...input, items });
+      return { filename: `rapport-veille-${new Date().toISOString().slice(0, 10)}.pdf`, mimeType: "application/pdf", base64: pdf.toString("base64") };
     }),
 
   getSources: protectedProcedure.query(async () => ({ sources: await listActiveSources() })),
