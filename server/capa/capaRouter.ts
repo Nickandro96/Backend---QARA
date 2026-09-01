@@ -74,6 +74,38 @@ async function recordHistory(
 }
 
 export const capaRouter = router({
+  dashboard: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    const actionRows = await db.select().from(capa_actions).where(eq(capa_actions.userId, ctx.user.id));
+    const auditRows = await db.select({ id: audits.id, name: audits.name }).from(audits).where(eq(audits.userId, ctx.user.id));
+    const auditNameById = new Map(auditRows.map((a) => [a.id, a.name]));
+    const responseRows = await db.select().from(audit_responses).where(eq(audit_responses.userId, ctx.user.id));
+    const questionRows = await db.select().from(questions);
+    const questionByKey = new Map(questionRows.map((q) => [q.questionKey, q]));
+    const actionKeys = new Set(actionRows.map((a) => `${a.auditId}:${a.questionKey}`));
+    const auditIds = new Set(auditRows.map((a) => a.id));
+    const unplanned = responseRows.flatMap((r) => {
+      const value = String(r.responseValue ?? "").toLowerCase().replace(/[ -]/g, "_");
+      if (!auditIds.has(r.auditId) || (!value.includes("non") && !value.includes("part")) || actionKeys.has(`${r.auditId}:${r.questionKey}`)) return [];
+      const q = questionByKey.get(r.questionKey);
+      return [{ auditId: r.auditId, auditName: auditNameById.get(r.auditId) ?? `Audit ${r.auditId}`, questionKey: r.questionKey, questionText: q?.questionText ?? q?.title ?? r.questionKey, criticality: q?.criticality ?? "medium", processName: q?.processDetail ?? null, articleReference: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, responseComment: r.responseComment, objectiveEvidence: r.note }];
+    });
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const actions = sortByPriority(actionRows.map(toCapaAction)).map((a) => ({ ...a, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}` }));
+    return {
+      stats: {
+        ncOuvertes: unplanned.length,
+        enCours: actionRows.filter((a) => ["ouverte", "en_cours", "a_verifier"].includes(a.statut)).length,
+        enRetard: actionRows.filter((a) => a.dueDate && a.dueDate < now && !a.statut.startsWith("cloturee")).length,
+        clotureesCeMois: actionRows.filter((a) => a.statut.startsWith("cloturee") && a.updatedAt >= monthStart).length,
+      },
+      unplanned,
+      actions,
+    };
+  }),
+
   generateAnalysis: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive(), questionKey: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
