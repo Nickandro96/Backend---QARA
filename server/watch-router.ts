@@ -13,6 +13,28 @@ const zUpdateType = z.enum(["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]);
 const zImpactLevel = z.enum(["Low", "Medium", "High", "Critical"]);
 const zStatus = z.enum(["NEW", "UPDATED", "REPEALED", "CORRIGENDUM"]);
 
+type WatchFilterItem = {
+  aiAnalyzed: boolean;
+  marketsImpacted: string[];
+  rolesImpacted: string[];
+  sourceRegistryId: string | null;
+  criticality?: "informational" | "watch" | "action_required" | null;
+};
+
+export function isWatchItemVisible(
+  item: WatchFilterItem,
+  filters: { marketsImpacted?: string[]; rolesImpacted?: string[]; sourceIds?: string[]; actionRequiredOnly?: boolean },
+): boolean {
+  // Les alertes nécessitant une action et les documents encore non analysés ne
+  // doivent jamais disparaître à cause d'un profil IA incomplet.
+  if (filters.actionRequiredOnly) return item.criticality === "action_required";
+  if (item.criticality === "action_required" || item.aiAnalyzed === false) return true;
+  if (filters.marketsImpacted?.length && !filters.marketsImpacted.some((v) => item.marketsImpacted.includes(v))) return false;
+  if (filters.rolesImpacted?.length && !filters.rolesImpacted.some((v) => item.rolesImpacted.includes(v))) return false;
+  if (filters.sourceIds?.length && (!item.sourceRegistryId || !filters.sourceIds.includes(item.sourceRegistryId))) return false;
+  return true;
+}
+
 const zCompanyProfile = z.object({
   economicRole: z.enum(["fabricant", "importateur", "distributeur", "sous_traitant", "ar"]),
   deviceClass: z.enum(["I", "IIa", "IIb", "III"]),
@@ -44,12 +66,14 @@ export const watchRouter = router({
         sourceIds: z.array(z.string()).optional(),
         readStatus: z.enum(["all", "read", "unread"]).optional().default("all"),
         sortBy: z.enum(["date", "criticality", "relevance"]).optional().default("date"),
+        actionRequiredOnly: z.coerce.boolean().optional().default(false),
+        analysisStatus: z.enum(["all", "analyzed", "pending"]).optional().default("all"),
       })
     )
     .query(async ({ ctx, input }) => {
       const { items, meta } = await getUpdatesCached({
-        limit: input.limit,
-        offset: input.offset,
+        limit: 200,
+        offset: 0,
         type: input.type,
         impactLevel: input.impactLevel,
         status: input.status,
@@ -66,13 +90,16 @@ export const watchRouter = router({
 
       // Equivalent SQL for DB-side optimization: JSON_OVERLAPS(markets_impacted, JSON_ARRAY(...))
       let filteredItems = items.filter((it) => {
-        if (input.marketsImpacted?.length && !input.marketsImpacted.some((v) => it.marketsImpacted.includes(v))) return false;
-        if (input.rolesImpacted?.length && !input.rolesImpacted.some((v) => it.rolesImpacted.includes(v as any))) return false;
-        if (input.sourceIds?.length && (!it.sourceRegistryId || !input.sourceIds.includes(it.sourceRegistryId))) return false;
+        if (input.analysisStatus === "analyzed" && !it.aiAnalyzed) return false;
+        if (input.analysisStatus === "pending" && it.aiAnalyzed) return false;
+        if (!isWatchItemVisible(it as WatchFilterItem, input)) return false;
         const isRead = readIds.has(it.id); if (input.readStatus === "read" && !isRead) return false; if (input.readStatus === "unread" && isRead) return false;
         return true;
       });
       if (input.sortBy === "criticality") filteredItems = filteredItems.sort((a,b) => ["Critical","High","Medium","Low"].indexOf(a.impactLevel)-["Critical","High","Medium","Low"].indexOf(b.impactLevel));
+      const totalFiltered = filteredItems.length;
+      filteredItems = filteredItems.slice(input.offset, input.offset + input.limit);
+      console.info("[watch] visibility", { totalAvailable: items.length, totalFiltered, returned: filteredItems.length });
       const enrichedItems = filteredItems.map((it) => {
         const personalized = personalizeUpdate(it, profile);
         return {
@@ -82,7 +109,7 @@ export const watchRouter = router({
         };
       });
 
-      return { items: enrichedItems, meta, companyProfile: profile };
+      return { items: enrichedItems, meta: { ...meta, totalAvailable: items.length, totalFiltered }, companyProfile: profile };
     }),
 
   latest: protectedProcedure.query(async ({ ctx }) => {
