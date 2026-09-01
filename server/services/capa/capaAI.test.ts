@@ -29,7 +29,21 @@ test("prompt without auditor comment forces regulatory-only analysis and low con
   assert.match(prompt,/uniquement sur l'exigence réglementaire/);
   assert.match(prompt,/niveauConfiance à 'faible'/);
 });
+test("CAPA prompt limits question and auditor comment lengths",()=>{
+  const prompt=buildCapaPrompt({questionText:"Q".repeat(600),questionKey:"MDR-1",criticality:"high",processSlug:"smq",referentialCode:"MDR",articleReference:"MDR Art. 10(9)",responseValue:"non_conforme",responseComment:"C".repeat(400),objectiveEvidence:null},{organisationName:"Medtech",economicRole:"fabricant",referentialCode:"MDR",processName:"SMQ"});
+  assert.match(prompt,new RegExp(`Question : Q{500}\\nArticle/Clause`));
+  assert.doesNotMatch(prompt,/Q{501}/);
+  assert.match(prompt,new RegExp(`Constat de l'auditeur : C{300}\\nPreuves objectives`));
+  assert.doesNotMatch(prompt,/C{301}/);
+});
 test("CapaAIResult schema validates a grounded ISO 14971 result",()=>assert.equal(CapaAIResultSchema.safeParse(valid).success,true));
+test("Anthropic request allows 2000 output tokens",async()=>{
+  let request:any;
+  const client:any={messages:{create:async(input:any)=>{request=input;return {content:[{type:"text",text:JSON.stringify(valid)}]};}}};
+  const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);
+  assert.equal(request.max_tokens,2000);
+  assert.deepEqual(result,valid);
+});
 test("invalid AI response is never returned",async()=>{
   const client:any={messages:{create:async()=>({content:[{type:"text",text:'{"invented":true}'}]})}};
   const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);

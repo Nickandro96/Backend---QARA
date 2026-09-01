@@ -55,10 +55,11 @@ Si les données sont insuffisantes pour une analyse complète, tu l'indiques exp
 Tu réponds UNIQUEMENT en JSON valide, sans texte avant ou après.`;
 
 export function buildCapaPrompt(nc: NonConformite, context: AuditContext) {
+  const questionText = nc.questionText.slice(0, 500);
   const auditorObservation = nc.responseComment?.trim()
-    ? nc.responseComment.trim()
+    ? nc.responseComment.trim().slice(0, 300)
     : "Aucun commentaire d'auditeur disponible — baser l'analyse uniquement sur l'exigence réglementaire et fixer niveauConfiance à 'faible'.";
-  return `CONTEXTE ORGANISATION\nOrganisation : ${context.organisationName ?? "Non renseignée"}\nRôle économique : ${context.economicRole ?? "Non renseigné"}\nRéférentiel : ${context.referentialCode}\nProcessus : ${context.processName ?? nc.processSlug ?? "Non renseigné"}\n\nNON-CONFORMITÉ RÉELLE\nQuestion : ${nc.questionText}\nArticle/Clause : ${nc.articleReference ?? "Non renseigné"}\nCriticité : ${nc.criticality}\nRéponse : ${nc.responseValue}\nConstat de l'auditeur : ${auditorObservation}\nPreuves objectives : ${nc.objectiveEvidence ?? "Non fournies"}\n\nProduis une analyse CAPA en JSON avec les champs exacts définis : contexteSituation, nonConformiteIdentifiee, analyse5Pourquoi (pourquoi1 à pourquoi5 et causeRacineIdentifiee), correctionImmediate, actionsCorrectivesProposees (3 à 5 actions), pointsVigilance, referenceReglementaire, niveauConfiance, raisonNiveauConfiance. Ne transforme jamais une hypothèse en fait.`;
+  return `CONTEXTE ORGANISATION\nOrganisation : ${context.organisationName ?? "Non renseignée"}\nRôle économique : ${context.economicRole ?? "Non renseigné"}\nRéférentiel : ${context.referentialCode}\nProcessus : ${context.processName ?? nc.processSlug ?? "Non renseigné"}\n\nNON-CONFORMITÉ RÉELLE\nQuestion : ${questionText}\nArticle/Clause : ${nc.articleReference ?? "Non renseigné"}\nCriticité : ${nc.criticality}\nRéponse : ${nc.responseValue}\nConstat de l'auditeur : ${auditorObservation}\nPreuves objectives : ${nc.objectiveEvidence ?? "Non fournies"}\n\nProduis une analyse CAPA en JSON avec les champs exacts définis : contexteSituation, nonConformiteIdentifiee, analyse5Pourquoi (pourquoi1 à pourquoi5 et causeRacineIdentifiee), correctionImmediate, actionsCorrectivesProposees (3 à 5 actions), pointsVigilance, referenceReglementaire, niveauConfiance, raisonNiveauConfiance. Ne transforme jamais une hypothèse en fait.`;
 }
 
 export async function generateCapaAnalysis(
@@ -69,9 +70,9 @@ export async function generateCapaAnalysis(
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!client && !apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-    const sdk = client ?? new Anthropic({ apiKey, timeout: 30_000 });
+    const sdk = client ?? new Anthropic({ apiKey, timeout: 120_000 });
     const response: any = await sdk.messages.create({
-      model: "claude-sonnet-4-6", max_tokens: 3500, temperature: 0,
+      model: "claude-sonnet-4-6", max_tokens: 2000, temperature: 0,
       system: CAPA_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildCapaPrompt(nc, auditContext) }],
     });
