@@ -9,6 +9,7 @@ import {
   watchCompanyProfiles,
   regulatorySources,
   regulatoryUserReads,
+  capa_actions,
 } from "../../../drizzle/schema";
 
 export async function getLastRefresh(): Promise<Date | null> {
@@ -76,6 +77,9 @@ export async function listUpdates(opts: {
     aiAnalyzed: Boolean(r.aiAnalyzed),
     aiAnalysisDate: r.aiAnalysisDate ? new Date(r.aiAnalysisDate) : null,
     aiModelVersion: r.aiModelVersion ?? null,
+    analysisCriticality: r.analysisCriticality ?? null,
+    keyChanges: r.keyChanges ?? [],
+    actionRequired: r.actionRequired ?? null,
     licenceVerified: r.licenceVerified ?? null,
     sourceRegistryId: r.sourceRegistryId ?? null,
     jurisdiction: r.jurisdiction,
@@ -360,6 +364,12 @@ export async function getUnreadItemCount(userId: number): Promise<number> {
   const database = await db.getDb(); if (!database) return 0;
   const rows = await database.select({ id: regulatoryUpdates.id }).from(regulatoryUpdates);
   const read = await getReadItemIds(userId); return rows.filter((row) => !read.has(row.id)).length;
+}
+
+export async function getUserWatchCapaIds(userId: number): Promise<Set<string>> {
+  const database = await db.getDb(); if (!database) return new Set();
+  const rows = await database.select({ watchItemId: capa_actions.watchItemId }).from(capa_actions).where(eq(capa_actions.userId, userId));
+  return new Set(rows.flatMap((row) => row.watchItemId ? [row.watchItemId] : []));
 }
 
 function cryptoRandomUuid(): string {

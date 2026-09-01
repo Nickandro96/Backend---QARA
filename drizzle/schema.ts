@@ -686,6 +686,9 @@ export const regulatoryUpdates = mysqlTable(
     aiAnalyzed: boolean("ai_analyzed").notNull().default(false),
     aiAnalysisDate: timestamp("ai_analysis_date"),
     aiModelVersion: varchar("ai_model_version", { length: 100 }),
+    analysisCriticality: mysqlEnum("criticality", ["informational", "watch", "action_required"]),
+    keyChanges: json("key_changes"),
+    actionRequired: text("action_required"),
     licenceVerified: boolean("licence_verified"),
     sourceRegistryId: varchar("source_id", { length: 64 }),
 

@@ -41,6 +41,13 @@ export type NonConformite = {
 };
 export type AuditContext = { organisationName: string | null; economicRole: string | null; referentialCode: string; processName: string | null };
 
+export function serializeSelectedActions(actions: Array<z.infer<typeof CapaAIActionSchema>>) {
+  return {
+    selectedActionIds: actions.map((action) => action.id),
+    actionRetenue: actions.map((action) => `${action.titre} — ${action.description}`).join("\n\n"),
+  };
+}
+
 export const CAPA_SYSTEM_PROMPT = `Tu es un expert en systèmes de management de la qualité pour dispositifs médicaux, spécialisé en ISO 13485, MDR 2017/745, FDA QMSR et méthodes CAPA (8D, 5 Pourquoi, Ishikawa, FMEA).
 Tu analyses UNIQUEMENT les données fournies.
 Tu n'inventes JAMAIS une non-conformité, une cause ou une action qui n'est pas suggérée par les données de l'audit.

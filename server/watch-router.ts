@@ -7,7 +7,7 @@ import {
   saveCompanyProfile,
   personalizeUpdate,
 } from "./services/watch/WatchAggregator";
-import { getReadItemIds, getUnreadItemCount, listActiveSources, markItemRead, markItemUnread } from "./services/watch/WatchStore";
+import { getReadItemIds, getUnreadItemCount, getUserWatchCapaIds, listActiveSources, markItemRead, markItemUnread } from "./services/watch/WatchStore";
 import { renderWatchReportPdf } from "./services/watch/watchReport";
 
 const zUpdateType = z.enum(["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]);
@@ -19,7 +19,7 @@ type WatchFilterItem = {
   marketsImpacted: string[];
   rolesImpacted: string[];
   sourceRegistryId: string | null;
-  criticality?: "informational" | "watch" | "action_required" | null;
+  analysisCriticality?: "informational" | "watch" | "action_required" | null;
 };
 
 export function isWatchItemVisible(
@@ -28,16 +28,16 @@ export function isWatchItemVisible(
 ): boolean {
   // Les alertes nécessitant une action et les documents encore non analysés ne
   // doivent jamais disparaître à cause d'un profil IA incomplet.
-  if (filters.actionRequiredOnly) return item.criticality === "action_required";
-  if (item.criticality === "action_required" || item.aiAnalyzed === false) return true;
+  if (filters.actionRequiredOnly) return item.analysisCriticality === "action_required";
+  if (item.analysisCriticality === "action_required" || item.aiAnalyzed === false) return true;
   if (filters.marketsImpacted?.length && !filters.marketsImpacted.some((v) => item.marketsImpacted.includes(v))) return false;
   if (filters.rolesImpacted?.length && !filters.rolesImpacted.some((v) => item.rolesImpacted.includes(v))) return false;
   if (filters.sourceIds?.length && (!item.sourceRegistryId || !filters.sourceIds.includes(item.sourceRegistryId))) return false;
   return true;
 }
 
-export function watchPriority(item: { criticality?: string | null; aiAnalyzed: boolean; impactLevel: string }): number {
-  if (item.criticality === "action_required") return 0;
+export function watchPriority(item: { analysisCriticality?: string | null; aiAnalyzed: boolean; impactLevel: string }): number {
+  if (item.analysisCriticality === "action_required") return 0;
   if (!item.aiAnalyzed) return 1;
   const impact = ["Critical", "High", "Medium", "Low"].indexOf(item.impactLevel);
   return impact === -1 ? 6 : impact + 2;
@@ -162,9 +162,10 @@ export const watchRouter = router({
 
   exportReport: protectedProcedure
     .input(z.object({ organisation: z.string().min(1).max(255), period: z.string().min(1).max(100) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
-      const pdf = await renderWatchReportPdf({ ...input, items });
+      const [sources, watchCapaIds] = await Promise.all([listActiveSources(), getUserWatchCapaIds(ctx.user.id)]);
+      const pdf = await renderWatchReportPdf({ ...input, items, sources, watchCapaIds });
       return { filename: `rapport-veille-${new Date().toISOString().slice(0, 10)}.pdf`, mimeType: "application/pdf", base64: pdf.toString("base64") };
     }),
 

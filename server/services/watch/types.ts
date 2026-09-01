@@ -98,6 +98,9 @@ export type RegulatoryUpdate = {
   aiAnalyzed: boolean;
   aiAnalysisDate: Date | null;
   aiModelVersion: string | null;
+  analysisCriticality?: "informational" | "watch" | "action_required" | null;
+  keyChanges?: string[];
+  actionRequired?: string | null;
   licenceVerified: boolean | null;
   sourceRegistryId: string | null;
 
