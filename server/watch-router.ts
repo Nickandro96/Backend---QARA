@@ -35,6 +35,13 @@ export function isWatchItemVisible(
   return true;
 }
 
+export function watchPriority(item: { criticality?: string | null; aiAnalyzed: boolean; impactLevel: string }): number {
+  if (item.criticality === "action_required") return 0;
+  if (!item.aiAnalyzed) return 1;
+  const impact = ["Critical", "High", "Medium", "Low"].indexOf(item.impactLevel);
+  return impact === -1 ? 6 : impact + 2;
+}
+
 const zCompanyProfile = z.object({
   economicRole: z.enum(["fabricant", "importateur", "distributeur", "sous_traitant", "ar"]),
   deviceClass: z.enum(["I", "IIa", "IIb", "III"]),
@@ -97,6 +104,7 @@ export const watchRouter = router({
         return true;
       });
       if (input.sortBy === "criticality") filteredItems = filteredItems.sort((a,b) => ["Critical","High","Medium","Low"].indexOf(a.impactLevel)-["Critical","High","Medium","Low"].indexOf(b.impactLevel));
+      if (input.sortBy === "relevance") filteredItems = filteredItems.sort((a, b) => watchPriority(a as any) - watchPriority(b as any));
       const totalFiltered = filteredItems.length;
       filteredItems = filteredItems.slice(input.offset, input.offset + input.limit);
       console.info("[watch] visibility", { totalAvailable: items.length, totalFiltered, returned: filteredItems.length });
