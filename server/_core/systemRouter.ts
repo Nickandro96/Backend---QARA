@@ -8,6 +8,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, verifyPassword, isBcryptHash } from "./passwordUtils";
 import { createResetToken, hashResetToken, sendPasswordResetEmail } from "./passwordReset";
+import { sendWelcomeEmail } from "./legalEmails";
 
 function errMsg(e: any) {
   if (!e) return "unknown";
@@ -121,6 +122,13 @@ export const systemRouter = router({
         ...cookieOptions,
         maxAge: ONE_YEAR_MS,
       });
+
+      try {
+        await sendWelcomeEmail(input.email, input.name);
+      } catch (error) {
+        // L'échec d'un email transactionnel ne doit pas annuler un compte déjà créé.
+        console.error("[Register] Welcome email delivery failed:", error);
+      }
 
       return { success: true, message: "Inscription réussie" };
     }),
