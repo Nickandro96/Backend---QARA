@@ -8,10 +8,40 @@ import {
   personalizeUpdate,
 } from "./services/watch/WatchAggregator";
 import { getReadItemIds, getUnreadItemCount, listActiveSources, markItemRead, markItemUnread } from "./services/watch/WatchStore";
+import { renderWatchReportPdf } from "./services/watch/watchReport";
 
 const zUpdateType = z.enum(["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]);
 const zImpactLevel = z.enum(["Low", "Medium", "High", "Critical"]);
 const zStatus = z.enum(["NEW", "UPDATED", "REPEALED", "CORRIGENDUM"]);
+
+type WatchFilterItem = {
+  aiAnalyzed: boolean;
+  marketsImpacted: string[];
+  rolesImpacted: string[];
+  sourceRegistryId: string | null;
+  criticality?: "informational" | "watch" | "action_required" | null;
+};
+
+export function isWatchItemVisible(
+  item: WatchFilterItem,
+  filters: { marketsImpacted?: string[]; rolesImpacted?: string[]; sourceIds?: string[]; actionRequiredOnly?: boolean },
+): boolean {
+  // Les alertes nécessitant une action et les documents encore non analysés ne
+  // doivent jamais disparaître à cause d'un profil IA incomplet.
+  if (filters.actionRequiredOnly) return item.criticality === "action_required";
+  if (item.criticality === "action_required" || item.aiAnalyzed === false) return true;
+  if (filters.marketsImpacted?.length && !filters.marketsImpacted.some((v) => item.marketsImpacted.includes(v))) return false;
+  if (filters.rolesImpacted?.length && !filters.rolesImpacted.some((v) => item.rolesImpacted.includes(v))) return false;
+  if (filters.sourceIds?.length && (!item.sourceRegistryId || !filters.sourceIds.includes(item.sourceRegistryId))) return false;
+  return true;
+}
+
+export function watchPriority(item: { criticality?: string | null; aiAnalyzed: boolean; impactLevel: string }): number {
+  if (item.criticality === "action_required") return 0;
+  if (!item.aiAnalyzed) return 1;
+  const impact = ["Critical", "High", "Medium", "Low"].indexOf(item.impactLevel);
+  return impact === -1 ? 6 : impact + 2;
+}
 
 const zCompanyProfile = z.object({
   economicRole: z.enum(["fabricant", "importateur", "distributeur", "sous_traitant", "ar"]),
@@ -44,12 +74,14 @@ export const watchRouter = router({
         sourceIds: z.array(z.string()).optional(),
         readStatus: z.enum(["all", "read", "unread"]).optional().default("all"),
         sortBy: z.enum(["date", "criticality", "relevance"]).optional().default("date"),
+        actionRequiredOnly: z.coerce.boolean().optional().default(false),
+        analysisStatus: z.enum(["all", "analyzed", "pending"]).optional().default("all"),
       })
     )
     .query(async ({ ctx, input }) => {
       const { items, meta } = await getUpdatesCached({
-        limit: input.limit,
-        offset: input.offset,
+        limit: 200,
+        offset: 0,
         type: input.type,
         impactLevel: input.impactLevel,
         status: input.status,
@@ -66,13 +98,17 @@ export const watchRouter = router({
 
       // Equivalent SQL for DB-side optimization: JSON_OVERLAPS(markets_impacted, JSON_ARRAY(...))
       let filteredItems = items.filter((it) => {
-        if (input.marketsImpacted?.length && !input.marketsImpacted.some((v) => it.marketsImpacted.includes(v))) return false;
-        if (input.rolesImpacted?.length && !input.rolesImpacted.some((v) => it.rolesImpacted.includes(v as any))) return false;
-        if (input.sourceIds?.length && (!it.sourceRegistryId || !input.sourceIds.includes(it.sourceRegistryId))) return false;
+        if (input.analysisStatus === "analyzed" && !it.aiAnalyzed) return false;
+        if (input.analysisStatus === "pending" && it.aiAnalyzed) return false;
+        if (!isWatchItemVisible(it as WatchFilterItem, input)) return false;
         const isRead = readIds.has(it.id); if (input.readStatus === "read" && !isRead) return false; if (input.readStatus === "unread" && isRead) return false;
         return true;
       });
       if (input.sortBy === "criticality") filteredItems = filteredItems.sort((a,b) => ["Critical","High","Medium","Low"].indexOf(a.impactLevel)-["Critical","High","Medium","Low"].indexOf(b.impactLevel));
+      if (input.sortBy === "relevance") filteredItems = filteredItems.sort((a, b) => watchPriority(a as any) - watchPriority(b as any));
+      const totalFiltered = filteredItems.length;
+      filteredItems = filteredItems.slice(input.offset, input.offset + input.limit);
+      console.info("[watch] visibility", { totalAvailable: items.length, totalFiltered, returned: filteredItems.length });
       const enrichedItems = filteredItems.map((it) => {
         const personalized = personalizeUpdate(it, profile);
         return {
@@ -82,7 +118,7 @@ export const watchRouter = router({
         };
       });
 
-      return { items: enrichedItems, meta, companyProfile: profile };
+      return { items: enrichedItems, meta: { ...meta, totalAvailable: items.length, totalFiltered }, companyProfile: profile };
     }),
 
   latest: protectedProcedure.query(async ({ ctx }) => {
@@ -98,10 +134,38 @@ export const watchRouter = router({
     return { items: critical.slice(0, 30), meta };
   }),
 
+  details: protectedProcedure
+    .input(z.object({ itemId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
+      const item = items.find((candidate) => candidate.id === input.itemId);
+      if (!item) throw new Error("Item de veille introuvable");
+      return {
+        ...item,
+        provenance: {
+          sourceName: item.sourceName,
+          sourceUrl: item.sourceUrl,
+          officialId: item.officialId,
+          publishedAt: item.publishedAt,
+          retrievedAt: item.retrievedAt,
+          languageSource: item.languageSource,
+          licenceVerified: item.licenceVerified,
+        },
+      };
+    }),
+
   refresh: adminProcedure
     .input(z.object({ trigger: z.enum(["manual"]).default("manual") }))
     .mutation(async ({ input }) => {
       return await triggerRefresh(input.trigger);
+    }),
+
+  exportReport: protectedProcedure
+    .input(z.object({ organisation: z.string().min(1).max(255), period: z.string().min(1).max(100) }))
+    .mutation(async ({ input }) => {
+      const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
+      const pdf = await renderWatchReportPdf({ ...input, items });
+      return { filename: `rapport-veille-${new Date().toISOString().slice(0, 10)}.pdf`, mimeType: "application/pdf", base64: pdf.toString("base64") };
     }),
 
   getSources: protectedProcedure.query(async () => ({ sources: await listActiveSources() })),

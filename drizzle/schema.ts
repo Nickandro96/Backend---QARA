@@ -485,6 +485,19 @@ export const capa_actions = mysqlTable(
 
     referentielsImpactes: json("referentielsImpactes"),
 
+    aiContexte: text("aiContexte"),
+    aiNonConformite: text("aiNonConformite"),
+    ai5Pourquoi: json("ai5Pourquoi"),
+    aiActionsProposees: json("aiActionsProposees"),
+    aiNiveauConfiance: varchar("aiNiveauConfiance", { length: 10 }),
+    selectedActionIds: json("selectedActionIds"),
+    progressNote: text("progressNote"),
+    progressUpdatedAt: timestamp("progressUpdatedAt"),
+    progressUpdatedBy: int("progressUpdatedBy"),
+    correctionImmediate: text("correctionImmediate"),
+    watchItemId: varchar("watchItemId", { length: 36 }),
+    source: mysqlEnum("source", ["audit", "veille_reglementaire", "manuel"]).notNull().default("audit"),
+
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
