@@ -8,7 +8,7 @@ import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
-import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis } from "../services/capa/capaAI";
+import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
 
 const CapaStatusEnum = z.enum([
   "ouverte",
@@ -92,7 +92,7 @@ export const capaRouter = router({
         gravite: item.impactLevel === "Critical" || item.impactLevel === "High" ? "majeur" : "mineur",
         criticality: item.impactLevel.toLowerCase(),
         ecartIdentifie: item.summaryFr || item.summaryLong || item.title,
-        actionRecommandee: (item.recommendedActions as Array<{ title?: string }> | null)?.[0]?.title || "Évaluer l'impact réglementaire et définir les mesures applicables",
+        actionRecommandee: item.actionRequired || (item.recommendedActions as Array<{ title?: string }> | null)?.[0]?.title || "Évaluer l'impact réglementaire et définir les mesures applicables",
         watchItemId: item.id,
         source: "veille_reglementaire",
       }).onDuplicateKeyUpdate({ set: { watchItemId: item.id, source: "veille_reglementaire" } });
@@ -118,7 +118,14 @@ export const capaRouter = router({
     });
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const actions = sortByPriority(actionRows.map(toCapaAction)).map((a) => ({ ...a, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}` }));
+    const rawById = new Map(actionRows.map((row) => [row.id, row]));
+    const watchIds = actionRows.flatMap((row) => row.watchItemId ? [row.watchItemId] : []);
+    const watchRows = watchIds.length ? await db.select({ id: regulatoryUpdates.id, title: regulatoryUpdates.title, sourceName: regulatoryUpdates.sourceName, sourceUrl: regulatoryUpdates.sourceUrl }).from(regulatoryUpdates) : [];
+    const watchById = new Map(watchRows.filter((row) => watchIds.includes(row.id)).map((row) => [row.id, row]));
+    const actions = sortByPriority(actionRows.map(toCapaAction)).map((a) => {
+      const raw = rawById.get(a.id)!;
+      return { ...a, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
+    });
     return {
       stats: {
         ncOuvertes: unplanned.length,
@@ -181,14 +188,14 @@ export const capaRouter = router({
       await assertAuditOwnership(db, input.auditId, ctx.user.id);
       const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id), eq(capa_actions.questionKey, input.questionKey))).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Créez d'abord la fiche CAPA depuis les écarts de l'audit" });
-      const actionRetenue = input.selectedActions.map((a) => `${a.titre} — ${a.description}`).join("\n\n");
+      const { actionRetenue, selectedActionIds } = serializeSelectedActions(input.selectedActions);
       await db.update(capa_actions).set({
         aiContexte: input.analysis.contexteSituation,
         aiNonConformite: input.analysis.nonConformiteIdentifiee,
         ai5Pourquoi: input.analysis.analyse5Pourquoi,
         aiActionsProposees: input.analysis.actionsCorrectivesProposees,
         aiNiveauConfiance: input.analysis.niveauConfiance,
-        selectedActionIds: input.selectedActions.map((a) => a.id),
+        selectedActionIds,
         analyseCauseRacine: input.analysis.analyse5Pourquoi.causeRacineIdentifiee,
         correctionImmediate: input.analysis.correctionImmediate,
         actionRetenue,

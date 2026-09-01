@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CAPA_SYSTEM_PROMPT, CapaAIResultSchema, buildCapaPrompt, generateCapaAnalysis } from "./capaAI";
+import { CAPA_SYSTEM_PROMPT, CapaAIResultSchema, buildCapaPrompt, generateCapaAnalysis, serializeSelectedActions } from "./capaAI";
 
 const valid = {
   contexteSituation: "La gestion des risques n'est pas démontrée par les preuves fournies dans l'audit.",
@@ -28,4 +28,11 @@ test("invalid AI response is never returned",async()=>{
   const client:any={messages:{create:async()=>({content:[{type:"text",text:'{"invented":true}'}]})}};
   const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);
   assert.equal(result,null);
+});
+test("seules les actions sélectionnées sont préparées pour la sauvegarde",()=>{
+  const saved=serializeSelectedActions([valid.actionsCorrectivesProposees[0],valid.actionsCorrectivesProposees[2]] as any);
+  assert.deepEqual(saved.selectedActionIds,["1","3"]);
+  assert.match(saved.actionRetenue,/Action 1/);
+  assert.doesNotMatch(saved.actionRetenue,/Action 2/);
+  assert.match(saved.actionRetenue,/Action 3/);
 });
