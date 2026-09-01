@@ -56,7 +56,7 @@ export interface GapEntry {
 
 export interface CapaEntry {
   gapReference: string;
-  containment: string | null; // pas de colonne dédiée sur capa_actions — "Non renseigné" assumé
+  containment: string | null;
   rootCauseAnalysis: string | null;
   rootCauseMethod: string | null;
   correctiveAction: string | null;
@@ -377,7 +377,7 @@ export async function assembleReportData(
       requirementRef,
       requirementTitle: dedupeRequirementTitle(q?.annexe ?? q?.article ?? null, q?.title ?? null),
       objectiveEvidence,
-      gapStatement: capa?.ecartIdentifie || buildGapStatement(ecart),
+      gapStatement: capa?.aiNonConformite || capa?.ecartIdentifie || buildGapStatement(ecart),
       gravite: ecart.gravite,
       criticalityJustification: GRAVITE_JUSTIFICATION[ecart.gravite] ?? "",
       processName: ecart.processName,
@@ -396,8 +396,10 @@ export async function assembleReportData(
       const capa = capaRows.find((c) => c.id === g.linkedCapaId)!;
       return {
         gapReference: g.reference,
-        containment: null,
-        rootCauseAnalysis: capa.analyseCauseRacine,
+        containment: capa.correctionImmediate,
+        rootCauseAnalysis:
+          capa.analyseCauseRacine ||
+          ((capa.ai5Pourquoi as { causeRacineIdentifiee?: string } | null)?.causeRacineIdentifiee ?? null),
         rootCauseMethod: (capa as any).rootCauseMethod ?? null,
         correctiveAction: capa.actionRetenue || capa.actionRecommandee,
         responsible: capa.responsible,
