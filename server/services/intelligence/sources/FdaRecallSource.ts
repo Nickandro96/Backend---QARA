@@ -1,0 +1,4 @@
+import type { RealDocument } from "../types";
+import { fetchTextWithRetry } from "../../watch/sources/_http";
+export function parseFdaRecalls(raw:string):RealDocument[]{const data=JSON.parse(raw);return (data.results??[]).map((r:any)=>({id:String(r.res_event_number??r.event_id??r.product_res_number),title:r.product_description??"FDA device recall",source:"FDA Device Recall",url:"https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfres/res.cfm",publishedAt:r.event_date_initiated??null,content:[r.reason_for_recall,r.action,r.recall_status,r.root_cause_description].filter(Boolean).join(" — "),status:r.recall_status??null}));}
+export async function fetchFdaRecalls():Promise<RealDocument[]>{const raw=await fetchTextWithRetry("https://api.fda.gov/device/recall.json?limit=20&sort=event_date_initiated:desc",{timeoutMs:30000});return parseFdaRecalls(raw);}

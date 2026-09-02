@@ -22,6 +22,8 @@ export interface PlanCapabilities {
   canUseFDA: boolean;
   canUseVeille: boolean;
   canExportReports: boolean;
+  canUseSectorIntelligence: boolean;
+  canUseSectorBenchmark: boolean;
 }
 
 const FREE_CAPABILITIES: PlanCapabilities = {
@@ -29,6 +31,8 @@ const FREE_CAPABILITIES: PlanCapabilities = {
   canUseFDA: false,
   canUseVeille: false,
   canExportReports: false,
+  canUseSectorIntelligence: false,
+  canUseSectorBenchmark: false,
 };
 
 const PAID_CAPABILITIES: PlanCapabilities = {
@@ -36,6 +40,8 @@ const PAID_CAPABILITIES: PlanCapabilities = {
   canUseFDA: true,
   canUseVeille: true,
   canExportReports: true,
+  canUseSectorIntelligence: true,
+  canUseSectorBenchmark: false,
 };
 
 export function normalizePlanTier(value: unknown): PlanTier {
@@ -47,7 +53,7 @@ export function normalizePlanTier(value: unknown): PlanTier {
 }
 
 export function getPlanCapabilities(subscriptionTier: unknown): PlanCapabilities {
-  return normalizePlanTier(subscriptionTier) === "free" ? FREE_CAPABILITIES : PAID_CAPABILITIES;
+  const tier=normalizePlanTier(subscriptionTier); return tier === "free" ? FREE_CAPABILITIES : tier === "entreprise" ? {...PAID_CAPABILITIES,canUseSectorBenchmark:true} : PAID_CAPABILITIES;
 }
 
 export function isAdmin(user: { role?: unknown } | null | undefined): boolean {

@@ -28,6 +28,7 @@ import { assistantRouter, callAssistant } from "./assistant/assistant-router";
 
 import { auditRouter } from "./audit-router";
 import { watchRouter } from "./watch-router";
+import { intelligenceRouter } from "./intelligence-router";
 
 import { generateAuditReport } from "./report-generator";
 import { assembleReportData } from "./report/reportData";
@@ -177,6 +178,7 @@ const optionalIntOrNull = z.preprocess(
 export const appRouter = router({
   system: systemRouter,
   watch: watchRouter,
+  intelligence: intelligenceRouter,
 
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),

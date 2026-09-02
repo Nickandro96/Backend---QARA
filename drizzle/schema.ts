@@ -7,6 +7,7 @@ import {
   timestamp,
   json,
   uniqueIndex,
+  index,
   mysqlEnum,
   date,
   mediumtext,
@@ -553,6 +554,23 @@ export const capa_action_history = mysqlTable("capa_action_history", {
   ancienneValeur: text("ancienneValeur"),
   nouvelleValeur: text("nouvelleValeur"),
 });
+
+export const sectorBriefings = mysqlTable("sector_briefings", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  topic: varchar("topic", { length: 50 }).notNull(),
+  referential: varchar("referential", { length: 20 }).notNull(),
+  titre: varchar("titre", { length: 500 }).notNull(),
+  content: json("content").notNull(),
+  sourcesUsed: json("sources_used").notNull(),
+  aiModel: varchar("ai_model", { length: 50 }).notNull(),
+  confidenceLevel: varchar("confidence_level", { length: 10 }).notNull(),
+  generatedAt: timestamp("generated_at").notNull().defaultNow(),
+  validUntil: timestamp("valid_until").notNull(),
+  viewCount: int("view_count").notNull().default(0),
+}, (t) => ({
+  topicRefIdx: index("idx_topic_ref").on(t.topic, t.referential),
+  generatedIdx: index("idx_generated").on(t.generatedAt),
+}));
 
 /* =========================
    RESULTATS
