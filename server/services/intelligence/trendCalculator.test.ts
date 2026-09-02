@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import { calculateTrendsFromRows } from "./trendCalculator";
+const now=new Date("2026-09-01T00:00:00Z");
+test("moins de 50 réponses produit une qualité insuffisante",()=>{const rows=Array.from({length:4},(_,i)=>({auditId:i%2+1,questionKey:"MDR-Q1",responseValue:i<2?"non_compliant":"compliant",createdAt:now,questionText:"Le SMQ est-il documenté ?",processName:"SMQ",criticality:"high"}));const result=calculateTrendsFromRows(1,90,rows);assert.equal(result.dataQuality,"insuffisant");assert.match(result.avertissement!,/Données insuffisantes/);assert.equal(result.topNCQuestions[0].tauxNC,50);});
+test("les données agrégées ne contiennent aucun identifiant utilisateur",()=>{const result=calculateTrendsFromRows(1,90,[]);assert.equal("userId" in result,false);assert.deepEqual(result.topNCQuestions,[]);});
