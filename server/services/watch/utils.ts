@@ -26,18 +26,46 @@ export function withTimeout<T>(
   }) as Promise<T>;
 }
 
+/**
+ * Allowlist de domaines officiels pour les connecteurs de veille.
+ *
+ * Historique (rapport QA 2026-09-02) : la liste ne contenait que les domaines
+ * UE + iso.org, si bien que 10 sources sur 13 (ANSM, FDA, Health Canada, TGA,
+ * MHRA, Federal Register…) échouaient avec « URL not allowed » avant même la
+ * requête réseau. On autorise ici les domaines des régulateurs officiels
+ * réellement interrogés par les connecteurs de `server/services/watch/sources/`.
+ * Reste volontairement une allowlist stricte (pas de wildcard générique).
+ */
+const ALLOWED_WATCH_HOSTS: readonly string[] = [
+  // Union européenne
+  "europa.eu",
+  "eur-lex.europa.eu",
+  "ec.europa.eu",
+  "publications.europa.eu",
+  // Normalisation
+  "iso.org",
+  "iaf.nu",
+  "imdrf.org",
+  // France — ANSM
+  "ansm.sante.fr",
+  // États-Unis — FDA / Federal Register
+  "fda.gov",
+  "federalregister.gov",
+  // Canada — Santé Canada
+  "canada.ca",
+  // Royaume-Uni — MHRA
+  "gov.uk",
+  // Australie — TGA
+  "tga.gov.au",
+];
+
 export function isUrlAllowed(url: string): boolean {
-  // Basic allowlist: official domains only for core sources.
-  // Keep intentionally strict.
   try {
     const u = new URL(url);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
     const host = u.hostname.toLowerCase();
-    return (
-      host.endsWith("europa.eu") ||
-      host.endsWith("eur-lex.europa.eu") ||
-      host.endsWith("iso.org") ||
-      host.endsWith("iaf.nu") ||
-      host.endsWith("imdrf.org")
+    return ALLOWED_WATCH_HOSTS.some(
+      (allowed) => host === allowed || host.endsWith(`.${allowed}`)
     );
   } catch {
     return false;

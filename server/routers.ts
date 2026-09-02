@@ -956,6 +956,8 @@ export const appRouter = router({
 
   // Stripe payment router
   stripe: stripeRouter,
+  // Alias historique : certaines pages appellent `subscription.getSubscription`.
+  subscription: stripeRouter,
 
   // FDA Audit System
   fda: fdaRouter,

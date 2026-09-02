@@ -511,7 +511,13 @@ export const auditRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(),
+        // Le frontend envoie parfois processId en nombre (ex. 2), parfois en
+        // chaîne, parfois null quand le processus vaut « all ». On accepte les
+        // trois et on normalise en chaîne|null pour le reste de la procédure.
+        processId: z
+          .union([z.string(), z.number()])
+          .nullish()
+          .transform((v) => (v === null || v === undefined || v === "" ? null : String(v))),
         evidenceFiles: z.array(z.string()).optional().default([]),
         answeredBy: z.union([z.number(), z.string()]).optional().nullable(),
         answeredAt: z.string().optional().nullable(),

@@ -3,11 +3,16 @@ import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./trpc";
+import { handleStripeWebhook } from "../stripe/webhook";
 
 const app = express();
 
 // Railway / reverse proxy (HTTPS en frontal)
 app.set("trust proxy", 1);
+
+// ⚠️ Le webhook Stripe doit recevoir le body BRUT (vérification de signature),
+// donc AVANT express.json().
+app.post("/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
 
 app.use(express.json());
 
