@@ -135,7 +135,7 @@ function buildRule(
   };
 }
 
-function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
+export function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   // Output containers
   const rules: RuleRef[] = [];
   const decisionPath: string[] = [];
@@ -465,9 +465,18 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
       assumptions.push("Invasif via orifice déclaré mais durée non renseignée : impossible d’appliquer la règle 5 correctement.");
     }
   } else if (answers.invasiveness === "non-invasif") {
-    const contactPeau = answers.contact_site?.some((s) => s.toLowerCase().includes("peau")) ?? false;
+    // ⚠️ Règle 4 (Annexe VIII) ne vise QUE la peau lésée. L'ancien test
+    // `s.includes("peau")` capturait aussi « peau_intacte » → un dispositif
+    // en contact avec une peau intacte était classé Règle 4 « peau lésée »
+    // (rapport QA 2026-09-02, IMP-8). On ne déclenche la Règle 4 que sur une
+    // peau explicitement lésée.
+    const contactPeauLesee =
+      (answers.contact_site?.some((s) => {
+        const v = s.toLowerCase();
+        return v.includes("lesee") || v.includes("lésée") || v.includes("wound") || v.includes("lesion");
+      }) ?? false);
 
-    if (contactPeau || answers.wound_depth) {
+    if (contactPeauLesee || answers.wound_depth) {
       if (answers.wound_depth === "profonde") {
         resultingClass = maxClass(resultingClass, "IIa");
         rules.push(
@@ -650,20 +659,54 @@ function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
     ...disclaimerLines,
   ].join("\n");
 
-  // Keep backward-compatible string list for your current UI section "Règles appliquées"
-  const appliedRules = uniqueRules.length ? uniqueRules : [];
+  // Le frontend (client/src/pages/Classification.tsx, exportUtils.ts) attend
+  // des OBJETS de règle ({ id, number, title, rationale, ... }), pas des
+  // chaînes formatées — sinon « Règle applicable : » s'affiche vide et
+  // l'export Excel liste des colonnes undefined (rapport QA 2026-09-02,
+  // IMP-8). On dédoublonne par ruleNumber en conservant l'ordre numérique.
+  const seenRuleNumbers = new Set<string>();
+  const appliedRules = rules
+    .slice()
+    .sort((a, b) => {
+      const an = parseInt(a.ruleNumber.split("/")[0], 10);
+      const bn = parseInt(b.ruleNumber.split("/")[0], 10);
+      if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
+      return a.ruleNumber.localeCompare(b.ruleNumber);
+    })
+    .filter((r) => {
+      if (seenRuleNumbers.has(r.ruleNumber)) return false;
+      seenRuleNumbers.add(r.ruleNumber);
+      return true;
+    })
+    .map((r) => ({
+      id: `regle-${r.ruleNumber}`,
+      number: r.ruleNumber,
+      title: r.title,
+      rationale: r.rationale,
+      description: r.rationale,
+      resultingClass: resultingClassLabel,
+      references: r.references,
+    }));
+
+  // Confiance : le frontend teste `confidence === "high" | "medium" | "low"`.
+  // On expose donc l'enum attendue, plus le score numérique en `confidenceScore`.
+  const confidenceLevel: "high" | "medium" | "low" =
+    confidence >= 0.85 ? "high" : confidence >= 0.6 ? "medium" : "low";
 
   return {
-    // Existing fields (frontend expects these)
+    // Champs attendus par le frontend
     resultingClass: resultingClassLabel,
     appliedRules,
     justification,
+    confidence: confidenceLevel,
+    recommendations: nextSteps,
+    missingData,
 
-    // Extra fields (optional to use in frontend)
-    confidence,
+    // Champs supplémentaires (compat / usages avancés)
+    appliedRulesText: uniqueRules,
+    confidenceScore: confidence,
     decisionPath,
     assumptions,
-    missingData,
     nextSteps,
     notes,
   };
