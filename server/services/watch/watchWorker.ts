@@ -3,6 +3,8 @@ import { runRefresh } from "./WatchAggregator";
 import { hasActiveRefreshRun } from "./WatchStore";
 import { getDb } from "../../db";
 import { runAnalysisQueue } from "./ai/analysisQueue";
+import { generateWeeklyBriefings } from "../intelligence/intelligenceWorker";
+import { sendSourceHealthAlert } from "./sourceHealthMonitor";
 
 const logger = {
   info: (data: unknown, message: string) => console.info(`[WatchAI] ${message}`, data),
@@ -22,6 +24,17 @@ export async function runWatchWorker(): Promise<"completed" | "locked"> {
     else logger.warn({}, "database unavailable; AI analysis skipped");
   } catch (error) {
     logger.error({ error }, "analysis queue failed; collection run remains successful");
+  }
+  try {
+    const briefingResults = await generateWeeklyBriefings();
+    logger.info({ briefingResults }, "sector briefings refresh completed");
+  } catch (error) {
+    logger.error({ error }, "sector briefings refresh failed; watch collection remains successful");
+  }
+  try {
+    await sendSourceHealthAlert();
+  } catch (error) {
+    logger.error({ error }, "source health alert failed");
   }
   return "completed";
 }

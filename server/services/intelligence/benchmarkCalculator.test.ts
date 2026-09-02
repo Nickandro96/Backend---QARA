@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import { calculateAnonymousBenchmark } from "./benchmarkCalculator";
+const rows=(users:number[])=>users.flatMap(userId=>Array.from({length:10},(_,i)=>({userId,responseValue:i<userId%6?"non_compliant":"compliant"})));
+test("masque le benchmark sous le seuil de confidentialité",()=>{const result=calculateAnonymousBenchmark(rows([1,2,3]),1);assert.equal(result.available,false);assert.equal(result.userNcRate,null);});
+test("retourne uniquement des agrégats pour une cohorte suffisante",()=>{const result=calculateAnonymousBenchmark(rows(Array.from({length:11},(_,i)=>i+1)),1);assert.equal(result.available,true);assert.equal(result.cohortSize,10);assert.equal("userId" in result,false);assert.equal(typeof result.cohortMedianNcRate,"number");});
