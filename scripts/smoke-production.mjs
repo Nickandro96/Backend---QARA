@@ -4,7 +4,7 @@ if(!backend||!frontend)throw new Error("SMOKE_BACKEND_URL and SMOKE_FRONTEND_URL
 const request=(url,options={})=>fetch(url,{...options,signal:AbortSignal.timeout(15_000)});
 const assertOk=async(response,label)=>{if(!response.ok)throw new Error(`${label} failed (${response.status}): ${await response.text()}`);return response;};
 await assertOk(await request(frontend),"frontend");
-const healthInput=encodeURIComponent(JSON.stringify({json:{timestamp:Date.now()}}));
+const healthInput=encodeURIComponent(JSON.stringify({timestamp:Date.now()}));
 await assertOk(await request(`${backend}/trpc/system.health?input=${healthInput}`),"backend health");
 const email=process.env.SMOKE_EMAIL;const password=process.env.SMOKE_PASSWORD;
 if(email&&password){
