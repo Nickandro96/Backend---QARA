@@ -498,6 +498,21 @@ export const capa_actions = mysqlTable(
     watchItemId: varchar("watchItemId", { length: 36 }),
     source: mysqlEnum("source", ["audit", "veille_reglementaire", "manuel"]).notNull().default("audit"),
 
+    qualificationDecision: mysqlEnum("qualificationDecision", [
+      "a_qualifier",
+      "capa_requise",
+      "correction_simple",
+      "surveillance",
+      "acceptation_justifiee",
+      "doublon",
+      "non_applicable_apres_revue",
+    ]).notNull().default("a_qualifier"),
+    qualificationJustification: text("qualificationJustification"),
+    qualificationOwner: varchar("qualificationOwner", { length: 255 }),
+    qualificationAt: timestamp("qualificationAt"),
+    impactPatient: mysqlEnum("impactPatient", ["aucun", "potentiel", "avere", "inconnu"]),
+    impactReglementaire: mysqlEnum("impactReglementaire", ["aucun", "potentiel", "avere", "inconnu"]),
+
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
@@ -505,6 +520,24 @@ export const capa_actions = mysqlTable(
     unq: uniqueIndex("capa_action_unq").on(t.userId, t.auditId, t.questionKey),
   })
 );
+
+/** Actions opérationnelles multiples rattachées à un dossier CAPA. */
+export const capa_tasks = mysqlTable("capa_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  capaId: int("capaId").notNull().references(() => capa_actions.id),
+  userId: int("userId").notNull().references(() => users.id),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  responsible: varchar("responsible", { length: 255 }),
+  dueDate: timestamp("dueDate"),
+  priority: mysqlEnum("priority", ["basse", "moyenne", "haute", "critique"]).notNull().default("moyenne"),
+  status: mysqlEnum("status", ["a_faire", "en_cours", "a_verifier", "cloturee", "annulee"]).notNull().default("a_faire"),
+  completionEvidence: text("completionEvidence"),
+  effectivenessCriterion: text("effectivenessCriterion"),
+  effectivenessResult: mysqlEnum("effectivenessResult", ["efficace", "inefficace", "non_verifiee"]).notNull().default("non_verifiee"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
 
 /** Historique immuable des modifications d'une action CAPA (traçabilité, §8 SPEC-2). */
 export const capa_action_history = mysqlTable("capa_action_history", {

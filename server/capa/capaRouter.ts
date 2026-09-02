@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, safeJsonParse } from "../db";
-import { audits, audit_responses, capa_actions, capa_action_history, questions, referentiels, regulatoryUpdates } from "../../drizzle/schema";
+import { audits, audit_responses, capa_actions, capa_action_history, capa_tasks, questions, referentiels, regulatoryUpdates } from "../../drizzle/schema";
 import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, classifyNonConformityResponse, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
@@ -74,6 +74,72 @@ async function recordHistory(
 }
 
 export const capaRouter = router({
+  qualify: protectedProcedure.input(z.object({
+    actionId: z.number().int().positive(),
+    decision: z.enum(["capa_requise", "correction_simple", "surveillance", "acceptation_justifiee", "doublon", "non_applicable_apres_revue"]),
+    justification: z.string().trim().max(4000).optional(),
+    owner: z.string().trim().max(255).optional(),
+    impactPatient: z.enum(["aucun", "potentiel", "avere", "inconnu"]).optional(),
+    impactReglementaire: z.enum(["aucun", "potentiel", "avere", "inconnu"]).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.id, input.actionId), eq(capa_actions.userId, ctx.user.id))).limit(1);
+    if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier introuvable" });
+    if (input.decision !== "capa_requise" && !input.justification?.trim()) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Une justification est obligatoire lorsqu'une CAPA n'est pas requise." });
+    }
+    await db.update(capa_actions).set({
+      qualificationDecision: input.decision,
+      qualificationJustification: input.justification?.trim() || null,
+      qualificationOwner: input.owner?.trim() || null,
+      qualificationAt: new Date(),
+      impactPatient: input.impactPatient,
+      impactReglementaire: input.impactReglementaire,
+    }).where(eq(capa_actions.id, input.actionId));
+    await recordHistory(db, input.actionId, ctx.user.id, [
+      { champ: "qualificationDecision", ancienneValeur: existing.qualificationDecision, nouvelleValeur: input.decision },
+      { champ: "qualificationJustification", ancienneValeur: existing.qualificationJustification, nouvelleValeur: input.justification?.trim() || null },
+    ]);
+    return { success: true };
+  }),
+
+  listTasks: protectedProcedure.input(z.object({ capaId: z.number().int().positive() })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    const [capa] = await db.select({ id: capa_actions.id }).from(capa_actions).where(and(eq(capa_actions.id, input.capaId), eq(capa_actions.userId, ctx.user.id))).limit(1);
+    if (!capa) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier CAPA introuvable" });
+    return db.select().from(capa_tasks).where(and(eq(capa_tasks.capaId, input.capaId), eq(capa_tasks.userId, ctx.user.id))).orderBy(capa_tasks.createdAt);
+  }),
+
+  createTask: protectedProcedure.input(z.object({
+    capaId: z.number().int().positive(), title: z.string().trim().min(3).max(500), description: z.string().max(5000).optional(),
+    responsible: z.string().max(255).optional(), dueDate: z.string().datetime().optional(),
+    priority: z.enum(["basse", "moyenne", "haute", "critique"]).default("moyenne"), effectivenessCriterion: z.string().max(3000).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    const [capa] = await db.select({ id: capa_actions.id }).from(capa_actions).where(and(eq(capa_actions.id, input.capaId), eq(capa_actions.userId, ctx.user.id))).limit(1);
+    if (!capa) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier CAPA introuvable" });
+    const [{ insertId }] = await db.insert(capa_tasks).values({ userId: ctx.user.id, capaId: input.capaId, title: input.title, description: input.description, responsible: input.responsible, dueDate: input.dueDate ? new Date(input.dueDate) : undefined, priority: input.priority, effectivenessCriterion: input.effectivenessCriterion });
+    await recordHistory(db, input.capaId, ctx.user.id, [{ champ: "action_creee", ancienneValeur: null, nouvelleValeur: String(insertId) }]);
+    return { id: Number(insertId) };
+  }),
+
+  updateTask: protectedProcedure.input(z.object({
+    taskId: z.number().int().positive(), title: z.string().trim().min(3).max(500).optional(), description: z.string().max(5000).nullish(), responsible: z.string().max(255).nullish(), dueDate: z.string().datetime().nullish(),
+    priority: z.enum(["basse", "moyenne", "haute", "critique"]).optional(), status: z.enum(["a_faire", "en_cours", "a_verifier", "cloturee", "annulee"]).optional(), completionEvidence: z.string().max(5000).nullish(), effectivenessCriterion: z.string().max(3000).nullish(), effectivenessResult: z.enum(["efficace", "inefficace", "non_verifiee"]).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    const [task] = await db.select().from(capa_tasks).where(and(eq(capa_tasks.id, input.taskId), eq(capa_tasks.userId, ctx.user.id))).limit(1);
+    if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "Action introuvable" });
+    if (input.status === "a_verifier" && !input.completionEvidence?.trim() && !task.completionEvidence) throw new TRPCError({ code: "BAD_REQUEST", message: "Une preuve de réalisation est requise." });
+    if (input.status === "cloturee" && (input.effectivenessResult ?? task.effectivenessResult) === "non_verifiee") throw new TRPCError({ code: "BAD_REQUEST", message: "L'efficacité doit être évaluée avant clôture." });
+    const { taskId, ...values } = input;
+    await db.update(capa_tasks).set({ ...values, dueDate: values.dueDate === undefined ? undefined : values.dueDate ? new Date(values.dueDate) : null }).where(eq(capa_tasks.id, taskId));
+    return { success: true };
+  }),
   createFromWatchItem: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive(), watchItemId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
@@ -103,6 +169,9 @@ export const capaRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const actionRows = await db.select().from(capa_actions).where(eq(capa_actions.userId, ctx.user.id));
+    const taskRows = await db.select().from(capa_tasks).where(eq(capa_tasks.userId, ctx.user.id));
+    const tasksByCapa = new Map<number, typeof taskRows>();
+    for (const task of taskRows) tasksByCapa.set(task.capaId, [...(tasksByCapa.get(task.capaId) ?? []), task]);
     const auditRows = await db.select({ id: audits.id, name: audits.name }).from(audits).where(eq(audits.userId, ctx.user.id));
     const auditNameById = new Map(auditRows.map((a) => [a.id, a.name]));
     const responseRows = await db.select().from(audit_responses).where(eq(audit_responses.userId, ctx.user.id));
@@ -131,7 +200,12 @@ export const capaRouter = router({
       const year = raw.createdAt.getUTCFullYear();
       const phase = raw.statut.startsWith("cloturee") ? "cloture" : raw.statut === "a_verifier" ? "verification" : raw.analyseCauseRacine ? "mise_en_oeuvre" : raw.ai5Pourquoi ? "cause_racine" : "qualification";
       const completedFields = [raw.analyseCauseRacine, raw.actionRetenue, raw.responsible, raw.dueDate, raw.preuveRealisation, raw.preuveEfficacite].filter(Boolean).length;
-      return { ...a, capaIdentifier: `CAPA-${year}-${String(a.id).padStart(4, "0")}`, actionIdentifier: `ACT-${year}-${String(a.id).padStart(4, "0")}`, phase, progress: Math.round((completedFields / 6) * 100), hasAIAnalysis: Boolean(raw.ai5Pourquoi), correctionImmediate: raw.correctionImmediate, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
+      return { ...a, qualificationDecision: raw.qualificationDecision, qualificationJustification: raw.qualificationJustification, qualificationOwner: raw.qualificationOwner, qualificationAt: raw.qualificationAt?.toISOString() ?? null, impactPatient: raw.impactPatient, impactReglementaire: raw.impactReglementaire, tasks: (tasksByCapa.get(a.id) ?? []).map((task) => ({ ...task, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}` })), capaIdentifier: `CAPA-${year}-${String(a.id).padStart(4, "0")}`, actionIdentifier: `ACT-${year}-${String(a.id).padStart(4, "0")}`, phase, progress: Math.round((completedFields / 6) * 100), hasAIAnalysis: Boolean(raw.ai5Pourquoi), correctionImmediate: raw.correctionImmediate, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
+    });
+    const capaById = new Map(actions.map((action) => [action.id, action]));
+    const operationalActions = taskRows.map((task) => {
+      const capa = capaById.get(task.capaId);
+      return { ...task, actionRetenue: task.title, statut: task.status, resultatEfficacite: task.effectivenessResult, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}`, capaIdentifier: capa?.capaIdentifier ?? `CAPA-${task.capaId}`, auditId: capa?.auditId ?? null, auditName: capa?.auditName ?? null, source: capa?.source ?? "audit" };
     });
     const closedRows = actionRows.filter((a) => a.statut.startsWith("cloturee"));
     const closedWithDueDate = closedRows.filter((a) => a.dueDate);
@@ -175,10 +249,10 @@ export const capaRouter = router({
         ncSansCapa: unplanned.length,
         ncRecurrentes: unplanned.filter((nc) => nc.recurrenceCount > 1).length,
         capaOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
-        actionsOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
-        enCours: actionRows.filter((a) => ["ouverte", "en_cours", "a_verifier"].includes(a.statut)).length,
-        aVerifier: actionRows.filter((a) => a.statut === "a_verifier").length,
-        enRetard: actionRows.filter((a) => a.dueDate && a.dueDate < now && !a.statut.startsWith("cloturee")).length,
+        actionsOuvertes: taskRows.filter((a) => !["cloturee", "annulee"].includes(a.status)).length,
+        enCours: taskRows.filter((a) => a.status === "en_cours").length,
+        aVerifier: taskRows.filter((a) => a.status === "a_verifier").length,
+        enRetard: taskRows.filter((a) => a.dueDate && a.dueDate < now && !["cloturee", "annulee"].includes(a.status)).length,
         clotureesCeMois: actionRows.filter((a) => a.statut.startsWith("cloturee") && a.updatedAt >= monthStart).length,
         tauxClotureDansLesDelais: closedWithDueDate.length ? Math.round((closedOnTime / closedWithDueDate.length) * 100) : null,
         tauxEfficacite: checkedEffectiveness.length ? Math.round((effective / checkedEffectiveness.length) * 100) : null,
@@ -187,9 +261,10 @@ export const capaRouter = router({
       unplanned,
       nonConformities,
       actions,
+      operationalActions,
       trends: monthBuckets,
       processBreakdown: Array.from(processCounts, ([process, count]) => ({ process, count })).sort((a, b) => b.count - a.count),
-      upcomingDeadlines: actions.filter((action) => action.dueDate && !String(action.statut).startsWith("cloturee")).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 8),
+      upcomingDeadlines: operationalActions.filter((action) => action.dueDate && !["cloturee", "annulee"].includes(action.status)).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 8),
     };
   }),
 
@@ -260,6 +335,19 @@ export const capaRouter = router({
         dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
         progressUpdatedAt: new Date(), progressUpdatedBy: ctx.user.id,
       }).where(eq(capa_actions.id, existing.id));
+      const existingTasks = await db.select({ title: capa_tasks.title }).from(capa_tasks).where(and(eq(capa_tasks.capaId, existing.id), eq(capa_tasks.userId, ctx.user.id)));
+      const existingTitles = new Set(existingTasks.map((task) => task.title.trim().toLocaleLowerCase("fr")));
+      const newTasks = input.selectedActions.filter((action) => !existingTitles.has(action.titre.trim().toLocaleLowerCase("fr"))).map((action) => ({
+        capaId: existing.id,
+        userId: ctx.user.id,
+        title: action.titre,
+        description: action.description,
+        responsible: input.responsible,
+        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+        priority: (action.priorite === "immediate" ? "critique" : action.priorite === "court_terme" ? "haute" : "moyenne") as "critique" | "haute" | "moyenne",
+        effectivenessCriterion: action.indicateurEfficacite,
+      }));
+      if (newTasks.length) await db.insert(capa_tasks).values(newTasks);
       await recordHistory(db, existing.id, ctx.user.id, [{ champ: "analyse_ia_validee", ancienneValeur: null, nouvelleValeur: `Actions sélectionnées : ${input.selectedActions.map((a) => a.id).join(", ")}` }]);
       const [saved] = await db.select().from(capa_actions).where(eq(capa_actions.id, existing.id)).limit(1);
       return toCapaAction(saved);
@@ -335,7 +423,17 @@ export const capaRouter = router({
       .from(capa_actions)
       .where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id)));
 
-    const actions = rows.map(toCapaAction);
+    const taskRows = await db.select().from(capa_tasks).where(eq(capa_tasks.userId, ctx.user.id));
+    const actions = rows.map((row) => ({
+      ...toCapaAction(row),
+      qualificationDecision: row.qualificationDecision,
+      qualificationJustification: row.qualificationJustification,
+      qualificationOwner: row.qualificationOwner,
+      qualificationAt: row.qualificationAt?.toISOString() ?? null,
+      impactPatient: row.impactPatient,
+      impactReglementaire: row.impactReglementaire,
+      tasks: taskRows.filter((task) => task.capaId === row.id).map((task) => ({ ...task, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() })),
+    }));
     const sorted = sortByPriority(actions);
     return sorted.map((a) => ({ ...a, priorite: sorted.indexOf(a) }));
   }),
