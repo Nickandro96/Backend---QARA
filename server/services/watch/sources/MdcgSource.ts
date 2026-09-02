@@ -47,6 +47,11 @@ export function parseDateFromText(text: string): Date | null {
     const d = new Date(`${fr[3]}-${mm}-${dd}T00:00:00Z`);
     if (!isNaN(d.getTime())) return d;
   }
+  const named = text.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i);
+  if (named) {
+    const d = new Date(`${named[2]} ${named[1]}, ${named[3]} UTC`);
+    if (!isNaN(d.getTime())) return d;
+  }
   return null;
 }
 
@@ -54,6 +59,11 @@ function extractDocCode(text: string): string | null {
   // MDCG 2021-xx patterns
   const m = text.match(/\bMDCG\s*\d{4}-\d+\b/i);
   return m ? m[0].toUpperCase().replace(/\s+/g, "") : null;
+}
+
+export function extractMdcgRevision(text: string): string | null {
+  const match = text.match(/\b(?:rev(?:ision)?\.?|version)\s*([0-9]+(?:\.[0-9]+)*)\b/i);
+  return match ? match[1] : null;
 }
 
 export const MdcgSource: UpdateSource = {
@@ -76,19 +86,20 @@ export const MdcgSource: UpdateSource = {
           if (!publishedAt) console.warn("[Watch][MDCG] publication date absent; preserving null", { sourceUrl: l.href });
           const title = code ? `${code} — ${l.text}` : l.text;
           const sourceId = code;
+          const revision = extractMdcgRevision(l.text);
 
           return {
             type: "GUIDANCE" as const,
             title: safeText(title),
             publishedAt,
             effectiveAt: null,
-            status: "NEW" as const,
+            status: revision ? "UPDATED" as const : "NEW" as const,
             sourceName: "EU Commission (MDCG)",
             sourceUrl: l.href,
             sourceId,
             jurisdiction: "EU" as const,
             rawContent: l.text,
-            tags: code ? [{ key: "mdcg", value: code }] : [{ key: "mdcg" }],
+            tags: [...(code ? [{ key: "mdcg", value: code }] : [{ key: "mdcg" }]), ...(revision ? [{ key: "revision", value: revision }] : [])],
             hash: computeUpdateHash({
               type: "GUIDANCE",
               title,

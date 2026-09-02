@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseFederalRegisterPayload } from "../sources/FederalRegisterSource";
 import { parseCellarSparqlXml } from "../sources/EurLexMdrSource";
-import { extractMdcgLinks, parseDateFromText } from "../sources/MdcgSource";
+import { extractMdcgLinks, extractMdcgRevision, parseDateFromText } from "../sources/MdcgSource";
 const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8");
 
 test("Federal Register contract maps official id and dates", () => {
@@ -18,4 +18,9 @@ test("CELLAR SPARQL XML contract maps CELEX provenance", () => {
 test("MDCG HTML contract keeps missing dates null", () => {
   const [link] = extractMdcgLinks(fixture("mdcg.html")); assert.match(link.href, /mdcg-2026-7/);
   assert.equal(parseDateFromText("MDCG guidance without a date"), null);
+});
+
+test("MDCG extracts named publication dates and revisions", () => {
+  assert.equal(parseDateFromText("Published 15 August 2026")?.toISOString(), "2026-08-15T00:00:00.000Z");
+  assert.equal(extractMdcgRevision("MDCG 2021-1 Rev. 1"), "1");
 });
