@@ -1,12 +1,22 @@
 // Backend---QARA-main/server/audit-router.ts
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { desc, eq, and, inArray } from "drizzle-orm";
+import { desc, eq, and, inArray, ne, lt } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import PDFDocument from "pdfkit";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
-import { audits, sites, referentiels, questions, auditResponses } from "../drizzle/schema";
+import { audits, sites, referentiels, questions, auditResponses, preparationChecklist, simulationResults, capa_actions, regulatoryUpdates, sectorBriefings } from "../drizzle/schema";
 import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray, getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
+import { generatePreparationChecklist } from "./services/preparation/checklistGenerator";
+import { generatePreparationPlanAI, generateAuditorQuestionsAI, evaluateAuditorAnswerAI, SIMULATION_WARNING } from "./services/preparation/preparationAI";
+
+const externalAuditInput=z.object({ organisme:z.enum(["ON","FDA","MDSAP","Autre"]), organismeNom:z.string().min(2).max(255), datePrevue:z.string().date(), typeExterne:z.enum(["certification_initiale","surveillance","renouvellement","inspection_non_annoncee","audit_cause"]), programmeDocumentRef:z.string().max(255).optional() });
+async function ownedPreparationAudit(db:any,userId:number,auditId:number){const [audit]=await db.select().from(audits).where(and(eq(audits.id,auditId),eq(audits.userId,userId))).limit(1);if(!audit)throw new TRPCError({code:"NOT_FOUND",message:"Préparation d'audit introuvable"});return audit;}
+export function countdown(date:Date){const days=Math.max(0,Math.ceil((date.getTime()-Date.now())/86400000));return {days,weeks:Math.floor(days/7),remainingDays:days%7};}
+// @ts-expect-error PDFKit's event callback chunk is a Node Buffer at runtime.
+async function pdfBuffer(data:any){const doc=new PDFDocument({margin:48,size:"A4"});const chunks:Buffer[]=[];doc.on("data",c=>chunks.push(c));const done=new Promise<Buffer>(resolve=>doc.on("end",()=>resolve(Buffer.concat(chunks))));doc.fontSize(22).text("Rapport de préparation à l'audit",{align:"center"}).moveDown();doc.fontSize(12).text(`Organisme : ${data.audit.auditOrganismeNom}`).text(`Type : ${data.audit.auditTypeExterne}`).text(`Date prévue : ${new Date(data.audit.auditDatePrevue).toLocaleDateString("fr-FR")}`).text(`Référence : PREP-${data.audit.id}-${new Date().getUTCFullYear()}`).moveDown();doc.fontSize(16).text("Résumé exécutif");doc.fontSize(11).text(`Niveau de risque : ${data.plan?.niveauRisque??"non généré"}`).text(data.plan?.raisonNiveauRisque??"Plan non généré").moveDown();doc.fontSize(16).text("Checklist");for(const x of data.checklist)doc.fontSize(9).text(`[${x.statut}] ${x.category} — ${x.item}${x.note?` — ${x.note}`:""}`);doc.moveDown().fontSize(16).text("CAPA ouvertes");for(const c of data.capas)doc.fontSize(9).text(`${c.questionKey} — ${c.ecartIdentifie} — ${c.statut}`);doc.end();return done;}
 
 const ResponseValueEnum = z.enum([
   "compliant",
@@ -122,6 +132,7 @@ export const auditRouter = router({
         startDate: z.string().optional(),
         endDate: z.string().optional(),
         notes: z.string().optional(),
+        externalPreparation: externalAuditInput.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -137,12 +148,36 @@ export const auditRouter = router({
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
         startDate: input.startDate ? new Date(input.startDate) : null,
+        auditOrganisme: input.externalPreparation?.organisme ?? null,
+        auditOrganismeNom: input.externalPreparation?.organismeNom ?? null,
+        auditDatePrevue: input.externalPreparation ? new Date(input.externalPreparation.datePrevue) : null,
+        auditTypeExterne: input.externalPreparation?.typeExterne ?? null,
         endDate: input.endDate ? new Date(input.endDate) : null,
         // notes can be stored later; ignored safely for now
       });
 
       return { auditId: created.id };
     }),
+
+  // @ts-expect-error Drizzle widens the conditional enum value inside the batch map.
+
+  initializePreparation: protectedProcedure.input(z.object({auditId:z.number().int().positive()})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);if(!audit.auditOrganisme)throw new TRPCError({code:"BAD_REQUEST",message:"Cet audit n'est pas une préparation externe"});const existing=await database.select({id:preparationChecklist.id}).from(preparationChecklist).where(and(eq(preparationChecklist.auditId,input.auditId),eq(preparationChecklist.userId,ctx.user.id))).limit(1);if(!existing.length){const openCapas=await database.select().from(capa_actions).where(and(eq(capa_actions.userId,ctx.user.id),ne(capa_actions.statut,"cloturee_efficace")));const seeds=generatePreparationChecklist(audit.auditOrganisme);await database.insert(preparationChecklist).values(seeds.map(seed=>{const linked=openCapas.find((c:any)=>`${seed.item} ${seed.category}`.toLowerCase().includes(String(c.processName??"").toLowerCase())&&c.processName);return {...seed,auditId:input.auditId,userId:ctx.user.id,statut:linked?"attention":"non_verifie",linkedCapaId:linked?.id??null};}));}return {success:true};}),
+
+  generatePreparationPlan: protectedProcedure.input(z.object({auditId:z.number().int().positive()})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);if(!audit.auditDatePrevue)throw new TRPCError({code:"BAD_REQUEST",message:"Date d'audit requise"});const [capas,alerts,refs]=await Promise.all([database.select().from(capa_actions).where(and(eq(capa_actions.userId,ctx.user.id),ne(capa_actions.statut,"cloturee_efficace"))),database.select().from(regulatoryUpdates).where(eq(regulatoryUpdates.status,"NEW")).orderBy(desc(regulatoryUpdates.publishedAt)).limit(20),safeParseArray(audit.referentialIds).length?database.select().from(referentiels).where(inArray(referentiels.id,safeParseArray(audit.referentialIds).map(Number))):[]]);const plan=await generatePreparationPlanAI({audit:{organisme:audit.auditOrganisme,nom:audit.auditOrganismeNom,type:audit.auditTypeExterne,date:audit.auditDatePrevue,referentiels:refs.map((r:any)=>({code:r.code,name:r.name})),semainesRestantes:countdown(new Date(audit.auditDatePrevue)).weeks},capaOuvertes:capas.map((c:any)=>({id:c.id,processus:c.processName,ecart:c.ecartIdentifie,statut:c.statut,echeance:c.dueDate})),alertesActives:alerts.map((a:any)=>({source:a.sourceName,titre:a.title,criticite:a.analysisCriticality}))});await database.update(audits).set({preparationPlan:plan,preparationNiveauRisque:plan.niveauRisque,preparationGeneratedAt:new Date()}).where(and(eq(audits.id,input.auditId),eq(audits.userId,ctx.user.id)));return plan;}),
+
+  getPreparationDashboard: protectedProcedure.input(z.object({auditId:z.number().int().positive()})).query(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);const [checklist,capas,simulations]=await Promise.all([database.select().from(preparationChecklist).where(and(eq(preparationChecklist.auditId,input.auditId),eq(preparationChecklist.userId,ctx.user.id))),database.select().from(capa_actions).where(and(eq(capa_actions.userId,ctx.user.id),ne(capa_actions.statut,"cloturee_efficace"))),database.select().from(simulationResults).where(and(eq(simulationResults.auditId,input.auditId),eq(simulationResults.userId,ctx.user.id))).orderBy(desc(simulationResults.createdAt))]);const done=checklist.filter((x:any)=>x.statut==="ok").length;return {audit:{...audit,countdown:audit.auditDatePrevue?countdown(new Date(audit.auditDatePrevue)):null},plan:audit.preparationPlan,checklist,progress:checklist.length?Math.round(done/checklist.length*100):0,capas,simulations,simulationWarning:SIMULATION_WARNING};}),
+
+  updatePreparationItem: protectedProcedure.input(z.object({auditId:z.number().int().positive(),itemId:z.string().uuid(),statut:z.enum(["non_verifie","ok","attention"]).optional(),note:z.string().max(5000).nullable().optional(),documentRef:z.string().max(255).nullable().optional()})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});await ownedPreparationAudit(database,ctx.user.id,input.auditId);const {auditId,itemId,...values}=input;const result=await database.update(preparationChecklist).set(values).where(and(eq(preparationChecklist.id,itemId),eq(preparationChecklist.auditId,auditId),eq(preparationChecklist.userId,ctx.user.id)));return {success:true,result};}),
+
+  simulateAuditorQuestions: protectedProcedure.input(z.object({auditId:z.number().int().positive(),processus:z.string().min(2).max(100)})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);const [capas,briefings,refs]=await Promise.all([database.select().from(capa_actions).where(and(eq(capa_actions.userId,ctx.user.id),eq(capa_actions.auditId,input.auditId))),database.select().from(sectorBriefings).orderBy(desc(sectorBriefings.generatedAt)).limit(5),safeParseArray(audit.referentialIds).length?database.select().from(referentiels).where(inArray(referentiels.id,safeParseArray(audit.referentialIds).map(Number))):[]]);const generated=await generateAuditorQuestionsAI({processus:input.processus,referentiels:refs.map((r:any)=>r.code),nonConformites:capas.filter((c:any)=>String(c.processName??"").toLowerCase().includes(input.processus.toLowerCase())),tendances:briefings.map((b:any)=>b.content)});const rows=generated.questions.map(q=>({id:randomUUID(),auditId:input.auditId,userId:ctx.user.id,processus:input.processus,question:q.question,contexte:q.contexte,orientationReponse:q.orientationReponse,preuvesAttendues:q.preuvesAttendues,criticite:q.criticite}));await database.insert(simulationResults).values(rows);return {...generated,results:rows};}),
+
+  evaluateSimulationAnswer: protectedProcedure.input(z.object({auditId:z.number().int().positive(),simulationId:z.string().uuid(),reponse:z.string().min(5).max(10000)})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});await ownedPreparationAudit(database,ctx.user.id,input.auditId);const [question]=await database.select().from(simulationResults).where(and(eq(simulationResults.id,input.simulationId),eq(simulationResults.auditId,input.auditId),eq(simulationResults.userId,ctx.user.id))).limit(1);if(!question)throw new TRPCError({code:"NOT_FOUND"});const evaluation=await evaluateAuditorAnswerAI({question:question.question,contexte:question.contexte,orientation:question.orientationReponse,preuvesAttendues:question.preuvesAttendues,reponseUtilisateur:input.reponse});await database.update(simulationResults).set({reponseUtilisateur:input.reponse,scoreIA:evaluation.score,feedbackIA:evaluation.feedback}).where(eq(simulationResults.id,input.simulationId));return evaluation;}),
+
+  getUpcomingPreparations: protectedProcedure.query(async({ctx})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const rows=await database.select().from(audits).where(and(eq(audits.userId,ctx.user.id),eq(audits.type,"external_preparation"))).orderBy(audits.auditDatePrevue);return Promise.all(rows.map(async(a:any)=>{const checklist=await database.select().from(preparationChecklist).where(and(eq(preparationChecklist.auditId,a.id),eq(preparationChecklist.userId,ctx.user.id)));return {...a,countdown:a.auditDatePrevue?countdown(new Date(a.auditDatePrevue)):null,progress:checklist.length?Math.round(checklist.filter((x:any)=>x.statut==="ok").length/checklist.length*100):0,criticalUnchecked:checklist.filter((x:any)=>x.statut==="attention").length};}));}),
+
+  savePostAudit: protectedProcedure.input(z.object({auditId:z.number().int().positive(),decision:z.enum(["certifie","suspendu","refuse","observation"]),notes:z.string().max(20000).optional(),observationsPositives:z.array(z.string().max(2000)).max(20).default([]),nonConformites:z.array(z.object({processus:z.string().max(255).optional(),description:z.string().min(3).max(5000),gravite:z.enum(["majeur","mineur","observation"]),action:z.string().min(3).max(5000)})).max(50)})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);await database.transaction(async(tx:any)=>{await tx.update(audits).set({postAuditDecision:input.decision,postAuditNotes:JSON.stringify({notes:input.notes??null,observationsPositives:input.observationsPositives})}).where(and(eq(audits.id,input.auditId),eq(audits.userId,ctx.user.id)));if(input.nonConformites.length)await tx.insert(capa_actions).values(input.nonConformites.map((nc,i)=>({userId:ctx.user.id,auditId:input.auditId,questionKey:`EXTERNAL-${input.auditId}-${Date.now()}-${i}`,referentialCode:"AUDIT_EXTERNE",processName:nc.processus??null,gravite:nc.gravite,criticality:nc.gravite==="majeur"?"critical":"high",ecartIdentifie:nc.description,actionRecommandee:nc.action,source:"audit",qualificationDecision:"capa_requise",aiContexte:`Audit externe ${audit.auditOrganismeNom??audit.auditOrganisme}`})));});return {success:true,createdNonConformities:input.nonConformites.length};}),
+
+  generatePreparationPDF: protectedProcedure.input(z.object({auditId:z.number().int().positive()})).mutation(async({ctx,input})=>{const database=await getDb();if(!database)throw new TRPCError({code:"INTERNAL_SERVER_ERROR"});const audit=await ownedPreparationAudit(database,ctx.user.id,input.auditId);const [checklist,capas]=await Promise.all([database.select().from(preparationChecklist).where(and(eq(preparationChecklist.auditId,input.auditId),eq(preparationChecklist.userId,ctx.user.id))),database.select().from(capa_actions).where(and(eq(capa_actions.userId,ctx.user.id),eq(capa_actions.auditId,input.auditId)))]);const buffer=await pdfBuffer({audit,plan:audit.preparationPlan,checklist,capas});return {fileName:`rapport-preparation-audit-${input.auditId}.pdf`,mimeType:"application/pdf",base64:buffer.toString("base64"),size:buffer.length};}),
 
   /**
    * Frontend expects: trpc.audit.list() (AuditSelector.tsx) et
@@ -511,7 +546,13 @@ export const auditRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(),
+        // Le frontend envoie parfois processId en nombre (ex. 2), parfois en
+        // chaîne, parfois null quand le processus vaut « all ». On accepte les
+        // trois et on normalise en chaîne|null pour le reste de la procédure.
+        processId: z
+          .union([z.string(), z.number()])
+          .nullish()
+          .transform((v) => (v === null || v === undefined || v === "" ? null : String(v))),
         evidenceFiles: z.array(z.string()).optional().default([]),
         answeredBy: z.union([z.number(), z.string()]).optional().nullable(),
         answeredAt: z.string().optional().nullable(),

@@ -1211,7 +1211,12 @@ export const mdrRouter = router({
         responseComment: z.string().optional().nullable(),
         note: z.string().optional().nullable(),
         role: z.string().optional().nullable(),
-        processId: z.string().optional().nullable(),
+        // Accepte processId en nombre | chaîne | null (le frontend n'est pas
+        // constant) et normalise en chaîne|null pour la suite de la procédure.
+        processId: z
+          .union([z.string(), z.number()])
+          .nullish()
+          .transform((v) => (v === null || v === undefined || v === "" ? null : String(v))),
         evidenceFiles: z.array(z.string()).optional().default([]),
         answeredBy: z.union([z.number(), z.string()]).optional().nullable(),
         answeredAt: z.string().optional().nullable(),

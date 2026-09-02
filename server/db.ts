@@ -711,6 +711,30 @@ export async function getUserByEmail(email: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+/**
+ * Met à jour le plan/état d'abonnement d'un utilisateur (appelé par le webhook
+ * Stripe, server/stripe/webhook.ts). Ne touche que les colonnes déjà présentes
+ * dans la table `users` (subscriptionTier / subscriptionStatus).
+ */
+export async function setSubscription(
+  match: { email?: string; userId?: number },
+  patch: { subscriptionTier?: string | null; subscriptionStatus?: string | null }
+) {
+  const db = await getDb();
+  if (!db) return false;
+  const where = match.userId
+    ? eq(users.id, match.userId)
+    : match.email
+      ? eq(users.email, match.email)
+      : null;
+  if (!where) return false;
+  await db
+    .update(users)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(where);
+  return true;
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;

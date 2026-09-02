@@ -279,12 +279,52 @@ export const audits = mysqlTable("audits", {
   plannedAgenda: json("plannedAgenda"), // [{ date, activity }] prévu
   actualAgenda: json("actualAgenda"), // [{ date, activity }] réalisé
 
+  auditOrganisme: varchar("auditOrganisme", { length: 100 }),
+  auditOrganismeNom: varchar("auditOrganismeNom", { length: 255 }),
+  auditDatePrevue: timestamp("auditDatePrevue", { mode: "date" }),
+  auditTypeExterne: varchar("auditTypeExterne", { length: 50 }),
+  preparationPlan: json("preparationPlan"),
+  preparationNiveauRisque: varchar("preparationNiveauRisque", { length: 20 }),
+  preparationGeneratedAt: timestamp("preparationGeneratedAt"),
+  postAuditDecision: varchar("postAuditDecision", { length: 50 }),
+  postAuditNotes: text("postAuditNotes"),
+
   startDate: timestamp("startDate"),
   endDate: timestamp("endDate"),
 
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
+
+export const preparationChecklist = mysqlTable("preparation_checklist", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  auditId: int("auditId").notNull().references(() => audits.id),
+  userId: int("userId").notNull().references(() => users.id),
+  category: varchar("category", { length: 100 }).notNull(),
+  item: text("item").notNull(),
+  exigence: varchar("exigence", { length: 255 }),
+  statut: mysqlEnum("statut", ["non_verifie", "ok", "attention"]).notNull().default("non_verifie"),
+  note: text("note"),
+  documentRef: varchar("documentRef", { length: 255 }),
+  linkedCapaId: int("linkedCapaId"),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+}, (t) => ({ auditIdx: index("idx_audit").on(t.auditId), userIdx: index("idx_user").on(t.userId) }));
+
+export const simulationResults = mysqlTable("simulation_results", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  auditId: int("auditId").notNull().references(() => audits.id),
+  userId: int("userId").notNull().references(() => users.id),
+  processus: varchar("processus", { length: 100 }).notNull(),
+  question: text("question").notNull(),
+  contexte: text("contexte"),
+  orientationReponse: text("orientationReponse"),
+  preuvesAttendues: json("preuvesAttendues"),
+  criticite: varchar("criticite", { length: 20 }),
+  reponseUtilisateur: text("reponseUtilisateur"),
+  scoreIA: int("scoreIA"),
+  feedbackIA: text("feedbackIA"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+}, (t) => ({ auditIdx: index("idx_simulation_audit").on(t.auditId) }));
 
 /* =========================
    QUESTIONS
