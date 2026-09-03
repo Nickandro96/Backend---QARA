@@ -408,7 +408,7 @@ export const isoRouter = router({
       }
 
       const rows = await db
-        .select(questionSelect)
+        .select()
         .from(questions)
         .where(and(...whereParts))
         .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);

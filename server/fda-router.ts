@@ -249,7 +249,7 @@ export const fdaRouter = router({
     .input(
       z.object({
         sessionName: z.string().optional(),
-        answers: z.record(z.any()),
+        answers: z.record(z.string(), z.any()),
       })
     )
     .mutation(async ({ ctx, input }) => {

@@ -15,7 +15,6 @@ import PDFDocument from "pdfkit";
 import { getDb } from "./db";
 import { audits, findings, actions, auditResponses, questions, referentials, processus, sites, evidenceFiles, users } from "../drizzle/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
-import { generateRadarChart, generateHistogramChart, generateHeatmapChart, generateTimelineChart } from './report-charts';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -129,12 +128,12 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     : [];
 
   // Fetch evidence files
-  const questionIds = responses.map((r) => r.question?.id).filter(Boolean) as number[];
-  const evidence = questionIds.length > 0
+  const questionKeys = responses.map((r) => r.question?.questionKey).filter((key): key is string => Boolean(key));
+  const evidence = questionKeys.length > 0
     ? await db.select().from(evidenceFiles).where(
         and(
           eq(evidenceFiles.userId, audit.userId),
-          inArray(evidenceFiles.questionId, questionIds)
+          inArray(evidenceFiles.questionKey, questionKeys)
         )
       )
     : [];
@@ -145,8 +144,12 @@ async function fetchAuditData(auditId: number): Promise<AuditData> {
     : null;
 
   // Fetch referentials and processes
-  const referentialIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
-  const processIds = audit.processIds ? JSON.parse(audit.processIds) : [];
+  const referentialIds = Array.isArray(audit.referentialIds)
+    ? audit.referentialIds
+    : typeof audit.referentialIds === "string" ? JSON.parse(audit.referentialIds) : [];
+  const processIds = Array.isArray(audit.processIds)
+    ? audit.processIds
+    : typeof audit.processIds === "string" ? JSON.parse(audit.processIds) : [];
 
   const auditReferentials = referentialIds.length > 0
     ? await db.select().from(referentials).where(inArray(referentials.id, referentialIds))
@@ -349,7 +352,7 @@ function generateCoverPage(doc: PDFKit.PDFDocument, data: AuditData, options: Re
 // ============================================================================
 
 function generateContextSection(doc: PDFKit.PDFDocument, data: AuditData, options: ReportOptions) {
-  const { audit, site, processes } = data;
+  const { audit, site, processus: processes } = data;
 
   doc.fontSize(18).font("Helvetica-Bold").text("1. CONTEXTE & PÉRIMÈTRE");
   doc.moveDown(1);
@@ -363,7 +366,7 @@ function generateContextSection(doc: PDFKit.PDFDocument, data: AuditData, option
 
   // Type
   doc.fontSize(14).font("Helvetica-Bold").text("Type d'audit");
-  doc.fontSize(11).font("Helvetica").text(audit.auditType || "N/A");
+  doc.fontSize(11).font("Helvetica").text(audit.type || "N/A");
   doc.moveDown(0.5);
 
   // Organizational scope
@@ -494,58 +497,46 @@ async function generateChartsSection(
   doc.fontSize(18).font("Helvetica-Bold").text("4. TABLEAUX & GRAPHIQUES");
   doc.moveDown(1);
 
-  try {
-    // 1. Radar Chart: Conformité par processus
-    doc.fontSize(14).font("Helvetica-Bold").text("4.1 Conformité par Processus");
-    doc.moveDown(0.5);
-    
-    const radarBuffer = await generateRadarChart(data, metadata);
-    doc.image(radarBuffer, {
-      fit: [500, 375],
-      align: 'center',
-    });
-    doc.moveDown(1);
+  const drawBars = (title: string, rows: Array<{ label: string; value: number }>, maxValue = 100) => {
+    doc.fontSize(14).font("Helvetica-Bold").text(title).moveDown(0.5);
+    if (rows.length === 0) {
+      doc.fontSize(10).font("Helvetica").fillColor("#64748b").text("Aucune donnée disponible.").fillColor("black").moveDown();
+      return;
+    }
+    const width = 330;
+    for (const row of rows.slice(0, 10)) {
+      const y = doc.y;
+      doc.fontSize(9).font("Helvetica").fillColor("black").text(row.label, 55, y, { width: 130 });
+      doc.rect(190, y, width, 10).fill("#e2e8f0");
+      doc.rect(190, y, Math.max(0, Math.min(width, width * row.value / Math.max(1, maxValue))), 10).fill("#2563eb");
+      doc.fillColor("black").text(String(Math.round(row.value * 10) / 10), 525, y - 1, { width: 35, align: "right" });
+      doc.y = y + 18;
+    }
+    doc.moveDown();
+  };
 
-    // 2. Histogram: NC par criticité
-    doc.fontSize(14).font("Helvetica-Bold").text("4.2 Non-Conformités par Criticité");
-    doc.moveDown(0.5);
-    
-    const histogramBuffer = await generateHistogramChart(data, metadata);
-    
-    doc.image(histogramBuffer, {
-      fit: [500, 375],
-      align: 'center',
-    });
-    doc.moveDown(1);
+  const processRows = data.processus.map(process => {
+    const responses = data.responses.filter(row => row.process?.id === process.id);
+    const applicable = responses.filter(row => row.response.status !== "na");
+    const conforming = applicable.filter(row => row.response.status === "conforme");
+    return { label: process.name || `Processus ${process.id}`, value: applicable.length ? conforming.length * 100 / applicable.length : 0 };
+  });
+  drawBars("4.1 Conformité par processus (%)", processRows);
 
-    // 3. Heatmap: Risques par processus
-    doc.addPage();
-    doc.fontSize(14).font("Helvetica-Bold").text("4.3 Heatmap des Risques");
-    doc.moveDown(0.5);
-    
-    const heatmapBuffer = await generateHeatmapChart(data, metadata);
-    doc.image(heatmapBuffer, {
-      fit: [500, 400],
-      align: 'center',
-    });
-    doc.moveDown(1);
+  drawBars("4.2 Non-conformités par catégorie", [
+    { label: "NC majeures", value: metadata.ncMajor },
+    { label: "NC mineures", value: metadata.ncMinor },
+    { label: "Observations", value: metadata.observations },
+    { label: "Opportunités", value: metadata.ofi },
+  ], Math.max(1, metadata.ncMajor, metadata.ncMinor, metadata.observations, metadata.ofi));
 
-    // 4. Timeline: Évolution 12 mois
-    doc.fontSize(14).font("Helvetica-Bold").text("4.4 Évolution de la Conformité");
-    doc.moveDown(0.5);
-    
-    const timelineBuffer = await generateTimelineChart(data, metadata);
-    doc.image(timelineBuffer, {
-      fit: [500, 375],
-      align: 'center',
-    });
+  doc.fontSize(14).font("Helvetica-Bold").text("4.3 Concentration des risques").moveDown(0.5);
+  drawBars("Constats par processus", metadata.topRisks.map(risk => ({ label: risk.process, value: risk.count })), Math.max(1, ...metadata.topRisks.map(risk => risk.count)));
 
-  } catch (error) {
-    console.error('[Report] Chart generation error:', error);
-    doc.fontSize(11).font("Helvetica").text(
-      "[Erreur lors de la génération des graphiques. Les données sont disponibles dans les sections suivantes.]"
-    );
-  }
+  doc.fontSize(14).font("Helvetica-Bold").text("4.4 Évolution de la conformité").moveDown(0.5);
+  doc.fontSize(10).font("Helvetica").fillColor("#64748b").text(
+    "La courbe historique est disponible dans le dashboard analytique. Ce rapport représente l’état consolidé de l’audit sélectionné."
+  ).fillColor("black");
 }
 
 // ============================================================================

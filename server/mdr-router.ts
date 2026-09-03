@@ -1549,12 +1549,12 @@ export const mdrRouter = router({
 
           rows = finalWhereNoRole
             ? await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .where(finalWhereNoRole)
                 .orderBy((questions as any).displayOrder, (questions as any).id)
             : await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .orderBy((questions as any).displayOrder, (questions as any).id);
 
