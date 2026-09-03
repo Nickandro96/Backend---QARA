@@ -735,8 +735,8 @@ export async function getDashboardDrilldown(
       .offset(offset);
     
     // Get related data (processes, referentials)
-    const processIds = [...new Set(data.map(f => f.processId).filter(Boolean))];
-    const referentialIds = [...new Set(data.map(f => f.referentialId).filter(Boolean))];
+    const processIds = [...new Set(data.map(f => f.processId).filter((id): id is number => id !== null))];
+    const referentialIds = [...new Set(data.map(f => f.referentialId).filter((id): id is number => id !== null))];
     
     const processData = processIds.length > 0
     ? await db.select().from(processus).where(inArray(processus.id, processIds))
@@ -817,9 +817,9 @@ export async function getDashboardDrilldown(
       .where(inArray(findings.id, data.map(a => a.findingId)));
     
     // Get processes
-    const processIds = [...new Set(relatedFindings.map(f => f.processId).filter(Boolean))];
+    const processIds = [...new Set(relatedFindings.map(f => f.processId).filter((id): id is number => id !== null))];
     const processData = processIds.length > 0
-      ? await db.select().from(processes).where(inArray(processes.id, processIds as number[]))
+      ? await db.select().from(processus).where(inArray(processus.id, processIds))
       : [];
     
     // Format response
@@ -880,7 +880,7 @@ export async function getDashboardDrilldown(
     id: a.id,
     code: "", // Audits don't have codes
     title: a.name || "",
-    type: a.auditType || "",
+    type: a.type || "",
     criticality: "", // Not applicable
     status: a.status || "",
     processName: siteData.find(s => s.id === a.siteId)?.name || "",
@@ -1194,7 +1194,17 @@ export async function getDashboardProcessus(userId: number, filters?: DashboardF
     return [];
   }
 
-  const processIds = [...new Set(userAudits.flatMap(a => a.processIds ? JSON.parse(a.processIds) : []))];
+  const processIds = [...new Set(userAudits.flatMap(a => {
+    if (!a.processIds) return [];
+    if (Array.isArray(a.processIds)) return a.processIds.filter((id): id is number => typeof id === "number");
+    if (typeof a.processIds !== "string") return [];
+    try {
+      const parsed = JSON.parse(a.processIds);
+      return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === "number") : [];
+    } catch {
+      return [];
+    }
+  }))];
 
   if (processIds.length === 0) {
     return [];
