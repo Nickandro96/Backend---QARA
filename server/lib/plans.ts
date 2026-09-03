@@ -24,6 +24,7 @@ export type Capability =
 export interface PlanUser {
   role?: string | null;
   subscriptionTier?: string | null;
+  subscriptionStatus?: string | null;
 }
 
 const FREE_PLAN_CAPABILITIES: Record<Capability, boolean> = {
@@ -50,8 +51,9 @@ export function isAdmin(user: PlanUser | null | undefined): boolean {
 }
 
 export function isPaidTier(user: PlanUser | null | undefined): boolean {
-  const tier = (user?.subscriptionTier ?? "free") as SubscriptionTier;
-  return tier !== "free";
+  const tier = String(user?.subscriptionTier ?? "free").toLowerCase() as SubscriptionTier;
+  const legacyStatus = String(user?.subscriptionStatus ?? "").toLowerCase();
+  return tier !== "free" || legacyStatus === "premium";
 }
 
 export function hasCapability(user: PlanUser | null | undefined, capability: Capability): boolean {
