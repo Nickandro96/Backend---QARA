@@ -293,10 +293,15 @@ export const findings = mysqlTable("findings", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").references(() => users.id),
   auditId: int("auditId").references(() => audits.id),
+  processId: int("processId").references(() => processus.id),
+  referentialId: int("referentialId").references(() => referentiels.id),
 
+  findingCode: varchar("findingCode", { length: 80 }),
+  findingType: varchar("findingType", { length: 50 }),
   title: varchar("title", { length: 255 }),
   description: text("description"),
   severity: varchar("severity", { length: 50 }),
+  criticality: varchar("criticality", { length: 50 }),
   status: varchar("status", { length: 50 }).default("open"),
 
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -312,10 +317,17 @@ export const actions = mysqlTable("actions", {
     .notNull()
     .references(() => findings.id),
   actionCode: varchar("actionCode", { length: 50 }),
+  title: varchar("title", { length: 255 }),
+  actionType: varchar("actionType", { length: 50 }),
+  priority: varchar("priority", { length: 50 }),
   description: text("description").notNull(),
   responsible: varchar("responsible", { length: 255 }),
+  responsibleName: varchar("responsibleName", { length: 255 }),
   dueDate: timestamp("dueDate"),
-  status: mysqlEnum("status", ["open", "in_progress", "closed"]).default("open").notNull(),
+  status: mysqlEnum("status", ["open", "in_progress", "completed", "verified", "closed", "cancelled"])
+    .default("open")
+    .notNull(),
+  completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
