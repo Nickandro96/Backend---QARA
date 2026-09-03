@@ -429,7 +429,17 @@ export const auditReports = mysqlTable("audit_reports", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   auditId: int("auditId").notNull(),
-  reportUrl: varchar("reportUrl", { length: 2048 }),
+  reportType: varchar("reportType", { length: 50 }).notNull(),
+  reportTitle: varchar("reportTitle", { length: 255 }).notNull(),
+  reportVersion: varchar("reportVersion", { length: 20 }).default("1.0").notNull(),
+  language: varchar("language", { length: 5 }).default("fr").notNull(),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  fileUrl: varchar("fileUrl", { length: 2048 }).notNull(),
+  fileSize: int("fileSize"),
+  fileFormat: varchar("fileFormat", { length: 20 }).default("pdf").notNull(),
+  generatedBy: int("generatedBy").notNull(),
+  metadata: json("metadata"),
+  generatedAt: timestamp("generatedAt").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
