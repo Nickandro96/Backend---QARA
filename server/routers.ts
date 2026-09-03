@@ -87,7 +87,21 @@ export const appRouter = router({
 
   profile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserProfile(ctx.user.id);
+      const profile = await db.getUserProfile(ctx.user.id);
+      if (!profile) return profile;
+
+      // Admins always have full access. Also normalize the legacy
+      // `subscriptionStatus = premium` value used by early production data.
+      const effectiveTier =
+        profile.role === "admin"
+          ? "entreprise"
+          : profile.subscriptionTier && profile.subscriptionTier !== "free"
+            ? profile.subscriptionTier
+            : String(profile.subscriptionStatus || "").toLowerCase() === "premium"
+              ? "pro"
+              : "free";
+
+      return { ...profile, subscriptionTier: effectiveTier };
     }),
 
     update: protectedProcedure
