@@ -12,7 +12,8 @@ import {
   sites,
   processus,
   referentiels,
-  questions
+  questions,
+  resultats
 } from "../drizzle/schema";
 import { eq, and, sql, desc, gte, lte, inArray, or } from "drizzle-orm";
 
@@ -66,6 +67,32 @@ function buildFindingFilters(filters?: DashboardFilters) {
   return conditions;
 }
 
+type AuditWithScores = typeof audits.$inferSelect & {
+  score: number | null;
+  conformityRate: number | null;
+};
+
+async function attachLatestScores(
+  db: Awaited<ReturnType<typeof getDb>>,
+  auditRows: Array<typeof audits.$inferSelect>
+): Promise<AuditWithScores[]> {
+  if (auditRows.length === 0) return [];
+  const scoreRows = await db
+    .select()
+    .from(resultats)
+    .where(inArray(resultats.auditId, auditRows.map(audit => audit.id)))
+    .orderBy(desc(resultats.createdAt));
+  const latestByAudit = new Map<number, typeof resultats.$inferSelect>();
+  for (const row of scoreRows) {
+    if (row.auditId !== null && !latestByAudit.has(row.auditId)) latestByAudit.set(row.auditId, row);
+  }
+  return auditRows.map(audit => ({
+    ...audit,
+    score: latestByAudit.get(audit.id)?.score ?? null,
+    conformityRate: latestByAudit.get(audit.id)?.conformityRate ?? null,
+  }));
+}
+
 /**
  * 1. GET SUMMARY - KPIs macro avec filtres
  */
@@ -76,10 +103,11 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
   const auditConditions = buildAuditFilters(userId, filters);
   
   // Get all audits matching filters
-  const userAudits = await db
+  const auditRows = await db
     .select()
     .from(audits)
     .where(and(...auditConditions));
+  const userAudits = await attachLatestScores(db, auditRows);
   
   const auditIds = userAudits.map(a => a.id);
   
@@ -113,8 +141,8 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
   const scoresAndRates = userAudits
     .filter(a => a.score && a.conformityRate)
     .map(a => ({
-      score: parseFloat(a.score!),
-      conformityRate: parseFloat(a.conformityRate!)
+      score: Number(a.score),
+      conformityRate: Number(a.conformityRate)
     }));
   
   const averageAuditScore = scoresAndRates.length > 0
@@ -368,11 +396,12 @@ export async function getDashboardTimeseries(
   const auditConditions = buildAuditFilters(userId, periodFilters);
   
   // Get audits
-  const userAudits = await db
+  const auditRows = await db
     .select()
     .from(audits)
     .where(and(...auditConditions))
     .orderBy(audits.startDate);
+  const userAudits = await attachLatestScores(db, auditRows);
   
   const auditIds = userAudits.map(a => a.id);
   
@@ -419,8 +448,8 @@ export async function getDashboardTimeseries(
     };
     
     current.auditsCount++;
-    if (audit.score) current.totalScore += parseFloat(audit.score);
-    if (audit.conformityRate) current.totalConformityRate += parseFloat(audit.conformityRate);
+    if (audit.score !== null) current.totalScore += Number(audit.score);
+    if (audit.conformityRate !== null) current.totalConformityRate += Number(audit.conformityRate);
     
     timeseriesMap.set(period, current);
   }
@@ -495,10 +524,11 @@ export async function getDashboardHeatmap(userId: number, filters?: DashboardFil
   const auditConditions = buildAuditFilters(userId, filters);
   
   // Get audits
-  const userAudits = await db
+  const auditRows = await db
     .select()
     .from(audits)
     .where(and(...auditConditions));
+  const userAudits = await attachLatestScores(db, auditRows);
   
   const auditIds = userAudits.map(a => a.id);
   
@@ -582,10 +612,11 @@ export async function getDashboardRadar(userId: number, filters?: DashboardFilte
   const auditConditions = buildAuditFilters(userId, filters);
   
   // Get audits
-  const userAudits = await db
+  const auditRows = await db
     .select()
     .from(audits)
     .where(and(...auditConditions));
+  const userAudits = await attachLatestScores(db, auditRows);
   
   const auditIds = userAudits.map(a => a.id);
   
@@ -635,7 +666,7 @@ export async function getDashboardRadar(userId: number, filters?: DashboardFilte
     if (dimensionAudits.length > 0) {
       const scores = dimensionAudits
         .filter(a => a.score)
-        .map(a => parseFloat(a.score!));
+        .map(a => Number(a.score));
       
       if (scores.length > 0) {
         baseScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
@@ -735,8 +766,8 @@ export async function getDashboardDrilldown(
       .offset(offset);
     
     // Get related data (processes, referentials)
-    const processIds = [...new Set(data.map(f => f.processId).filter(Boolean))];
-    const referentialIds = [...new Set(data.map(f => f.referentialId).filter(Boolean))];
+    const processIds = [...new Set(data.map(f => f.processId).filter((id): id is number => id !== null))];
+    const referentialIds = [...new Set(data.map(f => f.referentialId).filter((id): id is number => id !== null))];
     
     const processData = processIds.length > 0
     ? await db.select().from(processus).where(inArray(processus.id, processIds))
@@ -817,9 +848,9 @@ export async function getDashboardDrilldown(
       .where(inArray(findings.id, data.map(a => a.findingId)));
     
     // Get processes
-    const processIds = [...new Set(relatedFindings.map(f => f.processId).filter(Boolean))];
+    const processIds = [...new Set(relatedFindings.map(f => f.processId).filter((id): id is number => id !== null))];
     const processData = processIds.length > 0
-      ? await db.select().from(processes).where(inArray(processes.id, processIds as number[]))
+      ? await db.select().from(processus).where(inArray(processus.id, processIds))
       : [];
     
     // Format response
@@ -880,7 +911,7 @@ export async function getDashboardDrilldown(
     id: a.id,
     code: "", // Audits don't have codes
     title: a.name || "",
-    type: a.auditType || "",
+    type: a.type || "",
     criticality: "", // Not applicable
     status: a.status || "",
     processName: siteData.find(s => s.id === a.siteId)?.name || "",
@@ -903,10 +934,11 @@ export async function getDashboardScoring(userId: number, filters?: DashboardFil
   const auditConditions = buildAuditFilters(userId, filters);
   
   // Get audits
-  const userAudits = await db
+  const auditRows = await db
     .select()
     .from(audits)
     .where(and(...auditConditions));
+  const userAudits = await attachLatestScores(db, auditRows);
   
   const auditIds = userAudits.map(a => a.id);
   
@@ -943,7 +975,7 @@ export async function getDashboardScoring(userId: number, filters?: DashboardFil
     
     try {
       const auditProcessIds = JSON.parse(audit.processIds as string) as number[];
-      const auditScore = audit.score ? parseFloat(audit.score) : 0;
+      const auditScore = audit.score !== null ? Number(audit.score) : 0;
       
       for (const processId of auditProcessIds) {
         const current = processScoresMap.get(processId) || {
@@ -1194,7 +1226,17 @@ export async function getDashboardProcessus(userId: number, filters?: DashboardF
     return [];
   }
 
-  const processIds = [...new Set(userAudits.flatMap(a => a.processIds ? JSON.parse(a.processIds) : []))];
+  const processIds = [...new Set(userAudits.flatMap(a => {
+    if (!a.processIds) return [];
+    if (Array.isArray(a.processIds)) return a.processIds.filter((id): id is number => typeof id === "number");
+    if (typeof a.processIds !== "string") return [];
+    try {
+      const parsed = JSON.parse(a.processIds);
+      return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === "number") : [];
+    } catch {
+      return [];
+    }
+  }))];
 
   if (processIds.length === 0) {
     return [];

@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 
@@ -10,6 +10,9 @@ import {
   evidenceFiles,
   referentials,
   processus,
+  findings,
+  actions,
+  resultats,
 } from "../drizzle/schema";
 
 /**
@@ -183,14 +186,14 @@ function getMysqlConfigFromEnv(): MysqlCfg | null {
   return null;
 }
 
-export async function getDb() {
+export async function getDb(): Promise<ReturnType<typeof drizzle>> {
   // Fast-path
   if (_db) return _db;
 
   const cfg = getMysqlConfigFromEnv();
   if (!cfg) {
     console.error("[Database] Missing DB env vars. Provide DATABASE_URL (recommended) or MYSQL_*.");
-    return null;
+    throw new Error("Database configuration is missing");
   }
 
   try {
@@ -235,7 +238,7 @@ export async function getDb() {
       console.log("[Database] MySQL ping OK");
     }
 
-    _db = drizzle(_pool);
+    _db = drizzle(_pool) as unknown as ReturnType<typeof drizzle>;
     return _db;
   } catch (error) {
     console.error("[Database] Failed to connect:", error);
@@ -250,7 +253,7 @@ export async function getDb() {
     _db = null;
     _lastPingAt = 0;
 
-    return null;
+    throw error;
   }
 }
 
@@ -566,6 +569,63 @@ export async function getAudits(input: {
 
 export async function getAuditById(auditId: number, userId: number) {
   return await getAuditByIdAndUserId(auditId, userId);
+}
+
+export async function compareAudits(audit1Id: number, audit2Id: number, userId: number) {
+  if (audit1Id === audit2Id) throw new Error("Two different audits are required");
+  const db = await getDb();
+  const selectedAudits = await db
+    .select()
+    .from(audits)
+    .where(and(eq(audits.userId, userId), inArray(audits.id, [audit1Id, audit2Id])));
+  if (selectedAudits.length !== 2) return null;
+
+  const allFindings = await db.select().from(findings).where(inArray(findings.auditId, [audit1Id, audit2Id]));
+  const findingIds = allFindings.map(finding => finding.id);
+  const allActions = findingIds.length
+    ? await db.select().from(actions).where(inArray(actions.findingId, findingIds))
+    : [];
+  const scores = await db
+    .select()
+    .from(resultats)
+    .where(inArray(resultats.auditId, [audit1Id, audit2Id]))
+    .orderBy(desc(resultats.createdAt));
+
+  const findings1 = allFindings.filter(finding => finding.auditId === audit1Id);
+  const findings2 = allFindings.filter(finding => finding.auditId === audit2Id);
+  const normalize = (value: string | null) => (value || "").trim().toLocaleLowerCase("fr");
+  const titles1 = new Set(findings1.map(finding => normalize(finding.title)));
+  const titles2 = new Set(findings2.map(finding => normalize(finding.title)));
+  const byCriticality = (rows: typeof findings1) => rows.reduce<Record<string, number>>((acc, finding) => {
+    const key = finding.criticality || "low";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const conformity = (auditId: number) => Number(scores.find(score => score.auditId === auditId)?.conformityRate || 0);
+  const completedActions = (rows: typeof findings1) => {
+    const ids = new Set(rows.map(finding => finding.id));
+    return allActions.filter(action => ids.has(action.findingId) && ["completed", "verified", "closed"].includes(action.status)).length;
+  };
+
+  const audit1ConformityRate = conformity(audit1Id);
+  const audit2ConformityRate = conformity(audit2Id);
+  const audit1CompletedActions = completedActions(findings1);
+  const audit2CompletedActions = completedActions(findings2);
+  return {
+    audit1ConformityRate,
+    audit2ConformityRate,
+    conformityRateDelta: audit2ConformityRate - audit1ConformityRate,
+    audit1TotalFindings: findings1.length,
+    audit2TotalFindings: findings2.length,
+    totalFindingsDelta: findings2.length - findings1.length,
+    audit1CompletedActions,
+    audit2CompletedActions,
+    completedActionsDelta: audit2CompletedActions - audit1CompletedActions,
+    audit1FindingsByCriticality: byCriticality(findings1),
+    audit2FindingsByCriticality: byCriticality(findings2),
+    closedFindings: findings1.filter(finding => !titles2.has(normalize(finding.title))),
+    newFindings: findings2.filter(finding => !titles1.has(normalize(finding.title))),
+  };
 }
 
 export async function updateAudit(auditId: number, patch: Record<string, any>) {

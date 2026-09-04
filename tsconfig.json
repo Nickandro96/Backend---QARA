@@ -8,10 +8,10 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "rootDir": "./server",
+    "rootDir": ".",
     "outDir": "./dist",
     "types": ["node"]
   },
-  "include": ["server/**/*.ts"],
+  "include": ["server/**/*.ts", "shared/**/*.ts", "drizzle/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

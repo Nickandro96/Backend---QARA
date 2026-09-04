@@ -533,7 +533,7 @@ export const mdrRouter = router({
         auditType: z.string().optional(),
         type: z.string().optional(),
 
-        status: z.string().default("draft"),
+        status: z.enum(["draft", "in_progress"]).optional(),
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
 
@@ -557,17 +557,12 @@ export const mdrRouter = router({
       const now = new Date();
 
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
-      const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
-      const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
-
       const valuesToSave: any = {
         userId: ctx.user.id,
         siteId: input.siteId,
         name: input.name,
 
         type: resolvedType,
-        status: input.status,
-
         referentialIds: input.referentialIds ?? [],
         processIds: input.processIds ?? [],
 
@@ -576,14 +571,26 @@ export const mdrRouter = router({
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
 
-        startDate: resolvedStartDate,
-        endDate: resolvedEndDate,
-
         economicRole: input.economicRole ?? null,
         updatedAt: now,
       };
 
-      const insertValues: any = { ...valuesToSave, createdAt: now };
+      // On update, omitted lifecycle/date fields must never reset persisted data.
+      if (input.status !== undefined) valuesToSave.status = input.status;
+      if (input.startDate !== undefined) {
+        valuesToSave.startDate = input.startDate ? new Date(input.startDate) : null;
+      }
+      if (input.endDate !== undefined) {
+        valuesToSave.endDate = input.endDate ? new Date(input.endDate) : null;
+      }
+
+      const insertValues: any = {
+        ...valuesToSave,
+        status: input.status ?? "draft",
+        startDate: input.startDate ? new Date(input.startDate) : now,
+        endDate: input.endDate ? new Date(input.endDate) : null,
+        createdAt: now,
+      };
 
       try {
         if (input.auditId) {
@@ -595,6 +602,13 @@ export const mdrRouter = router({
 
           if (!existing) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Audit not found or not owned by user" });
+          }
+
+          if (["completed", "closed"].includes(String((existing as any).status)) && input.status !== undefined) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Le statut d’un audit terminé ne peut pas être modifié depuis le brouillon.",
+            });
           }
 
           await db.update(audits).set(valuesToSave).where(eq(audits.id, input.auditId));
@@ -625,6 +639,7 @@ export const mdrRouter = router({
         const normalized = normalizeAuditForFrontend(created);
         return { auditId: Number(normalized.id), audit: normalized };
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         const mysql = e?.cause ?? e;
         console.error("[MDR] createOrUpdateAuditDraft failed:", {
           message: e?.message,
@@ -860,11 +875,56 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn("questions", "risks");
-
-      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
 
       try {
+        const scopedQuestions = await fetchAuditScopedQuestions(db, {
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          economicRole: auditContext.economicRole,
+          processIds: auditContext.processIds,
+          referentialIds: auditContext.referentialIds,
+          select: { questionKey: (questions as any).questionKey },
+        });
+
+        const requiredKeys = new Set(
+          scopedQuestions.map((q: any) => String(q.questionKey || "").trim()).filter(Boolean)
+        );
+        if (requiredKeys.size === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Impossible de clôturer un audit sans questionnaire applicable.",
+          });
+        }
+
+        const savedResponses = await db
+          .select({
+            questionKey: (auditResponses as any).questionKey,
+            responseValue: (auditResponses as any).responseValue,
+          })
+          .from(auditResponses)
+          .where(
+            and(
+              eq((auditResponses as any).auditId, input.auditId),
+              eq((auditResponses as any).userId, ctx.user.id)
+            )
+          );
+
+        const finalValues = new Set(["compliant", "non_compliant", "partial", "not_applicable"]);
+        const answeredKeys = new Set(
+          savedResponses
+            .filter((r: any) => finalValues.has(String(r.responseValue || "").toLowerCase()))
+            .map((r: any) => String(r.questionKey || "").trim())
+            .filter((key: string) => requiredKeys.has(key))
+        );
+
+        if (answeredKeys.size !== requiredKeys.size) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Audit incomplet : ${answeredKeys.size}/${requiredKeys.size} questions finalisées.`,
+          });
+        }
+
         await db
           .update(audits)
           .set({ status: "completed", updatedAt: new Date() } as any)
@@ -872,6 +932,7 @@ export const mdrRouter = router({
 
         return { success: true };
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         const mysql = e?.cause ?? e;
         console.error("[MDR] completeAudit failed:", {
           message: e?.message,
@@ -1488,12 +1549,12 @@ export const mdrRouter = router({
 
           rows = finalWhereNoRole
             ? await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .where(finalWhereNoRole)
                 .orderBy((questions as any).displayOrder, (questions as any).id)
             : await db
-                .select()
+                .select(questionSelect)
                 .from(questions)
                 .orderBy((questions as any).displayOrder, (questions as any).id);
 

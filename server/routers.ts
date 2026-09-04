@@ -87,7 +87,21 @@ export const appRouter = router({
 
   profile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserProfile(ctx.user.id);
+      const profile = await db.getUserProfile(ctx.user.id);
+      if (!profile) return profile;
+
+      // Admins always have full access. Also normalize the legacy
+      // `subscriptionStatus = premium` value used by early production data.
+      const effectiveTier =
+        profile.role === "admin"
+          ? "entreprise"
+          : profile.subscriptionTier && profile.subscriptionTier !== "free"
+            ? profile.subscriptionTier
+            : String(profile.subscriptionStatus || "").toLowerCase() === "premium"
+              ? "pro"
+              : "free";
+
+      return { ...profile, subscriptionTier: effectiveTier };
     }),
 
     update: protectedProcedure
@@ -683,6 +697,10 @@ export const appRouter = router({
         return await dashboardV2.getDashboardRadar(ctx.user.id, input);
       }),
 
+    getHeatmap: protectedProcedure.query(async ({ ctx }) => {
+      return await dashboardV2.getDashboardHeatmap(ctx.user.id, {});
+    }),
+
     getDrilldown: protectedProcedure
       .input(
         z.object({
@@ -863,7 +881,7 @@ export const appRouter = router({
 
           // Save report metadata to database
           const database = await db.getDb();
-          const [report] = await database
+          const inserted = await database
             .insert(auditReports)
             .values({
               auditId: input.auditId,
@@ -871,6 +889,7 @@ export const appRouter = router({
               reportType: input.reportType,
               reportTitle: `Rapport d'audit #${input.auditId}`,
               reportVersion: "1.0",
+              language: input.language,
               fileKey,
               fileUrl,
               fileSize: pdfBuffer.length,
@@ -882,11 +901,13 @@ export const appRouter = router({
                 includeActionPlan: input.includeActionPlan,
               }),
             })
-            .returning();
+            .$returningId();
+          const reportId = inserted[0]?.id;
+          if (!reportId) throw new Error("Report metadata could not be saved");
 
           return {
             success: true,
-            reportId: report.id,
+            reportId,
             fileUrl,
             fileName,
           };
@@ -915,7 +936,7 @@ export const appRouter = router({
           .select()
           .from(auditReports)
           .where(and(...conditions))
-          .orderBy(auditReports.generatedAt)
+          .orderBy(desc(auditReports.generatedAt))
           .limit(input.limit);
 
         return reports;
@@ -935,6 +956,18 @@ export const appRouter = router({
         }
 
         return report;
+      }),
+
+    download: protectedProcedure
+      .input(z.object({ reportId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await db.getDb();
+        const [report] = await database
+          .select()
+          .from(auditReports)
+          .where(and(eq(auditReports.id, input.reportId), eq(auditReports.userId, ctx.user.id)));
+        if (!report) throw new Error("Report not found");
+        return { url: report.fileUrl };
       }),
 
     delete: protectedProcedure

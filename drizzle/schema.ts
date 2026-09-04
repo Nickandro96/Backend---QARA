@@ -293,10 +293,15 @@ export const findings = mysqlTable("findings", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").references(() => users.id),
   auditId: int("auditId").references(() => audits.id),
+  processId: int("processId").references(() => processus.id),
+  referentialId: int("referentialId").references(() => referentiels.id),
 
+  findingCode: varchar("findingCode", { length: 80 }),
+  findingType: varchar("findingType", { length: 50 }),
   title: varchar("title", { length: 255 }),
   description: text("description"),
   severity: varchar("severity", { length: 50 }),
+  criticality: varchar("criticality", { length: 50 }),
   status: varchar("status", { length: 50 }).default("open"),
 
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -312,10 +317,17 @@ export const actions = mysqlTable("actions", {
     .notNull()
     .references(() => findings.id),
   actionCode: varchar("actionCode", { length: 50 }),
+  title: varchar("title", { length: 255 }),
+  actionType: varchar("actionType", { length: 50 }),
+  priority: varchar("priority", { length: 50 }),
   description: text("description").notNull(),
   responsible: varchar("responsible", { length: 255 }),
+  responsibleName: varchar("responsibleName", { length: 255 }),
   dueDate: timestamp("dueDate"),
-  status: mysqlEnum("status", ["open", "in_progress", "closed"]).default("open").notNull(),
+  status: mysqlEnum("status", ["open", "in_progress", "completed", "verified", "closed", "cancelled"])
+    .default("open")
+    .notNull(),
+  completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
@@ -417,7 +429,17 @@ export const auditReports = mysqlTable("audit_reports", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   auditId: int("auditId").notNull(),
-  reportUrl: varchar("reportUrl", { length: 2048 }),
+  reportType: varchar("reportType", { length: 50 }).notNull(),
+  reportTitle: varchar("reportTitle", { length: 255 }).notNull(),
+  reportVersion: varchar("reportVersion", { length: 20 }).default("1.0").notNull(),
+  language: varchar("language", { length: 5 }).default("fr").notNull(),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  fileUrl: varchar("fileUrl", { length: 2048 }).notNull(),
+  fileSize: int("fileSize"),
+  fileFormat: varchar("fileFormat", { length: 20 }).default("pdf").notNull(),
+  generatedBy: int("generatedBy").notNull(),
+  metadata: json("metadata"),
+  generatedAt: timestamp("generatedAt").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

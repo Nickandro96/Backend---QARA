@@ -408,7 +408,7 @@ export const isoRouter = router({
       }
 
       const rows = await db
-        .select(questionSelect)
+        .select()
         .from(questions)
         .where(and(...whereParts))
         .orderBy(sql`${(questions as any).displayOrder} IS NULL, ${(questions as any).displayOrder} ASC, ${(questions as any).id} ASC`);
@@ -584,7 +584,7 @@ createOrUpdateAuditDraft: protectedProcedure
       auditorName: z.string().optional().default(""),
       auditeeName: z.string().optional().default(""),
       auditeeEmail: z.string().optional().default(""),
-      status: z.enum(["draft", "in_progress", "completed"]).optional().default("draft"),
+      status: z.enum(["draft", "in_progress"]).optional(),
     })
   )
   .mutation(async ({ ctx, input }) => {
@@ -598,12 +598,22 @@ createOrUpdateAuditDraft: protectedProcedure
     let existing: any = null;
     if (input.auditId) {
       const [row] = await db
-        .select({ id: (audits as any).id, processIds: (audits as any).processIds })
+        .select({
+          id: (audits as any).id,
+          processIds: (audits as any).processIds,
+          status: (audits as any).status,
+        })
         .from(audits)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
       existing = row ?? null;
       if (!existing) throw new Error("Audit introuvable");
+      if (["completed", "closed"].includes(String(existing.status)) && input.status !== undefined) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Le statut d’un audit terminé ne peut pas être modifié depuis le brouillon.",
+        });
+      }
     }
 
     // ✅ Determine stored processIds
@@ -626,17 +636,22 @@ createOrUpdateAuditDraft: protectedProcedure
       type: "internal",
       userId: ctx.user.id,
       siteId: input.siteId,
-      status: input.status ?? "draft",
       economicRole: null,
       processIds: storedProcessIds,
       referentialIds: [referentialId],
       auditorName: (input.auditorName ?? "").trim(),
       auditeeName: (input.auditeeName ?? "").trim(),
       auditeeEmail: (input.auditeeEmail ?? "").trim(),
-      startDate: input.startDate ? new Date(input.startDate) : null,
-      endDate: input.endDate ? new Date(input.endDate) : null,
       updatedAt: new Date(),
     };
+
+    if (input.status !== undefined) values.status = input.status;
+    if (input.startDate !== undefined) {
+      values.startDate = input.startDate ? new Date(input.startDate) : null;
+    }
+    if (input.endDate !== undefined) {
+      values.endDate = input.endDate ? new Date(input.endDate) : null;
+    }
 
     if (input.auditId) {
       await db
@@ -646,7 +661,13 @@ createOrUpdateAuditDraft: protectedProcedure
       return { auditId: input.auditId };
     }
 
-    const res: any = await db.insert(audits).values({ ...values, createdAt: new Date() });
+    const res: any = await db.insert(audits).values({
+      ...values,
+      status: input.status ?? "draft",
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      endDate: input.endDate ? new Date(input.endDate) : null,
+      createdAt: new Date(),
+    });
     const insertedId = res?.[0]?.insertId ?? res?.insertId ?? null;
 
     if (!insertedId) {
