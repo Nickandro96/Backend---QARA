@@ -15,6 +15,13 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { matchesScope, type RoleReglementaire, type SituationTag } from "./onboarding/scopeEngine";
 import { resolveProcessDbIds } from "./shared/processResolution";
+import {
+  assertAuditCanComplete,
+  assertAuditComplete,
+  assertAuditMutable,
+  assertQuestionBelongsToAudit,
+  resolveAuditProcessId,
+} from "./audit-lifecycle";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
@@ -475,7 +482,7 @@ export const mdrRouter = router({
         auditType: z.string().optional(),
         type: z.string().optional(),
 
-        status: z.string().default("draft"),
+        status: z.enum(["draft", "in_progress"]).optional(),
         referentialIds: z.array(z.number()).default([]),
         processIds: z.array(z.string()).default([]),
 
@@ -499,8 +506,6 @@ export const mdrRouter = router({
       const now = new Date();
 
       const resolvedType = String(input.type ?? input.auditType ?? "internal");
-      const resolvedStartDate = input.startDate ? new Date(input.startDate) : now;
-      const resolvedEndDate = input.endDate ? new Date(input.endDate) : null;
 
       // Numeric ids are environment-specific. Resolve MDR from its stable code
       // instead of trusting the frontend's historical `referentialIds: [1]`.
@@ -535,8 +540,6 @@ export const mdrRouter = router({
         name: input.name,
 
         type: resolvedType,
-        status: input.status,
-
         referentialIds: resolvedReferentialIds,
         processIds: input.processIds ?? [],
 
@@ -545,14 +548,21 @@ export const mdrRouter = router({
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
 
-        startDate: resolvedStartDate,
-        endDate: resolvedEndDate,
-
         economicRole: input.economicRole ?? null,
         updatedAt: now,
       };
 
-      const insertValues: any = { ...valuesToSave, createdAt: now };
+      if (input.status !== undefined) valuesToSave.status = input.status;
+      if (input.startDate !== undefined) valuesToSave.startDate = input.startDate ? new Date(input.startDate) : null;
+      if (input.endDate !== undefined) valuesToSave.endDate = input.endDate ? new Date(input.endDate) : null;
+
+      const insertValues: any = {
+        ...valuesToSave,
+        status: input.status ?? "draft",
+        startDate: input.startDate ? new Date(input.startDate) : now,
+        endDate: input.endDate ? new Date(input.endDate) : null,
+        createdAt: now,
+      };
 
       try {
         if (input.auditId) {
@@ -565,6 +575,7 @@ export const mdrRouter = router({
           if (!existing) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Audit not found or not owned by user" });
           }
+          assertAuditMutable(existing);
 
           await db.update(audits).set(valuesToSave).where(eq(audits.id, input.auditId));
 
@@ -594,6 +605,7 @@ export const mdrRouter = router({
         const normalized = normalizeAuditForFrontend(created);
         return { auditId: Number(normalized.id), audit: normalized };
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         const mysql = e?.cause ?? e;
         console.error("[MDR] createOrUpdateAuditDraft failed:", {
           message: e?.message,
@@ -829,18 +841,34 @@ export const mdrRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const hasRisksColumn = await hasColumn("questions", "risks");
-
-      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      assertAuditCanComplete(auditContext.audit);
 
       try {
+        const scopedQuestions = await fetchAuditScopedQuestions(db, {
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          economicRole: auditContext.economicRole,
+          economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+          situationTags: auditContext.situationTags,
+          processIds: auditContext.processIds,
+          referentialIds: auditContext.referentialIds,
+          select: { questionKey: (questions as any).questionKey },
+        });
+        const responses = await db
+          .select({ questionKey: (auditResponses as any).questionKey, responseValue: (auditResponses as any).responseValue })
+          .from(auditResponses)
+          .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
+        assertAuditComplete(scopedQuestions, responses);
+
         await db
           .update(audits)
-          .set({ status: "completed", updatedAt: new Date() } as any)
+          .set({ status: "completed", endDate: new Date(), updatedAt: new Date() } as any)
           .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
 
         return { success: true };
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         const mysql = e?.cause ?? e;
         console.error("[MDR] completeAudit failed:", {
           message: e?.message,
@@ -1055,6 +1083,7 @@ export const mdrRouter = router({
           timeline,
         };
       } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         const mysql = e?.cause ?? e;
         console.error("[MDR] getAuditDashboard failed:", {
           message: e?.message,
@@ -1228,10 +1257,22 @@ export const mdrRouter = router({
 
       const hasRisksColumn = await hasColumn("questions", "risks");
 
-      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      assertAuditMutable(auditContext.audit);
+      const scopedQuestions = await fetchAuditScopedQuestions(db, {
+        auditId: input.auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: { questionKey: (questions as any).questionKey, processId: (questions as any).processId },
+      });
+      assertQuestionBelongsToAudit(input.questionKey, scopedQuestions);
 
       const now = new Date();
-      const normalizedProcessId = input.processId && isNumericString(input.processId) ? Number(input.processId) : null;
+      const normalizedProcessId = resolveAuditProcessId(input.questionKey, input.processId, scopedQuestions);
       const normalizedAnsweredBy =
         input.answeredBy === null || input.answeredBy === undefined || input.answeredBy === ""
           ? ctx.user.id

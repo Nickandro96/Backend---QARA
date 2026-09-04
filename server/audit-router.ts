@@ -11,6 +11,14 @@ import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-
 import { safeParseArray, getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
 import { generatePreparationChecklist } from "./services/preparation/checklistGenerator";
 import { generatePreparationPlanAI, generateAuditorQuestionsAI, evaluateAuditorAnswerAI, SIMULATION_WARNING } from "./services/preparation/preparationAI";
+import {
+  assertAuditCanComplete,
+  assertAuditCanReopen,
+  assertAuditComplete,
+  assertAuditMutable,
+  assertQuestionBelongsToAudit,
+  resolveAuditProcessId,
+} from "./audit-lifecycle";
 
 const externalAuditInput=z.object({ organisme:z.enum(["ON","FDA","MDSAP","Autre"]), organismeNom:z.string().min(2).max(255), datePrevue:z.string().date(), typeExterne:z.enum(["certification_initiale","surveillance","renouvellement","inspection_non_annoncee","audit_cause"]), programmeDocumentRef:z.string().max(255).optional() });
 async function ownedPreparationAudit(db:any,userId:number,auditId:number){const [audit]=await db.select().from(audits).where(and(eq(audits.id,auditId),eq(audits.userId,userId))).limit(1);if(!audit)throw new TRPCError({code:"NOT_FOUND",message:"Préparation d'audit introuvable"});return audit;}
@@ -268,16 +276,14 @@ export const auditRouter = router({
    * audit is immutable; every other lifecycle state can return to in_progress.
    */
   reopen: protectedProcedure
-    .input(z.object({ auditId: z.number().int().positive() }))
+    .input(z.object({ auditId: z.number().int().positive(), reason: z.string().trim().min(3).max(2000).optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       const audit = await getAuditById(input.auditId, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
-      if ((audit as any).status === "closed") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Un audit clôturé ne peut pas être rouvert" });
-      }
+      assertAuditCanReopen(audit, input.reason);
 
       if ((audit as any).status !== "in_progress") {
         await db
@@ -319,6 +325,7 @@ export const auditRouter = router({
 
       const audit = await getAuditById(input.id, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
+      assertAuditMutable(audit);
 
       const { id, ...fields } = input;
       const patch: Record<string, any> = {};
@@ -342,6 +349,7 @@ export const auditRouter = router({
     .mutation(async ({ ctx, input }) => {
       const audit = await getAuditById(input.id, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
+      assertAuditMutable(audit);
       await deleteAudit(input.id);
       return { success: true };
     }),
@@ -484,9 +492,26 @@ export const auditRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      assertAuditCanComplete(auditContext.audit);
+      const scopedQuestions = await fetchAuditScopedQuestions(db, {
+        auditId: input.auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: { questionKey: (questions as any).questionKey },
+      });
+      const responses = await db
+        .select({ questionKey: auditResponses.questionKey, responseValue: auditResponses.responseValue })
+        .from(auditResponses)
+        .where(and(eq(auditResponses.auditId, input.auditId), eq(auditResponses.userId, ctx.user.id)));
+      assertAuditComplete(scopedQuestions, responses);
       await db
         .update(audits)
-        .set({ status: "completed", updatedAt: new Date() })
+        .set({ status: "completed", endDate: new Date(), updatedAt: new Date() })
         .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
       return { success: true as const };
     }),
@@ -562,11 +587,22 @@ export const auditRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      assertAuditMutable(auditContext.audit);
+      const scopedQuestions = await fetchAuditScopedQuestions(db, {
+        auditId: input.auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: { questionKey: (questions as any).questionKey, processId: (questions as any).processId },
+      });
+      assertQuestionBelongsToAudit(input.questionKey, scopedQuestions);
 
       const now = new Date();
-      const normalizedProcessId =
-        input.processId && /^[0-9]+$/.test(input.processId) ? Number(input.processId) : null;
+      const normalizedProcessId = resolveAuditProcessId(input.questionKey, input.processId, scopedQuestions);
       const normalizedAnsweredBy =
         input.answeredBy === null || input.answeredBy === undefined || input.answeredBy === ""
           ? ctx.user.id

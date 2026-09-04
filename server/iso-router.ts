@@ -15,6 +15,14 @@ import {
   sites,
 } from "../drizzle/schema";
 import { resolveProcessDbIds } from "./shared/processResolution";
+import { fetchAuditScopedQuestions, getAuditContextInternal } from "./mdr-router";
+import {
+  assertAuditCanComplete,
+  assertAuditComplete,
+  assertAuditMutable,
+  assertQuestionBelongsToAudit,
+  resolveAuditProcessId,
+} from "./audit-lifecycle";
 
 /**
  * ISO Router
@@ -387,12 +395,12 @@ export const isoRouter = router({
         .from(audits)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
-      if (!audit) throw new Error("Audit introuvable");
+      if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
 
       const rows = await db
         .select()
         .from(auditResponses)
-        .where(eq((auditResponses as any).auditId, input.auditId))
+        .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)))
         .orderBy(sql`${(auditResponses as any).id} ASC`);
       return rows;
     }),
@@ -401,9 +409,26 @@ export const isoRouter = router({
     .input(z.object({ auditId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
+      assertAuditCanComplete(auditContext.audit);
+      const scopedQuestions = await fetchAuditScopedQuestions(db, {
+        auditId: input.auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: { questionKey: (questions as any).questionKey },
+      });
+      const responses = await db
+        .select({ questionKey: (auditResponses as any).questionKey, responseValue: (auditResponses as any).responseValue })
+        .from(auditResponses)
+        .where(and(eq((auditResponses as any).auditId, input.auditId), eq((auditResponses as any).userId, ctx.user.id)));
+      assertAuditComplete(scopedQuestions, responses);
       await db
         .update(audits)
-        .set({ status: "completed", updatedAt: new Date() } as any)
+        .set({ status: "completed", endDate: new Date(), updatedAt: new Date() } as any)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)));
       return { success: true as const };
     }),
@@ -442,11 +467,12 @@ export const isoRouter = router({
       const db = await requireDb();
 
       const [a] = await db
-        .select({ id: (audits as any).id })
+        .select({ id: (audits as any).id, status: (audits as any).status })
         .from(audits)
         .where(and(eq((audits as any).id, (input as any).auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
-      if (!a) throw new Error("Audit introuvable");
+      if (!a) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+      assertAuditMutable(a);
 
       let q: any = null;
       if ((input as any).questionId) {
@@ -466,13 +492,23 @@ export const isoRouter = router({
         ).limit(1);
         q = row;
       }
-      if (!q) throw new Error("Question introuvable");
+      if (!q) throw new TRPCError({ code: "NOT_FOUND", message: "Question introuvable" });
 
       const questionKey = (q.questionKey || (input as any).questionKey || `q_${q.id}`) as string;
+      const auditContext = await getAuditContextInternal(db, ctx.user.id, (input as any).auditId);
+      const scopedQuestions = await fetchAuditScopedQuestions(db, {
+        auditId: (input as any).auditId,
+        userId: ctx.user.id,
+        economicRole: auditContext.economicRole,
+        economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+        situationTags: auditContext.situationTags,
+        processIds: auditContext.processIds,
+        referentialIds: auditContext.referentialIds,
+        select: { questionKey: (questions as any).questionKey, processId: (questions as any).processId },
+      });
+      assertQuestionBelongsToAudit(questionKey, scopedQuestions);
 
-      const v = (input as any).processId;
-      const n = typeof v === "string" ? Number(v) : v;
-      const resolvedProcessId = Number.isFinite(n) && n > 0 ? Number(n) : (q as any).processId ?? null;
+      const resolvedProcessId = resolveAuditProcessId(questionKey, (input as any).processId, scopedQuestions);
 
       const payload: any = {
         userId: ctx.user.id,
@@ -534,7 +570,7 @@ createOrUpdateAuditDraft: protectedProcedure
       auditorName: z.string().optional().default(""),
       auditeeName: z.string().optional().default(""),
       auditeeEmail: z.string().optional().default(""),
-      status: z.enum(["draft", "in_progress", "completed"]).optional().default("draft"),
+      status: z.enum(["draft", "in_progress"]).optional(),
     })
   )
   .mutation(async ({ ctx, input }) => {
@@ -548,12 +584,13 @@ createOrUpdateAuditDraft: protectedProcedure
     let existing: any = null;
     if (input.auditId) {
       const [row] = await db
-        .select({ id: (audits as any).id, processIds: (audits as any).processIds })
+        .select({ id: (audits as any).id, processIds: (audits as any).processIds, status: (audits as any).status })
         .from(audits)
         .where(and(eq((audits as any).id, input.auditId), eq((audits as any).userId, ctx.user.id)))
         .limit(1);
       existing = row ?? null;
-      if (!existing) throw new Error("Audit introuvable");
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
+      assertAuditMutable(existing);
     }
 
     // ✅ Determine stored processIds
@@ -576,17 +613,18 @@ createOrUpdateAuditDraft: protectedProcedure
       type: "internal",
       userId: ctx.user.id,
       siteId: input.siteId,
-      status: input.status ?? "draft",
       economicRole: null,
       processIds: storedProcessIds,
       referentialIds: [referentialId],
       auditorName: (input.auditorName ?? "").trim(),
       auditeeName: (input.auditeeName ?? "").trim(),
       auditeeEmail: (input.auditeeEmail ?? "").trim(),
-      startDate: input.startDate ? new Date(input.startDate) : null,
-      endDate: input.endDate ? new Date(input.endDate) : null,
       updatedAt: new Date(),
     };
+
+    if (input.status !== undefined) values.status = input.status;
+    if (input.startDate !== undefined) values.startDate = input.startDate ? new Date(input.startDate) : null;
+    if (input.endDate !== undefined) values.endDate = input.endDate ? new Date(input.endDate) : null;
 
     if (input.auditId) {
       await db
@@ -596,7 +634,13 @@ createOrUpdateAuditDraft: protectedProcedure
       return { auditId: input.auditId };
     }
 
-    const res: any = await db.insert(audits).values({ ...values, createdAt: new Date() });
+    const res: any = await db.insert(audits).values({
+      ...values,
+      status: input.status ?? "draft",
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      endDate: input.endDate ? new Date(input.endDate) : null,
+      createdAt: new Date(),
+    });
     const insertedId = res?.[0]?.insertId ?? res?.insertId ?? null;
 
     if (!insertedId) {

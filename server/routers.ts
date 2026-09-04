@@ -10,6 +10,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router, requireCapability } from "./_core/trpc";
 import { getEffectivePlanTier, getPlanCapabilities, isAdmin } from "./plans/capabilities";
+import { assertAuditCanStart, assertAuditMutable } from "./audit-lifecycle";
 
 import * as db from "./db";
 import * as dashboardV2 from "./db-dashboard-v2";
@@ -746,6 +747,7 @@ export const appRouter = router({
             message: "Audit not found or does not belong to the user",
           });
         }
+        assertAuditMutable(audit);
 
         // Resolve siteId and organizationId if provided
         if (updateData.siteId) {
@@ -832,6 +834,7 @@ export const appRouter = router({
             message: "Audit not found or does not belong to the user",
           });
         }
+        assertAuditMutable(audit);
 
         await db.updateAudit(resolvedId, {
           referentialIds: input.referentialIds ? JSON.stringify(input.referentialIds) : undefined,
@@ -852,6 +855,7 @@ export const appRouter = router({
             message: "Audit not found or does not belong to the user",
           });
         }
+        assertAuditCanStart(audit);
         try {
           await db.updateAudit(input.id, {
             status: "in_progress",
@@ -882,6 +886,7 @@ export const appRouter = router({
             message: "Audit not found or does not belong to the user",
           });
         }
+        assertAuditMutable(audit);
         try {
           await db.deleteAudit(input.id);
           return { success: true };
@@ -1201,7 +1206,7 @@ export const appRouter = router({
           .where(and(eq(auditReports.id, input.reportId), eq(auditReports.userId, ctx.user.id)));
 
         if (!report) {
-          throw new Error("Report not found");
+          throw new TRPCError({ code: "NOT_FOUND", message: "Rapport introuvable" });
         }
 
         return report;

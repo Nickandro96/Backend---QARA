@@ -49,6 +49,13 @@ let _lastPingAt = 0;
 // Cache for schema checks to avoid hitting INFORMATION_SCHEMA on every request
 const _hasColumnCache = new Map<string, boolean>();
 
+/** Test seam: injects an in-memory Drizzle-compatible boundary. Never used by runtime code. */
+export function __setDbForTests(database: any | null): void {
+  if (process.env.NODE_ENV !== "test") throw new Error("Test database injection is restricted to NODE_ENV=test");
+  _db = database as Database | null;
+  _hasColumnCache.clear();
+}
+
 function pickFirstEnv(...keys: string[]): string | undefined {
   for (const k of keys) {
     const v = process.env[k];
