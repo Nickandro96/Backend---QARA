@@ -9,6 +9,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router, requireCapability } from "./_core/trpc";
+import { getEffectivePlanTier, getPlanCapabilities, isAdmin } from "./plans/capabilities";
 
 import * as db from "./db";
 import * as dashboardV2 from "./db-dashboard-v2";
@@ -181,7 +182,11 @@ export const appRouter = router({
   intelligence: intelligenceRouter,
 
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query((opts) => {
+      if (!opts.ctx.user) return null;
+      const { passwordHash, ...safeUser } = opts.ctx.user as any;
+      return safeUser;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
 
@@ -251,7 +256,14 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const profile = await db.getUserProfile(ctx.user.id);
       const activeReferentials = await getActiveReferentialCodesForUser(ctx.user.id);
-      return { ...profile, activeReferentials };
+      const effectiveSubscriptionTier = getEffectivePlanTier(ctx.user);
+      return {
+        ...profile,
+        activeReferentials,
+        effectiveSubscriptionTier,
+        capabilities: getPlanCapabilities(effectiveSubscriptionTier),
+        isAdmin: isAdmin(ctx.user),
+      };
     }),
 
     update: protectedProcedure

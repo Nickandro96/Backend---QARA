@@ -221,7 +221,7 @@ export const systemRouter = router({
 
     return users.map((user) => ({
       ...user,
-      profile: profiles.find((p) => p.userId === user.id) || null,
+      profile: profiles.find((p) => p.id === user.id) || null,
     }));
   }),
 

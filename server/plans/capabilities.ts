@@ -16,6 +16,13 @@
  */
 
 export type PlanTier = "free" | "pro" | "expert" | "entreprise";
+export type SubscriptionStatus = "active" | "trialing" | "past_due" | "canceled";
+
+export interface EntitlementUser {
+  role?: unknown;
+  subscriptionTier?: unknown;
+  subscriptionStatus?: unknown;
+}
 
 export interface PlanCapabilities {
   canUseClassification: boolean;
@@ -56,7 +63,25 @@ export function getPlanCapabilities(subscriptionTier: unknown): PlanCapabilities
   const tier=normalizePlanTier(subscriptionTier); return tier === "free" ? FREE_CAPABILITIES : tier === "entreprise" ? {...PAID_CAPABILITIES,canUseSectorBenchmark:true} : PAID_CAPABILITIES;
 }
 
-export function isAdmin(user: { role?: unknown } | null | undefined): boolean {
+/**
+ * Les anciens comptes payants n'ont pas toujours de statut enregistré. Leur
+ * accès est conservé, tandis que les statuts Stripe explicitement non valides
+ * révoquent les capacités payantes. `premium` est une ancienne valeur de
+ * statut qui représentait à elle seule un plan Pro.
+ */
+export function getEffectivePlanTier(user: EntitlementUser | null | undefined): PlanTier {
+  const storedTier = normalizePlanTier(user?.subscriptionTier);
+  const status = typeof user?.subscriptionStatus === "string"
+    ? user.subscriptionStatus.toLowerCase()
+    : "";
+
+  if (status === "premium") return storedTier === "free" ? "pro" : storedTier;
+  if (storedTier === "free") return "free";
+  if (status === "" || status === "active" || status === "trialing") return storedTier;
+  return "free";
+}
+
+export function isAdmin(user: EntitlementUser | null | undefined): boolean {
   return user?.role === "admin";
 }
 
@@ -67,8 +92,8 @@ export function isAdmin(user: { role?: unknown } | null | undefined): boolean {
  */
 export function hasCapability(
   capability: keyof PlanCapabilities,
-  user: { role?: unknown; subscriptionTier?: unknown } | null | undefined
+  user: EntitlementUser | null | undefined
 ): boolean {
   if (isAdmin(user)) return true;
-  return getPlanCapabilities(user?.subscriptionTier)[capability];
+  return getPlanCapabilities(getEffectivePlanTier(user))[capability];
 }
