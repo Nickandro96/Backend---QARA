@@ -88,6 +88,72 @@ export interface StatusTransitionFields {
   resultatEfficacite?: string | null;
 }
 
+export type FindingClassification = "observation" | "opportunite_amelioration" | "nc_mineure" | "nc_majeure" | "nc_critique";
+
+/** Classification métier affichable, dérivée sans modifier la clé de la question. */
+export function classifyFinding(gravite: string, criticality: string): FindingClassification {
+  if (criticality.toLowerCase() === "critical") return "nc_critique";
+  if (gravite === "majeur") return "nc_majeure";
+  if (gravite === "mineur") return "nc_mineure";
+  if (criticality.toLowerCase() === "low") return "opportunite_amelioration";
+  return "observation";
+}
+
+export type CapaTaskStatus = "a_faire" | "en_cours" | "a_verifier" | "cloturee" | "annulee";
+
+const TASK_TRANSITIONS: Record<CapaTaskStatus, CapaTaskStatus[]> = {
+  a_faire: ["en_cours", "annulee"],
+  en_cours: ["a_verifier", "annulee"],
+  a_verifier: ["cloturee", "en_cours"],
+  cloturee: ["en_cours"],
+  annulee: [],
+};
+
+export function isTaskOverdue(
+  dueDate: Date | string | null | undefined,
+  status: CapaTaskStatus,
+  now = new Date()
+): boolean {
+  if (!dueDate || status === "cloturee" || status === "annulee") return false;
+  const due = dueDate instanceof Date ? dueDate : new Date(dueDate);
+  return !Number.isNaN(due.getTime()) && due.getTime() < now.getTime();
+}
+
+export function validateTaskTransition(
+  current: CapaTaskStatus,
+  next: CapaTaskStatus,
+  fields: {
+    completionEvidence?: string | null;
+    effectivenessResult?: string | null;
+    reopeningReason?: string | null;
+  }
+): string | null {
+  if (!TASK_TRANSITIONS[current]?.includes(next)) return `Transition d'action invalide : ${current} -> ${next}.`;
+  if (next === "a_verifier" && !fields.completionEvidence?.trim()) return "Une preuve de réalisation est requise.";
+  if (next === "cloturee" && !["efficace", "inefficace"].includes(fields.effectivenessResult ?? "")) {
+    return "L'efficacité doit être évaluée avant clôture.";
+  }
+  if (current === "cloturee" && next === "en_cours" && !fields.reopeningReason?.trim()) {
+    return "Un motif de réouverture est obligatoire.";
+  }
+  return null;
+}
+
+export function validateCapaTaskReadiness(
+  next: CapaStatus,
+  tasks: Array<{ status: CapaTaskStatus; effectivenessResult?: string | null }>
+): string | null {
+  if (!next.startsWith("cloturee") || next === "cloturee_sans_suite") return null;
+  if (tasks.length === 0) return "La CAPA ne peut pas être clôturée sans action opérationnelle.";
+  if (tasks.some((task) => !["cloturee", "annulee"].includes(task.status))) {
+    return "Toutes les actions opérationnelles doivent être finalisées avant la clôture de la CAPA.";
+  }
+  if (next === "cloturee_efficace" && tasks.some((task) => task.status !== "cloturee" || task.effectivenessResult !== "efficace")) {
+    return "Toutes les actions doivent avoir une efficacité démontrée avant une clôture efficace.";
+  }
+  return null;
+}
+
 /**
  * Valide les champs obligatoires exigés par une transition donnée, au-delà
  * de la validité de la transition elle-même (voir isValidStatusTransition).

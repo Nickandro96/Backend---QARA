@@ -931,14 +931,13 @@ export const appRouter = router({
       // We return a stable shape even if dashboardV2 changes internally
       return {
         scoreGlobal: stats?.averageAuditScore ?? stats?.globalScore ?? stats?.scoreGlobal ?? 0,
-        progression:
-          stats?.totalAudits > 0
-            ? Math.round(
-                (((stats?.auditsByStatus?.completed ?? 0) + (stats?.auditsByStatus?.closed ?? 0)) /
-                  stats.totalAudits) *
-                  1000
-              ) / 10
-            : (stats?.completionRate ?? stats?.progression ?? 0),
+        progression: stats?.averageProgression ?? 0,
+        auditsByStatus: stats?.auditsByStatus,
+        actuallyCompleteAudits: stats?.actuallyCompleteAudits ?? 0,
+        openFindings: stats?.totalFindings
+          ? (stats.totalFindings - (stats?.findingsByStatus?.closed ?? 0))
+          : 0,
+        overdueActions: stats?.overdueActions ?? 0,
         conforme: stats?.findingsByType?.positive ?? stats?.okCount ?? stats?.conforme ?? 0,
         nonConforme:
           (stats?.findingsByType?.nc_major ?? 0) + (stats?.findingsByType?.nc_minor ?? 0) ||

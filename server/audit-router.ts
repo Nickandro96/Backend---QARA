@@ -7,13 +7,14 @@ import PDFDocument from "pdfkit";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, createAudit, getAudits, getAuditById, deleteAudit } from "./db";
 import { audits, sites, referentiels, questions, auditResponses, preparationChecklist, simulationResults, capa_actions, regulatoryUpdates, sectorBriefings } from "../drizzle/schema";
-import { computeGenericAuditStats, computeGenericAuditScoreSafe } from "./audit-scoring";
+import { computeGenericAuditStats, computeGenericAuditProgressSafe, computeGenericAuditScoreSafe } from "./audit-scoring";
 import { safeParseArray, getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
 import { generatePreparationChecklist } from "./services/preparation/checklistGenerator";
 import { generatePreparationPlanAI, generateAuditorQuestionsAI, evaluateAuditorAnswerAI, SIMULATION_WARNING } from "./services/preparation/preparationAI";
 import {
   assertAuditCanComplete,
   assertAuditCanReopen,
+  assertAuditDeletable,
   assertAuditComplete,
   assertAuditMutable,
   assertQuestionBelongsToAudit,
@@ -78,10 +79,13 @@ async function enrichWithDisplayFields(db: any, userId: number, rows: any[]) {
   return Promise.all(
     rows.map(async (audit: any) => {
       const score = await computeGenericAuditScoreSafe(db, userId, audit.id);
+      const progress = await computeGenericAuditProgressSafe(db, userId, audit.id);
       return {
         ...audit,
         auditType: audit.type,
         conformityRate: score,
+        progression: progress?.percentage ?? 0,
+        progress,
         siteName: audit.siteId ? siteNameById.get(audit.siteId) ?? null : null,
       };
     })
@@ -114,7 +118,10 @@ export const auditRouter = router({
         .orderBy(desc(audits.createdAt))
         .limit(input.limit);
 
-      return rows;
+      return Promise.all(rows.map(async (audit: any) => {
+        const progress = await computeGenericAuditProgressSafe(db, ctx.user.id, audit.id);
+        return { ...audit, progression: progress?.percentage ?? 0, progress };
+      }));
     }),
 
   /**
@@ -268,6 +275,7 @@ export const auditRouter = router({
         siteName: (site as any)?.name ?? null,
         referentialNames,
         auditors: (audit as any).auditorName ?? null,
+        progression: (await computeGenericAuditProgressSafe(db, ctx.user.id, input.id))?.percentage ?? 0,
       };
     }),
 
@@ -347,9 +355,16 @@ export const auditRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const audit = await getAuditById(input.id, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
       assertAuditMutable(audit);
+      const [responses, capas] = await Promise.all([
+        db.select({ id: auditResponses.id }).from(auditResponses).where(and(eq(auditResponses.auditId, input.id), eq(auditResponses.userId, ctx.user.id))).limit(1),
+        db.select({ id: capa_actions.id }).from(capa_actions).where(and(eq(capa_actions.auditId, input.id), eq(capa_actions.userId, ctx.user.id))).limit(1),
+      ]);
+      assertAuditDeletable({ responses: responses.length, capas: capas.length });
       await deleteAudit(input.id);
       return { success: true };
     }),
@@ -364,8 +379,8 @@ export const auditRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-      const { audit, stats, score } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
-      return { ...audit, score, stats };
+      const { audit, stats, score, progress } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
+      return { ...audit, score, stats, progression: progress.percentage, progress };
     }),
 
   /**
@@ -376,8 +391,8 @@ export const auditRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-      const { stats, score } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
-      return { ...stats, score };
+      const { stats, score, progress } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
+      return { ...stats, score, progression: progress.percentage, progress };
     }),
 
   /**
@@ -397,7 +412,7 @@ export const auditRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
       if (input?.auditId !== undefined) {
-        const { score, stats } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
+        const { score, stats, progress } = await computeGenericAuditStats(db, ctx.user.id, input.auditId);
         return {
           score,
           total: stats.totalQuestions,
@@ -405,7 +420,7 @@ export const auditRouter = router({
           conforme: stats.compliant,
           nok: stats.non_compliant,
           na: stats.not_applicable,
-          progress: stats.totalQuestions > 0 ? Math.round((stats.answered / stats.totalQuestions) * 1000) / 10 : 0,
+          progress: progress.percentage,
         };
       }
 
@@ -415,18 +430,20 @@ export const auditRouter = router({
       let na = 0;
       let total = 0;
       let answered = 0;
+      let applicable = 0;
       const scores: number[] = [];
 
       for (const audit of userAudits) {
         try {
-          const { score, stats } = await computeGenericAuditStats(db, ctx.user.id, (audit as any).id);
+          const { score, stats, progress } = await computeGenericAuditStats(db, ctx.user.id, (audit as any).id);
           if (stats.answered === 0) continue;
           scores.push(score);
           conforme += stats.compliant;
           nok += stats.non_compliant;
           na += stats.not_applicable;
           total += stats.totalQuestions;
-          answered += stats.answered;
+          answered += progress.finalApplicableResponses;
+          applicable += progress.totalApplicableQuestions;
         } catch {
           // audit sans scope résolvable (ex. brouillon jamais rattaché à un
           // référentiel) : exclu de l'agrégat plutôt que de faire échouer
@@ -435,7 +452,7 @@ export const auditRouter = router({
       }
 
       const score = scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
-      const progress = total > 0 ? Math.round((answered / total) * 1000) / 10 : 0;
+      const progress = applicable > 0 ? Math.round((answered / applicable) * 1000) / 10 : 0;
       return { score, conforme, nok, na, total, answered, progress };
     }),
 

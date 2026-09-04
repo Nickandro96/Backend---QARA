@@ -7,7 +7,42 @@ import {
   validateTransitionFields,
   sortByPriority,
   classifyNonConformityResponse,
+  classifyFinding,
+  isTaskOverdue,
+  validateCapaTaskReadiness,
+  validateTaskTransition,
 } from "./capaEngine";
+
+test("classifyFinding distingue opportunité, observation et niveaux de NC", () => {
+  assert.equal(classifyFinding("observation", "low"), "opportunite_amelioration");
+  assert.equal(classifyFinding("observation", "medium"), "observation");
+  assert.equal(classifyFinding("mineur", "medium"), "nc_mineure");
+  assert.equal(classifyFinding("majeur", "high"), "nc_majeure");
+  assert.equal(classifyFinding("majeur", "critical"), "nc_critique");
+});
+
+test("isTaskOverdue ne marque en retard que les actions ouvertes échues", () => {
+  const now = new Date("2026-09-05T12:00:00Z");
+  assert.equal(isTaskOverdue("2026-09-04T12:00:00Z", "en_cours", now), true);
+  assert.equal(isTaskOverdue("2026-09-06T12:00:00Z", "en_cours", now), false);
+  assert.equal(isTaskOverdue("2026-09-04T12:00:00Z", "cloturee", now), false);
+  assert.equal(isTaskOverdue("2026-09-04T12:00:00Z", "annulee", now), false);
+});
+
+test("validateTaskTransition impose preuve, efficacité et motif de réouverture", () => {
+  assert.match(validateTaskTransition("en_cours", "a_verifier", {}) ?? "", /preuve/i);
+  assert.equal(validateTaskTransition("en_cours", "a_verifier", { completionEvidence: "PV signé" }), null);
+  assert.match(validateTaskTransition("a_verifier", "cloturee", { effectivenessResult: "non_verifiee" }) ?? "", /efficacité/i);
+  assert.match(validateTaskTransition("cloturee", "en_cours", { reopeningReason: "" }) ?? "", /motif/i);
+  assert.equal(validateTaskTransition("cloturee", "en_cours", { reopeningReason: "Résultat dégradé" }), null);
+});
+
+test("validateCapaTaskReadiness refuse une clôture sans actions finalisées", () => {
+  assert.match(validateCapaTaskReadiness("cloturee_efficace", []) ?? "", /sans action/i);
+  assert.match(validateCapaTaskReadiness("cloturee_efficace", [{ status: "en_cours" }]) ?? "", /finalisées/i);
+  assert.match(validateCapaTaskReadiness("cloturee_efficace", [{ status: "cloturee", effectivenessResult: "inefficace" }]) ?? "", /efficacité démontrée/i);
+  assert.equal(validateCapaTaskReadiness("cloturee_efficace", [{ status: "cloturee", effectivenessResult: "efficace" }]), null);
+});
 
 test("classifyNonConformityResponse exclut explicitement les réponses non applicables", () => {
   assert.equal(classifyNonConformityResponse("non_compliant"), "non_conforme");

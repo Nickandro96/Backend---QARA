@@ -6,7 +6,7 @@ import { getDb, safeJsonParse } from "../db";
 import { audits, audit_responses, capa_actions, capa_action_history, capa_tasks, questions, referentiels, regulatoryUpdates } from "../../drizzle/schema";
 import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
-import { buildActionDraft, classifyNonConformityResponse, isValidStatusTransition, sortByPriority, validateTransitionFields } from "./capaEngine";
+import { buildActionDraft, classifyFinding, classifyNonConformityResponse, isTaskOverdue, isValidStatusTransition, sortByPriority, validateCapaTaskReadiness, validateTaskTransition, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
 import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
 
@@ -51,6 +51,12 @@ function toCapaAction(row: typeof capa_actions.$inferSelect): CapaAction {
   };
 }
 
+function assertCapaEditable(status: string) {
+  if (status.startsWith("cloturee")) {
+    throw new TRPCError({ code: "CONFLICT", message: "Cette CAPA est clôturée et ne peut plus être modifiée directement." });
+  }
+}
+
 async function assertAuditOwnership(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, auditId: number, userId: number) {
   const [audit] = await db
     .select()
@@ -86,6 +92,7 @@ export const capaRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.id, input.actionId), eq(capa_actions.userId, ctx.user.id))).limit(1);
     if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier introuvable" });
+    assertCapaEditable(existing.statut);
     if (input.decision !== "capa_requise" && !input.justification?.trim()) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Une justification est obligatoire lorsqu'une CAPA n'est pas requise." });
     }
@@ -119,8 +126,9 @@ export const capaRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const [capa] = await db.select({ id: capa_actions.id }).from(capa_actions).where(and(eq(capa_actions.id, input.capaId), eq(capa_actions.userId, ctx.user.id))).limit(1);
+    const [capa] = await db.select({ id: capa_actions.id, statut: capa_actions.statut }).from(capa_actions).where(and(eq(capa_actions.id, input.capaId), eq(capa_actions.userId, ctx.user.id))).limit(1);
     if (!capa) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier CAPA introuvable" });
+    assertCapaEditable(capa.statut);
     const [{ insertId }] = await db.insert(capa_tasks).values({ userId: ctx.user.id, capaId: input.capaId, title: input.title, description: input.description, responsible: input.responsible, dueDate: input.dueDate ? new Date(input.dueDate) : undefined, priority: input.priority, effectivenessCriterion: input.effectivenessCriterion });
     await recordHistory(db, input.capaId, ctx.user.id, [{ champ: "action_creee", ancienneValeur: null, nouvelleValeur: String(insertId) }]);
     return { id: Number(insertId) };
@@ -128,16 +136,26 @@ export const capaRouter = router({
 
   updateTask: protectedProcedure.input(z.object({
     taskId: z.number().int().positive(), title: z.string().trim().min(3).max(500).optional(), description: z.string().max(5000).nullish(), responsible: z.string().max(255).nullish(), dueDate: z.string().datetime().nullish(),
-    priority: z.enum(["basse", "moyenne", "haute", "critique"]).optional(), status: z.enum(["a_faire", "en_cours", "a_verifier", "cloturee", "annulee"]).optional(), completionEvidence: z.string().max(5000).nullish(), effectivenessCriterion: z.string().max(3000).nullish(), effectivenessResult: z.enum(["efficace", "inefficace", "non_verifiee"]).optional(),
+    priority: z.enum(["basse", "moyenne", "haute", "critique"]).optional(), status: z.enum(["a_faire", "en_cours", "a_verifier", "cloturee", "annulee"]).optional(), completionEvidence: z.string().max(5000).nullish(), effectivenessCriterion: z.string().max(3000).nullish(), effectivenessResult: z.enum(["efficace", "inefficace", "non_verifiee"]).optional(), reopeningReason: z.string().trim().max(2000).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const [task] = await db.select().from(capa_tasks).where(and(eq(capa_tasks.id, input.taskId), eq(capa_tasks.userId, ctx.user.id))).limit(1);
     if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "Action introuvable" });
-    if (input.status === "a_verifier" && !input.completionEvidence?.trim() && !task.completionEvidence) throw new TRPCError({ code: "BAD_REQUEST", message: "Une preuve de réalisation est requise." });
-    if (input.status === "cloturee" && (input.effectivenessResult ?? task.effectivenessResult) === "non_verifiee") throw new TRPCError({ code: "BAD_REQUEST", message: "L'efficacité doit être évaluée avant clôture." });
-    const { taskId, ...values } = input;
+    const [parent] = await db.select({ statut: capa_actions.statut }).from(capa_actions).where(and(eq(capa_actions.id, task.capaId), eq(capa_actions.userId, ctx.user.id))).limit(1);
+    if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier CAPA introuvable" });
+    assertCapaEditable(parent.statut);
+    if (input.status && input.status !== task.status) {
+      const transitionError = validateTaskTransition(task.status, input.status, {
+        completionEvidence: input.completionEvidence ?? task.completionEvidence,
+        effectivenessResult: input.effectivenessResult ?? task.effectivenessResult,
+        reopeningReason: input.reopeningReason,
+      });
+      if (transitionError) throw new TRPCError({ code: "BAD_REQUEST", message: transitionError });
+    }
+    const { taskId, reopeningReason, ...values } = input;
     await db.update(capa_tasks).set({ ...values, dueDate: values.dueDate === undefined ? undefined : values.dueDate ? new Date(values.dueDate) : null }).where(eq(capa_tasks.id, taskId));
+    if (reopeningReason?.trim()) await recordHistory(db, task.capaId, ctx.user.id, [{ champ: `action_${task.id}_motif_reouverture`, ancienneValeur: null, nouvelleValeur: reopeningReason.trim() }]);
     return { success: true };
   }),
   createFromWatchItem: protectedProcedure
@@ -149,6 +167,8 @@ export const capaRouter = router({
       const [item] = await db.select().from(regulatoryUpdates).where(eq(regulatoryUpdates.id, input.watchItemId)).limit(1);
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Alerte réglementaire introuvable" });
       const questionKey = `watch:${item.id}`;
+      const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.userId, ctx.user.id), eq(capa_actions.auditId, input.auditId), eq(capa_actions.questionKey, questionKey))).limit(1);
+      if (existing) return existing;
       await db.insert(capa_actions).values({
         userId: ctx.user.id,
         auditId: input.auditId,
@@ -161,7 +181,7 @@ export const capaRouter = router({
         actionRecommandee: item.actionRequired || (item.recommendedActions as Array<{ title?: string }> | null)?.[0]?.title || "Évaluer l'impact réglementaire et définir les mesures applicables",
         watchItemId: item.id,
         source: "veille_reglementaire",
-      }).onDuplicateKeyUpdate({ set: { watchItemId: item.id, source: "veille_reglementaire" } });
+      });
       const [created] = await db.select().from(capa_actions).where(and(eq(capa_actions.userId, ctx.user.id), eq(capa_actions.auditId, input.auditId), eq(capa_actions.questionKey, questionKey))).limit(1);
       return created;
     }),
@@ -187,7 +207,9 @@ export const capaRouter = router({
     const unplanned = ncResponseRows.flatMap((r) => {
       if (actionKeys.has(`${r.auditId}:${r.questionKey}`)) return [];
       const q = questionByKey.get(r.questionKey);
-      return [{ id: `NC-${r.auditId}-${r.id}`, auditId: r.auditId, auditName: auditNameById.get(r.auditId) ?? `Audit ${r.auditId}`, questionKey: r.questionKey, questionText: q?.questionText ?? q?.title ?? r.questionKey, criticality: q?.criticality ?? "medium", processName: q?.processDetail ?? null, articleReference: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, responseComment: r.responseComment, objectiveEvidence: r.note, detectedAt: (r.answeredAt ?? r.updatedAt ?? r.createdAt).toISOString(), status: "a_qualifier" as const, recurrenceCount: occurrencesByQuestionKey.get(r.questionKey) ?? 1 }];
+      const criticality = q?.criticality ?? "medium";
+      const gravite = criticality === "critical" || criticality === "high" ? "majeur" : "mineur";
+      return [{ id: `NC-${r.auditId}-${r.id}`, auditId: r.auditId, auditName: auditNameById.get(r.auditId) ?? `Audit ${r.auditId}`, questionKey: r.questionKey, questionText: q?.questionText ?? q?.title ?? r.questionKey, referentialId: q?.referentialId ?? null, requirement: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, criticality, classification: classifyFinding(gravite, criticality), processName: q?.processDetail ?? null, articleReference: [q?.article, q?.annexe].filter(Boolean).join(" / ") || null, responseValue: r.responseValue, responseComment: r.responseComment, objectiveEvidence: r.note, evidenceFiles: r.evidenceFiles, authorId: r.answeredBy ?? r.userId, detectedAt: (r.answeredAt ?? r.updatedAt ?? r.createdAt).toISOString(), updatedAt: r.updatedAt.toISOString(), status: "a_qualifier" as const, recurrenceCount: occurrencesByQuestionKey.get(r.questionKey) ?? 1 }];
     });
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -200,12 +222,12 @@ export const capaRouter = router({
       const year = raw.createdAt.getUTCFullYear();
       const phase = raw.statut.startsWith("cloturee") ? "cloture" : raw.statut === "a_verifier" ? "verification" : raw.analyseCauseRacine ? "mise_en_oeuvre" : raw.ai5Pourquoi ? "cause_racine" : "qualification";
       const completedFields = [raw.analyseCauseRacine, raw.actionRetenue, raw.responsible, raw.dueDate, raw.preuveRealisation, raw.preuveEfficacite].filter(Boolean).length;
-      return { ...a, qualificationDecision: raw.qualificationDecision, qualificationJustification: raw.qualificationJustification, qualificationOwner: raw.qualificationOwner, qualificationAt: raw.qualificationAt?.toISOString() ?? null, impactPatient: raw.impactPatient, impactReglementaire: raw.impactReglementaire, tasks: (tasksByCapa.get(a.id) ?? []).map((task) => ({ ...task, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}` })), capaIdentifier: `CAPA-${year}-${String(a.id).padStart(4, "0")}`, actionIdentifier: `ACT-${year}-${String(a.id).padStart(4, "0")}`, phase, progress: Math.round((completedFields / 6) * 100), hasAIAnalysis: Boolean(raw.ai5Pourquoi), correctionImmediate: raw.correctionImmediate, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
+      return { ...a, classification: classifyFinding(a.gravite, a.criticality), qualificationDecision: raw.qualificationDecision, qualificationJustification: raw.qualificationJustification, qualificationOwner: raw.qualificationOwner, qualificationAt: raw.qualificationAt?.toISOString() ?? null, impactPatient: raw.impactPatient, impactReglementaire: raw.impactReglementaire, tasks: (tasksByCapa.get(a.id) ?? []).map((task) => ({ ...task, overdue: isTaskOverdue(task.dueDate, task.status, now), dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}` })), capaIdentifier: `CAPA-${year}-${String(a.id).padStart(4, "0")}`, actionIdentifier: `ACT-${year}-${String(a.id).padStart(4, "0")}`, phase, progress: Math.round((completedFields / 6) * 100), overdue: isTaskOverdue(raw.dueDate, raw.statut.startsWith("cloturee") ? "cloturee" : "en_cours", now), hasAIAnalysis: Boolean(raw.ai5Pourquoi), correctionImmediate: raw.correctionImmediate, auditName: auditNameById.get(a.auditId) ?? `Audit ${a.auditId}`, source: raw.source, watchItemId: raw.watchItemId, watchItem: raw.watchItemId ? watchById.get(raw.watchItemId) ?? null : null };
     });
     const capaById = new Map(actions.map((action) => [action.id, action]));
     const operationalActions = taskRows.map((task) => {
       const capa = capaById.get(task.capaId);
-      return { ...task, actionRetenue: task.title, statut: task.status, resultatEfficacite: task.effectivenessResult, dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}`, capaIdentifier: capa?.capaIdentifier ?? `CAPA-${task.capaId}`, auditId: capa?.auditId ?? null, auditName: capa?.auditName ?? null, source: capa?.source ?? "audit" };
+      return { ...task, actionRetenue: task.title, statut: task.status, resultatEfficacite: task.effectivenessResult, overdue: isTaskOverdue(task.dueDate, task.status, now), dueDate: task.dueDate?.toISOString() ?? null, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), actionIdentifier: `ACT-${task.createdAt.getUTCFullYear()}-${String(task.id).padStart(4, "0")}`, capaIdentifier: capa?.capaIdentifier ?? `CAPA-${task.capaId}`, auditId: capa?.auditId ?? null, auditName: capa?.auditName ?? null, source: capa?.source ?? "audit" };
     });
     const closedRows = actionRows.filter((a) => a.statut.startsWith("cloturee"));
     const closedWithDueDate = closedRows.filter((a) => a.dueDate);
@@ -249,10 +271,12 @@ export const capaRouter = router({
         ncSansCapa: unplanned.length,
         ncRecurrentes: unplanned.filter((nc) => nc.recurrenceCount > 1).length,
         capaOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
+        capaEnRetard: actionRows.filter((a) => isTaskOverdue(a.dueDate, a.statut.startsWith("cloturee") ? "cloturee" : "en_cours", now)).length,
         actionsOuvertes: taskRows.filter((a) => !["cloturee", "annulee"].includes(a.status)).length,
         enCours: taskRows.filter((a) => a.status === "en_cours").length,
         aVerifier: taskRows.filter((a) => a.status === "a_verifier").length,
-        enRetard: taskRows.filter((a) => a.dueDate && a.dueDate < now && !["cloturee", "annulee"].includes(a.status)).length,
+        efficaciteAVerifier: actionRows.filter((a) => a.statut === "a_verifier").length + taskRows.filter((a) => a.status === "a_verifier").length,
+        enRetard: taskRows.filter((a) => isTaskOverdue(a.dueDate, a.status, now)).length,
         clotureesCeMois: actionRows.filter((a) => a.statut.startsWith("cloturee") && a.updatedAt >= monthStart).length,
         tauxClotureDansLesDelais: closedWithDueDate.length ? Math.round((closedOnTime / closedWithDueDate.length) * 100) : null,
         tauxEfficacite: checkedEffectiveness.length ? Math.round((effective / checkedEffectiveness.length) * 100) : null,
@@ -264,6 +288,7 @@ export const capaRouter = router({
       operationalActions,
       trends: monthBuckets,
       processBreakdown: Array.from(processCounts, ([process, count]) => ({ process, count })).sort((a, b) => b.count - a.count),
+      ncByCriticality: Object.fromEntries(["critical", "high", "medium", "low"].map((level) => [level, nonConformities.filter((nc) => nc.criticality === level && nc.status !== "cloturee").length])),
       upcomingDeadlines: operationalActions.filter((action) => action.dueDate && !["cloturee", "annulee"].includes(action.status)).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 8),
     };
   }),
@@ -319,6 +344,7 @@ export const capaRouter = router({
       await assertAuditOwnership(db, input.auditId, ctx.user.id);
       const [existing] = await db.select().from(capa_actions).where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id), eq(capa_actions.questionKey, input.questionKey))).limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Créez d'abord la fiche CAPA depuis les écarts de l'audit" });
+      assertCapaEditable(existing.statut);
       const { actionRetenue, selectedActionIds } = serializeSelectedActions(input.selectedActions);
       await db.update(capa_actions).set({
         aiContexte: input.analysis.contexteSituation,
@@ -497,6 +523,10 @@ export const capaRouter = router({
         .limit(1);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Action introuvable" });
 
+      if (String(existing.statut).startsWith("cloturee")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Une CAPA clôturée est immuable. Réouvrez-la via une transition de statut autorisée." });
+      }
+
       const { actionId, ...fields } = input;
       const dateFields = new Set(["dueDate", "dateVerificationEfficacite"]);
       const updates: Record<string, unknown> = {};
@@ -563,6 +593,12 @@ export const capaRouter = router({
         resultatEfficacite: input.resultatEfficacite ?? existing.resultatEfficacite ?? undefined,
       });
       if (fieldError) throw new TRPCError({ code: "BAD_REQUEST", message: fieldError });
+
+      const taskRows = await db.select({ status: capa_tasks.status, effectivenessResult: capa_tasks.effectivenessResult })
+        .from(capa_tasks)
+        .where(and(eq(capa_tasks.capaId, input.actionId), eq(capa_tasks.userId, ctx.user.id)));
+      const taskError = validateCapaTaskReadiness(input.statut, taskRows);
+      if (taskError) throw new TRPCError({ code: "BAD_REQUEST", message: taskError });
 
       const updates: Record<string, unknown> = { statut: input.statut };
       if (input.resultatEfficacite) updates.resultatEfficacite = input.resultatEfficacite;

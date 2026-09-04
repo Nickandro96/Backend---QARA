@@ -1,17 +1,5 @@
 import { TRPCError } from "@trpc/server";
-
-export const FINAL_RESPONSE_VALUES = new Set([
-  "compliant",
-  "non_compliant",
-  "partial",
-  "not_applicable",
-  "0",
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-]);
+import { calculateAuditProgress } from "./audit-progress";
 
 export function isAuditClosed(status: unknown): boolean {
   return status === "completed" || status === "closed";
@@ -22,6 +10,15 @@ export function assertAuditMutable(audit: { status?: unknown }): void {
     throw new TRPCError({
       code: "CONFLICT",
       message: "Cet audit est terminé. Réouvrez-le explicitement avant toute modification.",
+    });
+  }
+}
+
+export function assertAuditDeletable(evidence: { responses: number; capas: number }): void {
+  if (evidence.responses > 0 || evidence.capas > 0) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Suppression refusée : cet audit contient des réponses ou des preuves de traitement CAPA.",
     });
   }
 }
@@ -104,18 +101,18 @@ export function assertAuditComplete(
     });
   }
 
-  const answeredKeys = new Set(
-    responses
-      .filter((response) => FINAL_RESPONSE_VALUES.has(String(response.responseValue ?? "").toLowerCase()))
-      .map((response) => String(response.questionKey ?? "").trim())
-      .filter((key) => requiredKeys.has(key))
+  const progress = calculateAuditProgress(
+    requiredKeys,
+    responses.map((response) => ({
+      questionKey: String(response.questionKey ?? "").trim(),
+      responseValue: String(response.responseValue ?? "").toLowerCase(),
+    })),
   );
-
-  if (answeredKeys.size !== requiredKeys.size) {
+  if (!progress.isComplete) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: `Audit incomplet : ${answeredKeys.size}/${requiredKeys.size} questions finalisées.`,
+      message: `Audit incomplet : ${progress.finalApplicableResponses}/${progress.totalApplicableQuestions} questions applicables finalisées.`,
     });
   }
-  return { answered: answeredKeys.size, expected: requiredKeys.size };
+  return { answered: progress.finalApplicableResponses, expected: progress.totalApplicableQuestions };
 }

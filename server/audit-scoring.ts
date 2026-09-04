@@ -13,6 +13,7 @@
 import { eq, and } from "drizzle-orm";
 import { auditResponses, questions } from "../drizzle/schema";
 import { getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
+import { calculateAuditProgress } from "./audit-progress";
 
 export const SCORE_MAP: Record<string, number> = {
   compliant: 100,
@@ -53,7 +54,7 @@ export async function computeGenericAuditStats(db: any, userId: number, auditId:
     select: { questionKey: (questions as any).questionKey },
   });
 
-  const scopedKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey)));
+  const scopedKeys = new Set<string>((questionRows || []).map((q: any) => String(q.questionKey)));
   const totalQuestions = scopedKeys.size;
 
   const responseRows = await db
@@ -91,7 +92,8 @@ export async function computeGenericAuditStats(db: any, userId: number, auditId:
 
   const score = scoreCount > 0 ? Math.round((scoreTotal / scoreCount) * 10) / 10 : 0;
 
-  return { audit: auditContext.audit, stats, score };
+  const progress = calculateAuditProgress(scopedKeys, scopedResponses);
+  return { audit: auditContext.audit, stats, score, progress };
 }
 
 /**
@@ -106,6 +108,14 @@ export async function computeGenericAuditScoreSafe(db: any, userId: number, audi
     const { stats, score } = await computeGenericAuditStats(db, userId, auditId);
     if (stats.answered === 0) return null;
     return score;
+  } catch {
+    return null;
+  }
+}
+
+export async function computeGenericAuditProgressSafe(db: any, userId: number, auditId: number) {
+  try {
+    return (await computeGenericAuditStats(db, userId, auditId)).progress;
   } catch {
     return null;
   }

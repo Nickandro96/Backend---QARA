@@ -24,7 +24,7 @@
 import { getDb } from "./db";
 import { audits, findings, actions } from "../drizzle/schema";
 import { eq, and, inArray, gte, lte } from "drizzle-orm";
-import { computeGenericAuditScoreSafe, mapSeverityToFindingType } from "./audit-scoring";
+import { computeGenericAuditProgressSafe, computeGenericAuditScoreSafe, mapSeverityToFindingType } from "./audit-scoring";
 
 // Types pour les filtres
 export interface DashboardFilters {
@@ -94,11 +94,12 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
   if (auditIds.length === 0) {
     return {
       totalAudits: 0,
-      auditsByStatus: { draft: 0, in_progress: 0, completed: 0, closed: 0 },
+      auditsByStatus: { draft: 0, planned: 0, in_progress: 0, completed: 0, closed: 0, cancelled: 0 },
       globalConformityRate: 0,
       averageAuditScore: 0,
       totalFindings: 0,
       findingsByCriticality: { critical: 0, high: 0, medium: 0, low: 0 },
+      findingsByStatus: { open: 0, in_progress: 0, closed: 0 },
       findingsByType: { nc_major: 0, nc_minor: 0, observation: 0, ofi: 0, positive: 0 },
       topRiskyProcesses: [],
       totalActions: 0,
@@ -106,14 +107,18 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
       overdueActions: 0,
       overduePercentage: 0,
       averageClosureTime: 0,
+      averageProgression: 0,
+      actuallyCompleteAudits: 0,
     };
   }
 
   const auditsByStatus = {
     draft: userAudits.filter((a: any) => a.status === "draft").length,
+    planned: userAudits.filter((a: any) => a.status === "planned").length,
     in_progress: userAudits.filter((a: any) => a.status === "in_progress").length,
     completed: userAudits.filter((a: any) => a.status === "completed").length,
     closed: userAudits.filter((a: any) => a.status === "closed").length,
+    cancelled: userAudits.filter((a: any) => a.status === "cancelled").length,
   };
 
   // `audits` n'a pas de colonnes `score`/`conformityRate` — recalcul à la
@@ -128,6 +133,13 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
       : 0;
 
   const globalConformityRate = averageAuditScore;
+  const computedProgress = (
+    await Promise.all(userAudits.map((a: any) => computeGenericAuditProgressSafe(db, userId, a.id)))
+  ).filter(Boolean) as Array<{ percentage: number; isComplete: boolean }>;
+  const averageProgression = computedProgress.length
+    ? computedProgress.reduce((sum, item) => sum + item.percentage, 0) / computedProgress.length
+    : 0;
+  const actuallyCompleteAudits = computedProgress.filter((item) => item.isComplete).length;
 
   const userFindings = await db
     .select()
@@ -142,6 +154,11 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
   };
 
   const findingTypes = userFindings.map((f: any) => mapSeverityToFindingType(f.severity));
+  const findingsByStatus = {
+    open: userFindings.filter((f: any) => f.status === "open").length,
+    in_progress: userFindings.filter((f: any) => f.status === "in_progress").length,
+    closed: userFindings.filter((f: any) => f.status === "closed").length,
+  };
   const findingsByType = {
     nc_major: findingTypes.filter((t: string) => t === "nc_major").length,
     nc_minor: findingTypes.filter((t: string) => t === "nc_minor").length,
@@ -197,6 +214,7 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
     averageAuditScore: Math.round(averageAuditScore * 10) / 10,
     totalFindings: userFindings.length,
     findingsByCriticality,
+    findingsByStatus,
     findingsByType,
     topRiskyProcesses,
     totalActions: userActions.length,
@@ -204,6 +222,8 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
     overdueActions,
     overduePercentage: Math.round(overduePercentage * 10) / 10,
     averageClosureTime: Math.round(averageClosureTime * 10) / 10,
+    averageProgression: Math.round(averageProgression * 10) / 10,
+    actuallyCompleteAudits,
   };
 }
 

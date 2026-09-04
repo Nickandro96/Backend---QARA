@@ -22,6 +22,7 @@ import {
   assertQuestionBelongsToAudit,
   resolveAuditProcessId,
 } from "./audit-lifecycle";
+import { calculateAuditProgress } from "./audit-progress";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
@@ -942,7 +943,7 @@ export const mdrRouter = router({
           },
         });
 
-        const scopedQuestionKeys = new Set((questionRows || []).map((q: any) => String(q.questionKey || generateQuestionKey(q))));
+        const scopedQuestionKeys = new Set<string>((questionRows || []).map((q: any) => String(q.questionKey || generateQuestionKey(q))));
 
         // Only responses for questions in the audit scope
         const responseRowsAll = await db
@@ -1018,6 +1019,7 @@ export const mdrRouter = router({
         }
 
         stats.score = Math.round((scoreTotal / (scoreCount || 1)) || 0);
+        const progress = calculateAuditProgress(scopedQuestionKeys, responseRows);
 
         // in_progress = questions in scope - responses saved (whatever the status)
         const respondedCount = responseRows.length;
@@ -1068,6 +1070,8 @@ export const mdrRouter = router({
             processIds: auditContext.processIds,
           },
           stats,
+          progression: progress.percentage,
+          progress,
           breakdown: {
             status: {
               compliant: stats.compliant,

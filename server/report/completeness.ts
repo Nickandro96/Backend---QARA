@@ -12,8 +12,9 @@ export interface ReportCompleteness {
 }
 
 export function assessReportCompleteness(data: ReportData): ReportCompleteness {
-  const answeredQuestions = Object.values(data.breakdown).reduce((sum, count) => sum + count, 0);
-  const totalQuestions = data.fullQA.length;
+  const notApplicableQuestions = data.fullQA.filter((row) => row.responseValue === "not_applicable").length;
+  const answeredQuestions = data.fullQA.filter((row) => ["compliant", "partial", "non_compliant"].includes(String(row.responseValue))).length;
+  const totalQuestions = Math.max(data.fullQA.length - notApplicableQuestions, 0);
   const missingCritical: string[] = [];
   const warnings: string[] = [];
 
@@ -30,7 +31,7 @@ export function assessReportCompleteness(data: ReportData): ReportCompleteness {
   if (data.gapRegister.length > 0 && data.capaPlan.length === 0) warnings.push("Des \u00e9carts existent sans plan CAPA associ\u00e9");
 
   const blocking = answeredQuestions === 0 ? ["Aucune r\u00e9ponse d'audit enregistr\u00e9e"] : [];
-  const completionPercent = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+  const completionPercent = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 10_000) / 100 : 100;
   const defaultNextSteps = data.gapRegister.length > 0
     ? `Formaliser, attribuer et suivre les actions associ\u00e9es aux ${data.gapRegister.length} \u00e9cart(s) identifi\u00e9(s), puis v\u00e9rifier leur efficacit\u00e9 aux \u00e9ch\u00e9ances convenues.`
     : "Maintenir la surveillance du syst\u00e8me et planifier le prochain audit selon le programme d'audit approuv\u00e9.";

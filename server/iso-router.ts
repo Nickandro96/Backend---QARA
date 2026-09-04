@@ -23,6 +23,7 @@ import {
   assertQuestionBelongsToAudit,
   resolveAuditProcessId,
 } from "./audit-lifecycle";
+import { calculateAuditProgress } from "./audit-progress";
 
 /**
  * ISO Router
@@ -937,6 +938,7 @@ createOrUpdateAuditDraft: protectedProcedure
         }
 
         stats.score = Math.round((scoreTotal / (scoreCount || 1)) || 0);
+        const progress = calculateAuditProgress(scopedKeys, responseRows);
 
         // questions in scope - responses saved
         const respondedCount = responseRows.length;
@@ -978,6 +980,8 @@ createOrUpdateAuditDraft: protectedProcedure
             processIds,
           },
           stats,
+          progression: progress.percentage,
+          progress,
           breakdown: {
             status: {
               compliant: stats.compliant,

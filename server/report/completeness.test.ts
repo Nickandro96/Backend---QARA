@@ -18,7 +18,7 @@ function report(overrides: Record<string, unknown> = {}) {
     gapRegister: [],
     capaPlan: [],
     breakdown: { compliant: 2, partial: 1, nonCompliant: 0, notApplicable: 0 },
-    fullQA: [{}, {}, {}],
+    fullQA: [{ responseValue: "compliant" }, { responseValue: "compliant" }, { responseValue: "partial" }],
     verdictPhrase: "Système apte sous réserve du suivi des observations.",
     ...overrides,
   } as any;
@@ -27,6 +27,7 @@ function report(overrides: Record<string, unknown> = {}) {
 test("un audit sans réponse bloque la génération", () => {
   const result = assessReportCompleteness(report({
     breakdown: { compliant: 0, partial: 0, nonCompliant: 0, notApplicable: 0 },
+    fullQA: [{ responseValue: null }, { responseValue: null }, { responseValue: null }],
   }));
   assert.equal(result.blocking.length, 1);
 });

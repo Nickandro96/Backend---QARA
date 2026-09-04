@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertAuditDeletable,
   assertAuditCanComplete,
   assertAuditCanStart,
   assertAuditCanReopen,
@@ -12,6 +13,12 @@ import {
 } from "./audit-lifecycle";
 
 const codeIs = (code: string) => (error: any) => error?.code === code;
+
+test("suppression destructive refusée dès qu'une preuve réglementaire existe", () => {
+  assert.doesNotThrow(() => assertAuditDeletable({ responses: 0, capas: 0 }));
+  assert.throws(() => assertAuditDeletable({ responses: 1, capas: 0 }), codeIs("CONFLICT"));
+  assert.throws(() => assertAuditDeletable({ responses: 0, capas: 1 }), codeIs("CONFLICT"));
+});
 
 test("machine d’états : brouillon puis en cours, sans modification silencieuse après clôture", () => {
   assert.doesNotThrow(() => assertAuditCanStart({ status: "draft" }));
@@ -54,14 +61,14 @@ test("questionKey doit appartenir exactement au questionnaire MDR ou ISO", () =>
   assert.throws(() => assertQuestionBelongsToAudit("UNKNOWN", iso), codeIs("BAD_REQUEST"));
 });
 
-test("clôture uniquement lorsque chaque question a une réponse finale persistée", () => {
+test("clôture lorsque chaque question applicable a une réponse finale persistée", () => {
   const questions = [{ questionKey: "Q1" }, { questionKey: "Q2" }];
   assert.deepEqual(
     assertAuditComplete(questions, [
       { questionKey: "Q1", responseValue: "compliant" },
       { questionKey: "Q2", responseValue: "not_applicable" },
     ]),
-    { answered: 2, expected: 2 }
+    { answered: 1, expected: 1 }
   );
   assert.throws(
     () => assertAuditComplete(questions, [{ questionKey: "Q1", responseValue: "in_progress" }]),

@@ -176,3 +176,17 @@ test("18 audit générique public : mise à jour, clôture, protection puis lect
   f = fakeDb([[audit("completed")]]); __setDbForTests(f.db); await assert.rejects(caller().audits.update({ id: 10, name: "Interdit" }), rejectsCode("CONFLICT"));
   f = fakeDb([[{ ...audit("completed"), referentialIds: [] }]]); __setDbForTests(f.db); assert.equal((await caller().audit.getById({ id: 10 })).status, "completed");
 });
+
+test("19 multi-tenant CAPA : lecture, création et mutation par identifiant deviné sont refusées", async () => {
+  let f = fakeDb([[]]); __setDbForTests(f.db);
+  await assert.rejects(caller(2).capa.list({ auditId: 10 }), rejectsCode("NOT_FOUND"));
+  assert.equal(f.writes.length, 0);
+
+  f = fakeDb([[]]); __setDbForTests(f.db);
+  await assert.rejects(caller(2).capa.createTask({ capaId: 4, title: "Action étrangère" }), rejectsCode("NOT_FOUND"));
+  assert.equal(f.writes.length, 0);
+
+  f = fakeDb([[]]); __setDbForTests(f.db);
+  await assert.rejects(caller(2).capa.updateStatus({ actionId: 4, statut: "en_cours" }), rejectsCode("NOT_FOUND"));
+  assert.equal(f.writes.length, 0);
+});
