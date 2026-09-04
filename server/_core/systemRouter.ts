@@ -146,7 +146,7 @@ export const systemRouter = router({
         const user = await db.getUserByEmail(input.email);
         console.log("[Login] getUserByEmail:", user ? `found id=${user.id}` : "not found");
 
-        if (!user) {
+        if (!user || !user.openId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email ou mot de passe incorrect" });
         }
 
@@ -211,7 +211,7 @@ export const systemRouter = router({
 
     return users.map((user) => ({
       ...user,
-      profile: profiles.find((p) => p.userId === user.id) || null,
+      profile: profiles.find((p) => p.id === user.id) || null,
     }));
   }),
 
