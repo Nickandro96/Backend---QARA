@@ -80,3 +80,27 @@ commencer le cadrage des **141 groupes divergents** — préparer une propositio
 (quels groupes fusionner, quels `title` différencier, quelles criticités harmoniser) **pour
 présentation à l'utilisateur** (Point de contrôle A), sans rien écrire en base. C'est la suite
 logique du CHANTIER 1 et ne dépend pas de l'exécution SQL en attente.
+
+## MISE À JOUR AUTONOME — 2026-08-04, groupes divergents
+
+- Production corpus finalisée et sauvegardée : 473 questions / 473 clés, 0 troncature, 24 titres corrigés, longueur maximale 333.
+- PR #5 (garde-fou import), #6 (corpus) et #8 (title VARCHAR(1024)) fusionnées et vérifiées sur Railway.
+- Recalcul effectué sur le JSON de production actuel : 141 groupes / 354 questions ; 42 groupes forte similarité, 63 moyens, 36 faibles ; 46 groupes contiennent un doublon texte exact ; 21 groupes ont une criticité divergente.
+- Lot 1 validé : 7 groupes, 8 clés à désactiver non destructivement. Registre documentaire : `docs/corpus/approved-retirements-lot-1.json`.
+- Diagnostic complet reproductible : `docs/corpus/divergent-groups-current.json`.
+- Conception de conservation historique : `docs/corpus/non-destructive-retirement-design.md`.
+- Aucune question supprimée, aucune migration préparée ou exécutée, aucun comportement runtime modifié.
+
+### Prochaine action
+
+Implémenter sur branche de travail la désactivation additive (`isActive`, `supersededByQuestionKey`) avec distinction stricte nouveaux audits / audits historiques, puis tests. Ne pas fusionner ni appliquer en production avant point de contrôle B. Préparer en parallèle les prochains lots exacts pour point de contrôle A.
+
+### Préparation complémentaire terminée
+
+- 7 lots couvrant les 46 ensembles de doublons exacts préparés dans `docs/corpus/exact-duplicate-validation-lots.md` ; lot 1 marqué validé, lots 2 à 7 en attente du point de contrôle A.
+- Les 21 groupes à criticité divergente sont exposés ligne par ligne dans `docs/corpus/criticality-divergence-validation.md`.
+- Aucun choix automatique de criticité, aucune désactivation et aucune écriture en base.
+
+### Reprise recommandée
+
+À la prochaine session utilisateur : présenter les lots 2 à 7 par blocs simples. En autonomie, poursuivre l’audit technique des chemins nouveaux audits / rapports historiques avant toute implémentation du statut actif.
