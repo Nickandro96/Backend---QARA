@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `classification_sessions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `userId` int NOT NULL,
+  `tenantId` int NULL,
+  `sourceSessionId` int NULL,
+  `jurisdiction` varchar(20) NOT NULL DEFAULT 'MDR',
+  `sessionName` varchar(255) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'draft',
+  `rulesetVersion` varchar(50) NOT NULL,
+  `answersJson` json NOT NULL,
+  `resultJson` json NULL,
+  `completedAt` timestamp NULL,
+  `deletedAt` timestamp NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `classification_sessions_user_status_idx` (`userId`, `status`),
+  KEY `classification_sessions_source_idx` (`sourceSessionId`),
+  CONSTRAINT `classification_sessions_user_fk` FOREIGN KEY (`userId`) REFERENCES `users` (`id`)
+);

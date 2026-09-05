@@ -1,5 +1,9 @@
 import { z } from "zod";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { router, requireCapability } from "./_core/trpc";
+import { getDb } from "./db";
+import { classificationSessions } from "../drizzle/schema";
 
 /**
  * MDR Device Classification helper (EU MDR 2017/745 – Annex VIII rules)
@@ -17,7 +21,7 @@ import { router, requireCapability } from "./_core/trpc";
  * Your current version was simplified and produced generic justification. 
  */
 
-const AnswersSchema = z.object({
+export const AnswersSchema = z.object({
   // General
   device_name: z.string().optional(),
   device_description: z.string().optional(),
@@ -64,6 +68,29 @@ const AnswersSchema = z.object({
   // Software
   software_purpose: z.array(z.string()).optional(),
 });
+
+const RULESET_VERSION = "MDR-2026.09";
+const SessionIdSchema = z.object({ sessionId: z.number().int().positive() });
+
+async function ownedSession(database: any, userId: number, sessionId: number) {
+  const [session] = await database.select().from(classificationSessions).where(and(
+    eq(classificationSessions.id, sessionId),
+    eq(classificationSessions.userId, userId),
+    isNull(classificationSessions.deletedAt),
+  )).limit(1);
+  if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Classification introuvable." });
+  return session;
+}
+
+function sessionName(answers: z.infer<typeof AnswersSchema>) {
+  return answers.device_name?.trim() || "Classification MDR";
+}
+
+function insertedId(value: any): number {
+  const id = Number(value?.[0]?.insertId ?? value?.insertId);
+  if (!Number.isInteger(id) || id <= 0) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Identifiant de classification indisponible." });
+  return id;
+}
 
 type MdrClass = "I" | "IIa" | "IIb" | "III";
 
@@ -713,9 +740,89 @@ export function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
 }
 
 export const classificationRouter = router({
-  classify: requireCapability("canUseClassification")
-    .input(AnswersSchema)
-    .mutation(async ({ input }) => {
-      return classifyAnswers(input);
+  list: requireCapability("canUseClassification").query(async ({ ctx }) => {
+    const database = await getDb();
+    if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+    return database.select().from(classificationSessions).where(and(
+      eq(classificationSessions.userId, ctx.user.id),
+      isNull(classificationSessions.deletedAt),
+    )).orderBy(desc(classificationSessions.updatedAt));
+  }),
+
+  get: requireCapability("canUseClassification").input(SessionIdSchema).query(async ({ ctx, input }) => {
+    const database = await getDb();
+    if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+    return ownedSession(database, ctx.user.id, input.sessionId);
+  }),
+
+  saveDraft: requireCapability("canUseClassification")
+    .input(z.object({ sessionId: z.number().int().positive().optional(), answers: AnswersSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const database = await getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      if (input.sessionId) {
+        const existing = await ownedSession(database, ctx.user.id, input.sessionId);
+        if (existing.status !== "draft") throw new TRPCError({ code: "CONFLICT", message: "Une décision terminée est immuable. Créez une nouvelle révision." });
+        await database.update(classificationSessions).set({
+          sessionName: sessionName(input.answers), answersJson: input.answers, updatedAt: new Date(),
+        }).where(and(eq(classificationSessions.id, input.sessionId), eq(classificationSessions.userId, ctx.user.id)));
+        return { sessionId: input.sessionId, status: "draft" as const };
+      }
+      const created: any = await database.insert(classificationSessions).values({
+        userId: ctx.user.id, tenantId: null, sourceSessionId: null, jurisdiction: "MDR",
+        sessionName: sessionName(input.answers), status: "draft", rulesetVersion: RULESET_VERSION,
+        answersJson: input.answers, resultJson: null, createdAt: new Date(), updatedAt: new Date(),
+      });
+      return { sessionId: insertedId(created), status: "draft" as const };
     }),
+
+  classify: requireCapability("canUseClassification")
+    .input(AnswersSchema.extend({ sessionId: z.number().int().positive().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const database = await getDb();
+      if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      const { sessionId, ...answers } = input;
+      const result = classifyAnswers(answers);
+      let persistedSessionId = sessionId;
+      if (persistedSessionId) {
+        const existing = await ownedSession(database, ctx.user.id, persistedSessionId);
+        if (existing.status !== "draft") throw new TRPCError({ code: "CONFLICT", message: "Une décision terminée ne peut pas être recalculée." });
+        await database.update(classificationSessions).set({
+          sessionName: sessionName(answers), answersJson: answers, resultJson: result,
+          status: "completed", rulesetVersion: RULESET_VERSION, completedAt: new Date(), updatedAt: new Date(),
+        }).where(and(eq(classificationSessions.id, persistedSessionId), eq(classificationSessions.userId, ctx.user.id)));
+      } else {
+        const created: any = await database.insert(classificationSessions).values({
+          userId: ctx.user.id, tenantId: null, sourceSessionId: null, jurisdiction: "MDR",
+          sessionName: sessionName(answers), status: "completed", rulesetVersion: RULESET_VERSION,
+          answersJson: answers, resultJson: result, completedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+        });
+        persistedSessionId = insertedId(created);
+      }
+      return { ...result, sessionId: persistedSessionId, rulesetVersion: RULESET_VERSION };
+    }),
+
+  revise: requireCapability("canUseClassification").input(SessionIdSchema).mutation(async ({ ctx, input }) => {
+    const database = await getDb();
+    if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+    const source = await ownedSession(database, ctx.user.id, input.sessionId);
+    if (source.status !== "completed") throw new TRPCError({ code: "BAD_REQUEST", message: "Seule une décision terminée peut être révisée." });
+    const created: any = await database.insert(classificationSessions).values({
+      userId: ctx.user.id, tenantId: source.tenantId ?? null, sourceSessionId: source.id,
+      jurisdiction: source.jurisdiction, sessionName: `${source.sessionName} — révision`, status: "draft",
+      rulesetVersion: RULESET_VERSION, answersJson: source.answersJson ?? {}, resultJson: null,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    return { sessionId: insertedId(created), status: "draft" as const, sourceSessionId: source.id };
+  }),
+
+  deleteDraft: requireCapability("canUseClassification").input(SessionIdSchema).mutation(async ({ ctx, input }) => {
+    const database = await getDb();
+    if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+    const existing = await ownedSession(database, ctx.user.id, input.sessionId);
+    if (existing.status !== "draft") throw new TRPCError({ code: "CONFLICT", message: "Une décision terminée ne peut pas être supprimée." });
+    await database.update(classificationSessions).set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(classificationSessions.id, input.sessionId), eq(classificationSessions.userId, ctx.user.id)));
+    return { success: true };
+  }),
 });

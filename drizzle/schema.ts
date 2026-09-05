@@ -666,6 +666,33 @@ export const fdaQualificationResults = mysqlTable("fda_qualification_results", {
 });
 
 /* =========================
+   MDR / IVDR CLASSIFICATIONS
+========================= */
+export const classificationSessions = mysqlTable(
+  "classification_sessions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id),
+    tenantId: int("tenantId"),
+    sourceSessionId: int("sourceSessionId"),
+    jurisdiction: varchar("jurisdiction", { length: 20 }).notNull().default("MDR"),
+    sessionName: varchar("sessionName", { length: 255 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    rulesetVersion: varchar("rulesetVersion", { length: 50 }).notNull(),
+    answersJson: json("answersJson").notNull(),
+    resultJson: json("resultJson"),
+    completedAt: timestamp("completedAt"),
+    deletedAt: timestamp("deletedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    userStatusIdx: index("classification_sessions_user_status_idx").on(t.userId, t.status),
+    sourceIdx: index("classification_sessions_source_idx").on(t.sourceSessionId),
+  }),
+);
+
+/* =========================
    MDR ROLE QUALIFICATIONS
 ========================= */
 export const mdrRoleQualifications = mysqlTable("mdr_role_qualifications", {
