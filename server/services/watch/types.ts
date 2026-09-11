@@ -158,6 +158,7 @@ export type CompanyProfile = {
   preferredSources?: string[];
   notificationEnabled?: boolean;
   notificationFrequency?: "realtime" | "daily" | "weekly" | "never";
+  configured?: boolean;
 };
 
 export type PersonalizedImpact = {

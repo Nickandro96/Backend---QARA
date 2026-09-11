@@ -40,3 +40,9 @@ test("registry contains the eight P0/P1-C sources", () => {
     assert.equal(ids.has(id), true, `${id} missing from registry`);
   }
 });
+
+test("every source declares whether it is official or secondary", () => {
+  for (const source of REGULATORY_SOURCE_REGISTRY) {
+    assert.ok(["official", "secondary"].includes(source.authorityType), `${source.id} authority type missing`);
+  }
+});

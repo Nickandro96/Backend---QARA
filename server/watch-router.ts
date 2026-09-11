@@ -9,6 +9,7 @@ import {
 } from "./services/watch/WatchAggregator";
 import { getReadItemIds, getUnreadItemCount, getUserWatchCapaIds, listActiveSources, markItemRead, markItemUnread } from "./services/watch/WatchStore";
 import { renderWatchReportPdf } from "./services/watch/watchReport";
+import { REGULATORY_SOURCE_REGISTRY } from "./services/watch/registry";
 
 const zUpdateType = z.enum(["REGULATION", "GUIDANCE", "STANDARD", "QUALITY"]);
 const zImpactLevel = z.enum(["Low", "Medium", "High", "Critical"]);
@@ -111,8 +112,10 @@ export const watchRouter = router({
       console.info("[watch] visibility", { totalAvailable: items.length, totalFiltered, returned: filteredItems.length });
       const enrichedItems = filteredItems.map((it) => {
         const personalized = personalizeUpdate(it, profile);
+        const sourceDefinition = REGULATORY_SOURCE_REGISTRY.find((source) => source.id === it.sourceRegistryId);
         return {
           ...it,
+          sourceAuthority: sourceDefinition?.authorityType ?? "unknown",
           personalizedImpact: personalized,
           isRead: readIds.has(it.id),
         };
@@ -121,20 +124,20 @@ export const watchRouter = router({
       return { items: enrichedItems, meta: { ...meta, totalAvailable: items.length, totalFiltered }, companyProfile: profile };
     }),
 
-  latest: protectedProcedure.query(async ({ ctx }) => {
+  latest: requireCapability("canUseVeille").query(async ({ ctx }) => {
     const { items, meta } = await getUpdatesCached({ limit: 20, offset: 0 });
     if (meta.stale && !meta.refreshInProgress) void triggerRefresh("page_open");
     return { items: items.slice(0, 10), meta };
   }),
 
-  critical: protectedProcedure.query(async ({ ctx }) => {
+  critical: requireCapability("canUseVeille").query(async ({ ctx }) => {
     const { items, meta } = await getUpdatesCached({ limit: 100, offset: 0 });
     if (meta.stale && !meta.refreshInProgress) void triggerRefresh("page_open");
     const critical = items.filter((i) => i.impactLevel === "Critical" || i.impactLevel === "High");
     return { items: critical.slice(0, 30), meta };
   }),
 
-  details: protectedProcedure
+  details: requireCapability("canUseVeille")
     .input(z.object({ itemId: z.string().uuid() }))
     .query(async ({ input }) => {
       const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
@@ -160,7 +163,7 @@ export const watchRouter = router({
       return await triggerRefresh(input.trigger);
     }),
 
-  exportReport: protectedProcedure
+  exportReport: requireCapability("canUseVeille")
     .input(z.object({ organisation: z.string().min(1).max(255), period: z.string().min(1).max(100) }))
     .mutation(async ({ input, ctx }) => {
       const { items } = await getUpdatesCached({ limit: 200, offset: 0 });
@@ -169,19 +172,19 @@ export const watchRouter = router({
       return { filename: `rapport-veille-${new Date().toISOString().slice(0, 10)}.pdf`, mimeType: "application/pdf", base64: pdf.toString("base64") };
     }),
 
-  getSources: protectedProcedure.query(async () => ({ sources: await listActiveSources() })),
-  markAsRead: protectedProcedure.input(z.object({ itemId: z.string().uuid() })).mutation(async ({ ctx, input }) => ({ success: await markItemRead(ctx.user.id, input.itemId) })),
-  markAsUnread: protectedProcedure.input(z.object({ itemId: z.string().uuid() })).mutation(async ({ ctx, input }) => { await markItemUnread(ctx.user.id, input.itemId); return { success: true }; }),
-  getUnreadCount: protectedProcedure.query(async ({ ctx }) => ({ count: await getUnreadItemCount(ctx.user.id) })),
-  getProfile: protectedProcedure.query(async ({ ctx }) => ({ profile: await getOrDefaultCompanyProfile(ctx.user.id) })),
-  updateProfile: protectedProcedure.input(zCompanyProfile).mutation(async ({ ctx, input }) => { await saveCompanyProfile(ctx.user.id, input); return { success: true }; }),
+  getSources: requireCapability("canUseVeille").query(async () => ({ sources: (await listActiveSources()).map((source: any) => ({ ...source, authorityType: REGULATORY_SOURCE_REGISTRY.find((entry) => entry.id === source.id)?.authorityType ?? "unknown" })) })),
+  markAsRead: requireCapability("canUseVeille").input(z.object({ itemId: z.string().uuid() })).mutation(async ({ ctx, input }) => ({ success: await markItemRead(ctx.user.id, input.itemId) })),
+  markAsUnread: requireCapability("canUseVeille").input(z.object({ itemId: z.string().uuid() })).mutation(async ({ ctx, input }) => { await markItemUnread(ctx.user.id, input.itemId); return { success: true }; }),
+  getUnreadCount: requireCapability("canUseVeille").query(async ({ ctx }) => ({ count: await getUnreadItemCount(ctx.user.id) })),
+  getProfile: requireCapability("canUseVeille").query(async ({ ctx }) => ({ profile: await getOrDefaultCompanyProfile(ctx.user.id) })),
+  updateProfile: requireCapability("canUseVeille").input(zCompanyProfile).mutation(async ({ ctx, input }) => { await saveCompanyProfile(ctx.user.id, input); return { success: true }; }),
 
   companyProfile: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
+    get: requireCapability("canUseVeille").query(async ({ ctx }) => {
       const profile = await getOrDefaultCompanyProfile(ctx.user.id);
       return { profile };
     }),
-    upsert: protectedProcedure.input(zCompanyProfile).mutation(async ({ ctx, input }) => {
+    upsert: requireCapability("canUseVeille").input(zCompanyProfile).mutation(async ({ ctx, input }) => {
       await saveCompanyProfile(ctx.user.id, input);
       return { success: true };
     }),

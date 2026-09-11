@@ -173,7 +173,8 @@ export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promi
   const sources = DEFAULT_SOURCES;
 
   for (const source of REGULATORY_SOURCE_REGISTRY) {
-    try { await upsertSourceRegistry({ ...source, createdAt: new Date(), updatedAt: new Date() }); }
+    const { authorityType: _authorityType, ...persistedSource } = source;
+    try { await upsertSourceRegistry({ ...persistedSource, createdAt: new Date(), updatedAt: new Date() }); }
     catch (error) { errors.push(`[${source.name}] registry sync failed: ${asErrorMessage(error)}`); }
   }
 
@@ -314,7 +315,7 @@ function sourceRegistryIdFor(sourceName: string): string | null {
 export async function getOrDefaultCompanyProfile(userId: number): Promise<CompanyProfile> {
   try {
     const existing = await getCompanyProfile(userId);
-    if (existing) return existing;
+    if (existing) return { ...existing, configured: true };
   } catch (err) {
     // If company profile table missing, degrade gracefully.
     lastDegraded = true;
@@ -326,7 +327,7 @@ export async function getOrDefaultCompanyProfile(userId: number): Promise<Compan
     deviceClass: "IIa",
     deviceFamilies: ["non_active"],
     markets: ["EU"],
-    preferredReferentials: [], preferredSources: [], notificationEnabled: false, notificationFrequency: "weekly",
+    preferredReferentials: [], preferredSources: [], notificationEnabled: false, notificationFrequency: "weekly", configured: false,
   };
 }
 
