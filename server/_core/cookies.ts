@@ -8,6 +8,8 @@ export const getSessionCookieOptions = (_req: any) => {
     path: "/",
     httpOnly: true,
     secure: isProd, // must be true in production (HTTPS)
-    sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+    // Le frontend relaie /trpc vers Railway : le cookie reste same-origin et
+    // peut utiliser Lax, plus robuste et plus protecteur contre les requêtes CSRF.
+    sameSite: "lax" as const,
   };
 };

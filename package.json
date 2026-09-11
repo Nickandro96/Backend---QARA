@@ -19,7 +19,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "import:fda:questions": "tsx scripts/import-questionnaires.ts",
     "release": "node scripts/release.mjs",
-    "smoke:production": "node scripts/smoke-production.mjs"
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "test:e2e:auth": "node scripts/auth-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

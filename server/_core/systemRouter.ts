@@ -1,19 +1,33 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import * as db from "../db";
 import { sdk } from "./sdk";
-import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
+import { COOKIE_NAME } from "../../shared/const";
 import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, verifyPassword, isBcryptHash } from "./passwordUtils";
 import { createResetToken, hashResetToken, sendPasswordResetEmail } from "./passwordReset";
 import { sendWelcomeEmail } from "./legalEmails";
 
-function errMsg(e: any) {
-  if (!e) return "unknown";
-  if (typeof e === "string") return e;
-  return e?.message || e?.cause?.message || JSON.stringify(e);
+const SESSION_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const authAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function assertAuthRateLimit(action: string, req: any, identity: string, max: number, windowMs: number) {
+  const now = Date.now();
+  if (authAttempts.size > 10_000) {
+    for (const [key, value] of authAttempts) if (value.resetAt <= now) authAttempts.delete(key);
+  }
+  const fingerprint = createHash("sha256").update(`${req?.ip ?? "unknown"}:${identity.trim().toLowerCase()}`).digest("hex");
+  const key = `${action}:${fingerprint}`;
+  const current = authAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    authAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return;
+  }
+  if (current.count >= max) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Trop de tentatives. Réessayez plus tard." });
+  current.count += 1;
 }
 
 export const systemRouter = router({
@@ -23,7 +37,8 @@ export const systemRouter = router({
 
   requestPasswordReset: publicProcedure
     .input(z.object({ email: z.string().email() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      assertAuthRateLimit("reset-request", ctx.req, input.email, 5, 15 * 60 * 1000);
       const genericResult = {
         success: true,
         message: "Si un compte existe pour cet email, un lien de réinitialisation sera envoyé.",
@@ -80,6 +95,7 @@ export const systemRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      assertAuthRateLimit("register", ctx.req, input.email, 5, 60 * 60 * 1000);
       if (input.cguAccepted !== true) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Vous devez accepter les CGU pour créer un compte" });
       }
@@ -87,8 +103,7 @@ export const systemRouter = router({
       if (!dbConn) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message:
-            "DB indisponible. Vérifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
+          message: "Service temporairement indisponible.",
         });
       }
 
@@ -120,7 +135,7 @@ export const systemRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, sessionToken, {
         ...cookieOptions,
-        maxAge: ONE_YEAR_MS,
+        maxAge: SESSION_COOKIE_MAX_AGE_MS,
       });
 
       try {
@@ -139,13 +154,13 @@ export const systemRouter = router({
   login: publicProcedure
     .input(z.object({ email: z.string().email(), password: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      assertAuthRateLimit("login", ctx.req, input.email, 10, 15 * 60 * 1000);
       // ✅ 1) DB check upfront (la cause la + fréquente du 500)
       const dbConn = await db.getDb();
       if (!dbConn) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message:
-            "DB indisponible. Vérifie DATABASE_URL (ou MYSQL_URL/vars Railway) dans le service Backend.",
+          message: "Service temporairement indisponible.",
         });
       }
 
@@ -192,7 +207,7 @@ export const systemRouter = router({
 
         ctx.res.cookie(COOKIE_NAME, sessionToken, {
           ...cookieOptions,
-          maxAge: ONE_YEAR_MS,
+          maxAge: SESSION_COOKIE_MAX_AGE_MS,
         });
 
         return { success: true, message: "Connexion réussie" };
@@ -203,7 +218,7 @@ export const systemRouter = router({
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Login backend error: ${errMsg(e)}`,
+          message: "Connexion temporairement indisponible.",
         });
       }
     }),
