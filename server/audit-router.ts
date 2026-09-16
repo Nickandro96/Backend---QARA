@@ -237,10 +237,12 @@ export const auditRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-      const rows = await getAudits({ userId: ctx.user.id, status: input?.status, siteId: input?.siteId });
+      const rows = await getAudits({ userId: ctx.user.id, siteId: input?.siteId });
       const scoped = filterByReferentialId(rows, input?.referentialId);
       const search = input?.search?.trim().toLowerCase();
-      const searched = search ? scoped.filter((a: any) => String(a.name ?? "").toLowerCase().includes(search)) : scoped;
+      const normalizeStatus = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_").replace(/^en_cours$/, "in_progress");
+      const byStatus = input?.status ? scoped.filter((a: any) => normalizeStatus(a.status) === input.status) : scoped;
+      const searched = search ? byStatus.filter((a: any) => [a.name, a.reference, a.id].some((value) => String(value ?? "").toLowerCase().includes(search))) : byStatus;
       return enrichWithDisplayFields(db, ctx.user.id, searched);
     }),
 
