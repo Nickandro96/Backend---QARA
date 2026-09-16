@@ -39,7 +39,7 @@ export const HarmonisedStandardsSource: UpdateSource = {
     const started = Date.now();
     try {
       const url = process.env.WATCH_HARMONISED_STANDARDS_URL ?? DEFAULT_URL;
-      if (!isUrlAllowed(url)) throw new Error("Standards URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source normes refusée");
       const html = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
       const tokens = extractEnIsoTokens(html);
       const publishedAt = parsePublishedAt(html);

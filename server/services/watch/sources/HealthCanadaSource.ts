@@ -5,7 +5,7 @@ import { fetchTextWithRetry } from "./_http";
 import { stableOfficialId } from "./SourceParsing";
 
 const SOURCE_ID = "health-canada";
-const ENDPOINT = "https://recalls-rappels.canada.ca/en/api/recall-alert";
+const ENDPOINT = "https://recalls-rappels.canada.ca/sites/default/files/opendata-donneesouvertes/HCRSAMOpenData.json";
 
 function firstValue(row: any, keys: string[]): string {
   for (const key of keys) if (row[key]) return String(row[key]);
@@ -14,7 +14,7 @@ function firstValue(row: any, keys: string[]): string {
 
 export function parseHealthCanadaPayload(raw: string) {
   const data = JSON.parse(raw);
-  const rows = Array.isArray(data) ? data : data.results ?? data.data ?? [];
+  const rows = Array.isArray(data) ? data : data.results ?? data.data ?? data.RECALLS ?? data.recalls ?? [];
   return rows.map((row: any) => {
     const officialId = safeText(firstValue(row, ["recall_id", "id", "recallId"])) || stableOfficialId(SOURCE_ID, firstValue(row, ["title", "title_en", "title_fr"]), null);
     const title = safeText(firstValue(row, ["title", "title_en", "title_fr"]));
@@ -42,10 +42,9 @@ export const HealthCanadaSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     try {
-      const params = new URLSearchParams({ cat: "3", lim: "20", iss: "desc" });
-      const url = `${process.env.WATCH_HEALTH_CANADA_URL ?? ENDPOINT}?${params}`;
-      if (!isUrlAllowed(url)) throw new Error("Health Canada URL not allowed");
-      const items = parseHealthCanadaPayload(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 }));
+      const url = process.env.WATCH_HEALTH_CANADA_URL ?? ENDPOINT;
+      if (!isUrlAllowed(url)) throw new Error("URL de source Health Canada refusée");
+      const items = parseHealthCanadaPayload(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 })).slice(0, 100);
       return { items, health: { name: "Health Canada", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (error: any) {
       return { items: [], health: { name: "Health Canada", ok: false, durationMs: Date.now() - started, items: 0, message: error?.message ?? "error" } };

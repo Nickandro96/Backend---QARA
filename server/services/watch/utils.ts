@@ -31,7 +31,7 @@ export function withTimeout<T>(
  *
  * Historique (rapport QA 2026-09-02) : la liste ne contenait que les domaines
  * UE + iso.org, si bien que 10 sources sur 13 (ANSM, FDA, Health Canada, TGA,
- * MHRA, Federal Register…) échouaient avec « URL not allowed » avant même la
+ * MHRA, Federal Register…) échouaient au contrôle d'URL avant même la
  * requête réseau. On autorise ici les domaines des régulateurs officiels
  * réellement interrogés par les connecteurs de `server/services/watch/sources/`.
  * Reste volontairement une allowlist stricte (pas de wildcard générique).

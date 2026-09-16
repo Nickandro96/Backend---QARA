@@ -46,7 +46,7 @@ export const FdaMedwatchSource: UpdateSource = {
     try {
       const params = new URLSearchParams({ limit: "20", sort: "recall_initiation_date:desc", search: "status:Ongoing" });
       const url = `${process.env.WATCH_FDA_MEDWATCH_URL ?? ENDPOINT}?${params}`;
-      if (!isUrlAllowed(url)) throw new Error("FDA MedWatch URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source FDA MedWatch refusée");
       const items = parseFdaMedwatchPayload(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 }));
       return { items, health: { name: "FDA MedWatch", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (error: any) {

@@ -35,7 +35,7 @@ export const FederalRegisterSource: UpdateSource = {
       params.append("conditions[agencies][]", "food-and-drug-administration");
       params.append("conditions[term]", "medical device");
       const url = `${process.env.WATCH_FEDERAL_REGISTER_URL ?? ENDPOINT}?${params}`;
-      if (!isUrlAllowed(url)) throw new Error("Federal Register URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source Federal Register refusée");
       const items = parseFederalRegisterPayload(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 }));
       return { items, health: { name: "FederalRegister", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (error: any) {

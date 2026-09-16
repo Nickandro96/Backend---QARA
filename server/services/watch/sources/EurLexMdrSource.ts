@@ -24,7 +24,7 @@ export function parseCellarSparqlXml(xml: string) {
 export const EurLexMdrSource: UpdateSource = { name: "EUR-Lex CELLAR", async fetchUpdates(ctx) {
   const started = Date.now();
   try { const base = process.env.WATCH_EURLEX_SPARQL_URL ?? CELLAR; const url = `${base}?query=${encodeURIComponent(QUERY)}&format=${encodeURIComponent("application/sparql-results+xml")}`;
-    if (!isUrlAllowed(url)) throw new Error("EUR-Lex CELLAR URL not allowed");
+    if (!isUrlAllowed(url)) throw new Error("URL de source EUR-Lex refusée");
     const items = parseCellarSparqlXml(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 }));
     return { items, health: { name: "EUR-Lex CELLAR", ok: true, durationMs: Date.now() - started, items: items.length } };
   } catch (error: any) { return { items: [], health: { name: "EUR-Lex CELLAR", ok: false, durationMs: Date.now() - started, items: 0, message: error?.message ?? "error" } }; }

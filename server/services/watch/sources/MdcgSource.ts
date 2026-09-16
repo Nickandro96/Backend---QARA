@@ -10,7 +10,7 @@ import { nowUtc, safeText, isUrlAllowed } from "../utils";
  * Parsing is intentionally conservative to avoid hallucination.
  */
 const DEFAULT_URL =
-  "https://health.ec.europa.eu/medical-devices-sector/new-regulations/guidance-mdcg-documents_en";
+  "https://health.ec.europa.eu/medical-devices-sector/new-regulations/guidance-mdcg-endorsed-documents-and-other-guidance_en";
 
 export function extractMdcgLinks(html: string): { href: string; text: string }[] {
   const links: { href: string; text: string }[] = [];
@@ -72,7 +72,7 @@ export const MdcgSource: UpdateSource = {
     const started = Date.now();
     try {
       const url = process.env.WATCH_MDCG_URL ?? DEFAULT_URL;
-      if (!isUrlAllowed(url)) throw new Error("MDCG URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source MDCG refusée");
       const html = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
       const links = extractMdcgLinks(html)
         .map((l) => ({ ...l, href: absolutize(url, l.href) }))

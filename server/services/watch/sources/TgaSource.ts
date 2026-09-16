@@ -40,7 +40,7 @@ export const TgaSource: UpdateSource = {
     const items = [];
     for (const feed of FEEDS) {
       try {
-        if (!isUrlAllowed(feed.url)) throw new Error("TGA URL not allowed");
+        if (!isUrlAllowed(feed.url)) throw new Error("URL de source TGA refusée");
         items.push(...parseTgaRss(await fetchTextWithRetry(feed.url, { timeoutMs: ctx.timeoutMs, retries: 2 }), feed.sourceType));
       } catch (error: any) {
         return { items, health: { name: "TGA", ok: false, durationMs: Date.now() - started, items: items.length, message: error?.message ?? "error" } };

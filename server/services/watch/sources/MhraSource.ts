@@ -37,7 +37,7 @@ export const MhraSource: UpdateSource = {
     const started = Date.now();
     try {
       const url = process.env.WATCH_MHRA_ATOM_URL ?? ATOM_URL;
-      if (!isUrlAllowed(url)) throw new Error("MHRA URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source MHRA refusée");
       const items = parseMhraAtom(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 }));
       return { items, health: { name: "MHRA", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (error: any) {

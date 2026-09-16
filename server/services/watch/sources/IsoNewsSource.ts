@@ -30,7 +30,7 @@ export const IsoNewsSource: UpdateSource = {
     const started = Date.now();
     try {
       const url = process.env.WATCH_ISO_RSS ?? DEFAULT_RSS;
-      if (!isUrlAllowed(url)) throw new Error("ISO RSS URL not allowed");
+      if (!isUrlAllowed(url)) throw new Error("URL de source ISO refusée");
       const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
       const parsed = extractRssItems(xml);
 
