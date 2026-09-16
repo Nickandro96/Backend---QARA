@@ -47,6 +47,9 @@ test("validateCapaTaskReadiness refuse une clôture sans actions finalisées", (
 test("classifyNonConformityResponse exclut explicitement les réponses non applicables", () => {
   assert.equal(classifyNonConformityResponse("non_compliant"), "non_conforme");
   assert.equal(classifyNonConformityResponse("partial"), "partiel");
+  assert.equal(classifyNonConformityResponse("non-conforme"), "non_conforme");
+  assert.equal(classifyNonConformityResponse("NC"), "non_conforme");
+  assert.equal(classifyNonConformityResponse("partiellement conforme"), "partiel");
   assert.equal(classifyNonConformityResponse("non_applicable"), null);
   assert.equal(classifyNonConformityResponse("compliant"), null);
 });

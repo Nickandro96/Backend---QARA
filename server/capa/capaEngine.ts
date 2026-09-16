@@ -21,7 +21,7 @@ import type { CapaActionDraft, CapaReferentielImpacte, CapaStatus } from "./type
 export function classifyNonConformityResponse(value: unknown): "non_conforme" | "partiel" | null {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[ -]/g, "_");
   if (["partial", "partiel", "partially_compliant", "partiellement_conforme"].includes(normalized)) return "partiel";
-  if (["non_compliant", "non_conforme", "noncompliant", "nok"].includes(normalized)) return "non_conforme";
+  if (["non_compliant", "non_conforme", "nonconforme", "noncompliant", "nok", "nc"].includes(normalized)) return "non_conforme";
   return null;
 }
 

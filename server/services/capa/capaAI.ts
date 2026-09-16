@@ -92,6 +92,11 @@ export async function generateCapaAnalysis(
     return validated.data;
   } catch (error) {
     console.error("[CAPA AI] Generation failed", error);
-    return null;
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ANTHROPIC_API_KEY")) throw new Error("Configuration IA indisponible : ANTHROPIC_API_KEY absente.");
+    if (/timeout|timed out|APIConnectionTimeoutError/i.test(message) || (error as any)?.name === "APIConnectionTimeoutError") {
+      throw new Error("L'analyse IA a dépassé 120 secondes. Réessayez.");
+    }
+    throw new Error(`Service d'analyse IA indisponible : ${message}`);
   }
 }
