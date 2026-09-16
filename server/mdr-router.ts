@@ -23,6 +23,7 @@ import {
   resolveAuditProcessId,
 } from "./audit-lifecycle";
 import { calculateAuditProgress } from "./audit-progress";
+import { sampleAuditQuestions, type SampleMode } from "./audit-sampler";
 
 // Define MDR_PROCESSES locally to avoid import issues during build
 const MDR_PROCESSES = [
@@ -399,6 +400,11 @@ export async function fetchAuditScopedQuestions(db: any, params: {
     rows = await applyOnboardingScopeFilter(db, rows, finalWhere, economicRolesFromOnboarding, situationTags);
   }
 
+  if (params.auditId > 0) {
+    const [auditSampling] = await db.select({ sampleMode: (audits as any).sampleMode }).from(audits)
+      .where(and(eq((audits as any).id, params.auditId), eq((audits as any).userId, params.userId))).limit(1);
+    return sampleAuditQuestions(rows || [], auditSampling?.sampleMode as SampleMode);
+  }
   return rows || [];
 }
 
@@ -496,6 +502,7 @@ export const mdrRouter = router({
         endDate: z.string().optional().nullable(),
 
         economicRole: z.enum(["fabricant", "importateur", "distributeur", "mandataire"]).optional(),
+        sampleMode: z.enum(["rapid", "standard", "in_depth", "complete"]).default("standard"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -543,6 +550,7 @@ export const mdrRouter = router({
         type: resolvedType,
         referentialIds: resolvedReferentialIds,
         processIds: input.processIds ?? [],
+        sampleMode: input.sampleMode,
 
         clientOrganization: input.clientOrganization ?? null,
         siteLocation: input.siteLocation ?? null,
@@ -1357,7 +1365,7 @@ export const mdrRouter = router({
 
       const hasRisksColumn = await hasColumn("questions", "risks");
 
-      const { auditId, economicRole, economicRolesFromOnboarding, situationTags, processIds, referentialIds } =
+      const { audit, auditId, economicRole, economicRolesFromOnboarding, situationTags, processIds, referentialIds } =
         await getAuditContextInternal(db, ctx.user.id, input.auditId);
       const useOnboardingScope = economicRolesFromOnboarding.length > 0;
 
@@ -1479,7 +1487,7 @@ export const mdrRouter = router({
 
         console.log(`[MDR] DB filtered questions count: ${rows.length}`);
 
-        const out = (rows || []).map((q: any) => ({
+        const out = sampleAuditQuestions((rows || []).map((q: any) => ({
           id: q.id,
           questionKey: q.questionKey || generateQuestionKey(q),
           questionText: q.questionText,
@@ -1502,7 +1510,7 @@ export const mdrRouter = router({
           processId: q.processId ?? null,
 
           displayOrder: q.displayOrder ?? null,
-        }));
+        })), (audit as any).sampleMode as SampleMode);
 
         // 🔎 Debug: show a small sample of risks to verify per-question payload
         try {

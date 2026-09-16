@@ -16,6 +16,7 @@ import {
 } from "../drizzle/schema";
 import { resolveProcessDbIds } from "./shared/processResolution";
 import { fetchAuditScopedQuestions, getAuditContextInternal } from "./mdr-router";
+import { sampleAuditQuestions, type SampleMode } from "./audit-sampler";
 import {
   assertAuditCanComplete,
   assertAuditComplete,
@@ -741,7 +742,7 @@ createOrUpdateAuditDraft: protectedProcedure
       );
       console.log(`[ISO] DB filtered questions count: ${rows.length}`);
 
-      const normalized = rows.map((r) => normalizeIsoQuestion(r));
+      const normalized = sampleAuditQuestions(rows.map((r) => normalizeIsoQuestion(r)), (audit as any).sampleMode as SampleMode);
 
       // 🔎 Debug: show a small sample of risks to verify per-question payload
       try {

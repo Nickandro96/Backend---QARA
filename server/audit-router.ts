@@ -147,6 +147,7 @@ export const auditRouter = router({
         startDate: z.string().optional(),
         endDate: z.string().optional(),
         notes: z.string().optional(),
+        sampleMode: z.enum(["rapid", "standard", "in_depth", "complete"]).default("standard"),
         externalPreparation: externalAuditInput.optional(),
       })
     )
@@ -157,6 +158,7 @@ export const auditRouter = router({
         type: input.auditType,
         siteId: input.siteId ?? null,
         status: "draft",
+        sampleMode: input.sampleMode,
         economicRole: input.economicRole ?? null,
         processIds: input.processIds ?? null,
         referentialIds: input.referentialIds ?? null,

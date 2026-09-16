@@ -250,6 +250,7 @@ export const audits = mysqlTable("audits", {
   siteId: int("siteId").references(() => sites.id),
 
   status: varchar("status", { length: 50 }).default("draft").notNull(),
+  sampleMode: varchar("sampleMode", { length: 20 }).default("complete").notNull(),
   economicRole: varchar("economicRole", { length: 50 }),
 
   // ✅ JSON columns (store arrays directly in router; no stringify)
