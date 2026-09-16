@@ -395,6 +395,12 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
   const total = range.count;
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
+    // PDFKit déclenche automatiquement une nouvelle page lorsqu'un texte est
+    // placé sous la limite de contenu. Le footer est volontairement dans la
+    // marge : neutraliser temporairement cette limite évite une page isolée
+    // par pied de page.
+    const bottomMargin = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
     const bottom = doc.page.height - 35;
     doc.fontSize(8).fillColor(COLORS.gray).font("Helvetica");
     doc.text(
@@ -408,6 +414,7 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       align: "right",
       lineBreak: false,
     });
+    doc.page.margins.bottom = bottomMargin;
     doc.fillColor("black");
   }
 
