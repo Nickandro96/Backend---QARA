@@ -5,6 +5,7 @@ import { nowUtc, safeText, isUrlAllowed } from "../utils";
 
 // ISO publishes various RSS feeds; this one is public and stable-ish.
 const DEFAULT_RSS = "https://www.iso.org/contents/data/publication_feeds/iso_rss.xml";
+const NEWS_URL = "https://www.iso.org/home/insights-news/news/standards-world/news-list.html";
 
 function extractRssItems(xml: string): { title: string; link: string; pubDate?: Date }[] {
   const items: { title: string; link: string; pubDate?: Date }[] = [];
@@ -24,6 +25,22 @@ function extractRssItems(xml: string): { title: string; link: string; pubDate?: 
   return items;
 }
 
+export function extractIsoNews(html: string): { title: string; link: string; pubDate?: Date }[] {
+  const items: { title: string; link: string; pubDate?: Date }[] = [];
+  const seen = new Set<string>();
+  const re = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html))) {
+    const title = safeText(match[2].replace(/<[^>]+>/g, " "));
+    if (!/\bISO\s*(9001|13485)\b|quality\s+management/i.test(title)) continue;
+    const link = new URL(match[1], NEWS_URL).toString();
+    if (seen.has(link)) continue;
+    seen.add(link);
+    items.push({ title, link });
+  }
+  return items;
+}
+
 export const IsoNewsSource: UpdateSource = {
   name: "ISO (public RSS)",
   async fetchUpdates(ctx) {
@@ -31,8 +48,15 @@ export const IsoNewsSource: UpdateSource = {
     try {
       const url = process.env.WATCH_ISO_RSS ?? DEFAULT_RSS;
       if (!isUrlAllowed(url)) throw new Error("URL de source ISO refusée");
-      const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
-      const parsed = extractRssItems(xml);
+      let parsed: { title: string; link: string; pubDate?: Date }[];
+      try {
+        const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 1 });
+        parsed = extractRssItems(xml);
+      } catch (rssError) {
+        if (process.env.WATCH_ISO_RSS) throw rssError;
+        const html = await fetchTextWithRetry(NEWS_URL, { timeoutMs: ctx.timeoutMs, retries: 1 });
+        parsed = extractIsoNews(html);
+      }
 
       // Keep only likely ISO 9001 / ISO 13485 signals to stay relevant.
       const filtered = parsed.filter((it) => /\bISO\s*(9001|13485)\b/i.test(it.title) || /quality\s+management/i.test(it.title));

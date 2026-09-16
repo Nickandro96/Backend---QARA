@@ -5,7 +5,7 @@ import { fetchTextWithRetry } from "./_http";
 import { parseRssItems, stableOfficialId, stripHtml, tagValue } from "./SourceParsing";
 
 const SOURCE_ID = "ansm";
-const NEWS_URL = "https://ansm.sante.fr/actualites";
+const NEWS_URL = "https://ansm.sante.fr/actualites/";
 
 export function parseAnsmNewsPage(html: string) {
   const items: any[] = [];

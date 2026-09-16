@@ -11,6 +11,7 @@ import { nowUtc, safeText, isUrlAllowed } from "../utils";
  */
 const DEFAULT_URL =
   "https://health.ec.europa.eu/medical-devices-sector/new-regulations/guidance-mdcg-endorsed-documents-and-other-guidance_en";
+const FALLBACK_URL = `${DEFAULT_URL}?prefLang=en`;
 
 export function extractMdcgLinks(html: string): { href: string; text: string }[] {
   const links: { href: string; text: string }[] = [];
@@ -71,9 +72,19 @@ export const MdcgSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     try {
-      const url = process.env.WATCH_MDCG_URL ?? DEFAULT_URL;
-      if (!isUrlAllowed(url)) throw new Error("URL de source MDCG refusée");
-      const html = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 2 });
+      const candidates = process.env.WATCH_MDCG_URL ? [process.env.WATCH_MDCG_URL] : [DEFAULT_URL, FALLBACK_URL];
+      let url = candidates[0];
+      let html = "";
+      let lastError: unknown;
+      for (const candidate of candidates) {
+        try {
+          if (!isUrlAllowed(candidate)) throw new Error("URL de source MDCG refusée");
+          html = await fetchTextWithRetry(candidate, { timeoutMs: ctx.timeoutMs, retries: 1 });
+          url = candidate;
+          break;
+        } catch (error) { lastError = error; }
+      }
+      if (!html) throw lastError instanceof Error ? lastError : new Error("Source MDCG indisponible");
       const links = extractMdcgLinks(html)
         .map((l) => ({ ...l, href: absolutize(url, l.href) }))
         .filter((l) => /\.pdf(\?|$)/i.test(l.href) || /guidance|mdcg/i.test(l.text));

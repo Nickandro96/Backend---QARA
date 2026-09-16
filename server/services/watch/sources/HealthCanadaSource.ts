@@ -6,6 +6,7 @@ import { stableOfficialId } from "./SourceParsing";
 
 const SOURCE_ID = "health-canada";
 const ENDPOINT = "https://recalls-rappels.canada.ca/sites/default/files/opendata-donneesouvertes/HCRSAMOpenData.json";
+const FALLBACK_ENDPOINT = "https://recalls-rappels.canada.ca/sites/default/files/opendata-donneesouvertes/SCRSAMDonneesOuvertes.json";
 
 function firstValue(row: any, keys: string[]): string {
   for (const key of keys) if (row[key]) return String(row[key]);
@@ -42,9 +43,18 @@ export const HealthCanadaSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     try {
-      const url = process.env.WATCH_HEALTH_CANADA_URL ?? ENDPOINT;
-      if (!isUrlAllowed(url)) throw new Error("URL de source Health Canada refusée");
-      const items = parseHealthCanadaPayload(await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 3 })).slice(0, 100);
+      const candidates = process.env.WATCH_HEALTH_CANADA_URL ? [process.env.WATCH_HEALTH_CANADA_URL] : [ENDPOINT, FALLBACK_ENDPOINT];
+      let raw = "";
+      let lastError: unknown;
+      for (const url of candidates) {
+        try {
+          if (!isUrlAllowed(url)) throw new Error("URL de source Health Canada refusée");
+          raw = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 1 });
+          break;
+        } catch (error) { lastError = error; }
+      }
+      if (!raw) throw lastError instanceof Error ? lastError : new Error("Source Health Canada indisponible");
+      const items = parseHealthCanadaPayload(raw).slice(0, 100);
       return { items, health: { name: "Health Canada", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (error: any) {
       return { items: [], health: { name: "Health Canada", ok: false, durationMs: Date.now() - started, items: 0, message: error?.message ?? "error" } };

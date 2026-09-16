@@ -6,9 +6,9 @@ import { parseRssItems, stableOfficialId, stripHtml, tagValue } from "./SourcePa
 
 const SOURCE_ID = "tga";
 const FEEDS = [
-  { url: "https://www.tga.gov.au/rss/alerts", sourceType: "alert" },
-  { url: "https://www.tga.gov.au/rss/market-actions", sourceType: "recall" },
-  { url: "https://www.tga.gov.au/rss/publications-and-consultations", sourceType: "guidance" },
+  { url: "https://www.tga.gov.au/feeds/alert/safety-alerts.xml", sourceType: "alert" },
+  { url: "https://www.tga.gov.au/feeds/alert/market-actions.xml", sourceType: "recall" },
+  { url: "https://www.tga.gov.au/feeds/guidance.xml", sourceType: "guidance" },
 ];
 
 export function parseTgaRss(xml: string, sourceType = "notice") {
