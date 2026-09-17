@@ -45,3 +45,14 @@ test("doublons et réponses hors périmètre sont ignorés", () => {
   assert.equal(result.finalApplicableResponses, 1);
   assert.equal(result.percentage, 50);
 });
+
+test("les valeurs historiques françaises comptent comme réponses finales", () => {
+  const result = calculateAuditProgress(keys(3), [
+    { questionKey: "Q1", responseValue: "partiel" },
+    { questionKey: "Q2", responseValue: "non-conforme" },
+    { questionKey: "Q3", responseValue: "brouillon" },
+  ]);
+  assert.equal(result.finalApplicableResponses, 2);
+  assert.equal(result.draftResponses, 1);
+  assert.equal(result.percentage, 66.67);
+});

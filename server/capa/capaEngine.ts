@@ -16,13 +16,11 @@
 
 import type { Ecart, Gravite, Criticality } from "../scoring/types";
 import type { CapaActionDraft, CapaReferentielImpacte, CapaStatus } from "./types";
+import { classifyNonConformityValue } from "../response-values";
 
 /** Normalise uniquement les réponses constituant réellement un écart. */
 export function classifyNonConformityResponse(value: unknown): "non_conforme" | "partiel" | null {
-  const normalized = String(value ?? "").trim().toLowerCase().replace(/[ -]/g, "_");
-  if (["partial", "partiel", "partially_compliant", "partiellement_conforme"].includes(normalized)) return "partiel";
-  if (["non_compliant", "non_conforme", "nonconforme", "noncompliant", "nok", "nc"].includes(normalized)) return "non_conforme";
-  return null;
+  return classifyNonConformityValue(value);
 }
 
 /** Construit le brouillon d'action pré-rempli pour un écart détecté. */

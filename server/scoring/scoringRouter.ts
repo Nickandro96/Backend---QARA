@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, safeJsonParse } from "../db";
-import { audits, audit_responses, questions, processus, referentiels } from "../../drizzle/schema";
+import { audit_responses, questions, processus, referentiels } from "../../drizzle/schema";
 import { buildScoringResult } from "./scoringEngine";
 import type { ScoringQuestion, ScoringResponse, ResponseValue } from "./types";
+import { fetchAuditScopedQuestions, getAuditContextInternal } from "../mdr-router";
+import { normalizeResponseValue } from "../response-values";
 
 /**
  * Reconstruit les objets `ScoringQuestion`/`ScoringResponse` (voir ./types.ts)
@@ -17,7 +19,7 @@ import type { ScoringQuestion, ScoringResponse, ResponseValue } from "./types";
  * `audit_responses` (voir docs/audit/08-moteur-scoring.md).
  */
 function toScoringResponse(row: { questionKey: string; responseValue: string | null }): ScoringResponse {
-  const raw = row.responseValue ?? "in_progress";
+  const raw = normalizeResponseValue(row.responseValue);
   if (raw === "not_applicable" || raw === "in_progress") {
     return { questionKey: row.questionKey, responseValue: raw as ResponseValue };
   }
@@ -39,14 +41,8 @@ export async function loadAuditScoringContext(
   auditId: number,
   userId: number
 ) {
-  const [audit] = await db
-    .select()
-    .from(audits)
-    .where(and(eq(audits.id, auditId), eq(audits.userId, userId)))
-    .limit(1);
-  if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit introuvable" });
-
-  const referentialIds: number[] = safeJsonParse(audit.referentialIds, []);
+  const auditContext = await getAuditContextInternal(db, userId, auditId);
+  const referentialIds: number[] = auditContext.referentialIds;
   if (referentialIds.length === 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -54,7 +50,20 @@ export async function loadAuditScoringContext(
     });
   }
 
-  const questionRows = await db.select().from(questions).where(and(inArray(questions.referentialId, referentialIds), eq(questions.isActive, true)));
+  // Source unique du périmètre : exactement les mêmes filtres rôle/processus/
+  // échantillonnage que le questionnaire et la progression de l'audit.
+  // L'ancienne requête prenait toutes les questions actives du référentiel
+  // (71 pour l'audit 41) alors que le questionnaire n'en exposait que 65.
+  const questionRows: Array<typeof questions.$inferSelect> = await fetchAuditScopedQuestions(db, {
+    auditId,
+    userId,
+    economicRole: auditContext.economicRole,
+    economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+    situationTags: auditContext.situationTags,
+    processIds: auditContext.processIds,
+    referentialIds,
+    select: getTableColumns(questions),
+  });
   const processRows = await db.select().from(processus);
   const processNameById = new Map(processRows.map((p) => [p.id, p.name]));
 

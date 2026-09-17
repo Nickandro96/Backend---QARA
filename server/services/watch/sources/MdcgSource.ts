@@ -72,7 +72,13 @@ export const MdcgSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     try {
-      const candidates = process.env.WATCH_MDCG_URL ? [process.env.WATCH_MDCG_URL] : [DEFAULT_URL, FALLBACK_URL];
+      // Une ancienne variable Railway ne doit pas condamner le connecteur :
+      // tester ensuite les URL officielles canoniques, sans doublon.
+      const candidates = Array.from(new Set([
+        ...(process.env.WATCH_MDCG_URL ? [process.env.WATCH_MDCG_URL] : []),
+        DEFAULT_URL,
+        FALLBACK_URL,
+      ]));
       let url = candidates[0];
       let html = "";
       let lastError: unknown;

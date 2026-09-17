@@ -14,6 +14,7 @@ import { eq, and } from "drizzle-orm";
 import { auditResponses, questions } from "../drizzle/schema";
 import { getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
 import { calculateAuditProgress } from "./audit-progress";
+import { normalizeResponseValue } from "./response-values";
 
 export const SCORE_MAP: Record<string, number> = {
   compliant: 100,
@@ -81,7 +82,7 @@ export async function computeGenericAuditStats(db: any, userId: number, auditId:
   let scoreCount = 0;
 
   for (const r of scopedResponses) {
-    const status = String(r.responseValue || "in_progress");
+    const status = String(normalizeResponseValue(r.responseValue));
     if (status in stats) {
       (stats as any)[status] += 1;
       if (status !== "in_progress") stats.answered += 1;

@@ -53,7 +53,9 @@ export const IsoNewsSource: UpdateSource = {
         const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 1 });
         parsed = extractRssItems(xml);
       } catch (rssError) {
-        if (process.env.WATCH_ISO_RSS) throw rssError;
+        // ISO refuse régulièrement l'ancien RSS (403), y compris lorsqu'une
+        // URL obsolète subsiste dans Railway. La page publique officielle est
+        // le repli autorisé dans tous les cas.
         const html = await fetchTextWithRetry(NEWS_URL, { timeoutMs: ctx.timeoutMs, retries: 1 });
         parsed = extractIsoNews(html);
       }

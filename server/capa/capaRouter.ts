@@ -397,11 +397,10 @@ export const capaRouter = router({
       );
       const questionByKey = new Map(questionRows.map((q) => [q.questionKey, q]));
 
-      const normalizedResponses = scoringResponses.map((response: any) => {
-        const classification = classifyNonConformityResponse(response.responseValue);
-        return classification ? { ...response, responseValue: classification === "non_conforme" ? "non_compliant" : "partial" } : response;
-      });
-      const { ecarts, couvertureCroisee } = buildScoringResult(scoringQuestions, normalizedResponses);
+      // Les réponses sont déjà normalisées par loadAuditScoringContext ; le
+      // CAPA consomme désormais strictement le même périmètre et les mêmes
+      // valeurs que scoring, progression et rapports.
+      const { ecarts, couvertureCroisee } = buildScoringResult(scoringQuestions, scoringResponses);
       const coverageByKey = new Map(couvertureCroisee.map((c) => [c.questionKey, c.referentielsCouverts]));
 
       const existingRows = await db

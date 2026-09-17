@@ -1,3 +1,5 @@
+import { normalizeResponseValue } from "./response-values";
+
 export const FINAL_RESPONSE_VALUES = new Set([
   "compliant", "partial", "non_compliant", "not_applicable",
   "0", "1", "2", "3", "4", "5",
@@ -24,7 +26,7 @@ export function calculateAuditProgress(
   for (const response of responses) {
     const key = String(response.questionKey);
     if (!keys.has(key) || responseByKey.has(key)) continue;
-    responseByKey.set(key, String(response.responseValue ?? "in_progress"));
+    responseByKey.set(key, String(normalizeResponseValue(response.responseValue)));
   }
 
   let finalApplicableResponses = 0;
