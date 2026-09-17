@@ -40,8 +40,8 @@ export const TgaSource: UpdateSource = {
     const results = await Promise.allSettled(FEEDS.map(async (feed) => {
       if (!isUrlAllowed(feed.url)) throw new Error("URL de source TGA refusée");
       const xml = await fetchTextWithRetry(feed.url, {
-        timeoutMs: Math.min(ctx.timeoutMs, 8_000),
-        retries: 0,
+        timeoutMs: Math.max(ctx.timeoutMs, 20_000),
+        retries: 1,
       });
       return parseTgaRss(xml, feed.sourceType);
     }));
