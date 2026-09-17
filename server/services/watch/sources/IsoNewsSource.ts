@@ -6,6 +6,7 @@ import { nowUtc, safeText, isUrlAllowed } from "../utils";
 // ISO publishes various RSS feeds; this one is public and stable-ish.
 const DEFAULT_RSS = "https://www.iso.org/contents/data/publication_feeds/iso_rss.xml";
 const NEWS_URL = "https://www.iso.org/home/insights-news/news/standards-world/news-list.html";
+const CURRENT_NEWS_URL = "https://www.iso.org/news.html";
 
 function extractRssItems(xml: string): { title: string; link: string; pubDate?: Date }[] {
   const items: { title: string; link: string; pubDate?: Date }[] = [];
@@ -48,7 +49,7 @@ export const IsoNewsSource: UpdateSource = {
     try {
       const url = process.env.WATCH_ISO_RSS ?? DEFAULT_RSS;
       if (!isUrlAllowed(url)) throw new Error("URL de source ISO refusée");
-      let parsed: { title: string; link: string; pubDate?: Date }[];
+      let parsed: { title: string; link: string; pubDate?: Date }[] | null = null;
       try {
         const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 1 });
         parsed = extractRssItems(xml);
@@ -56,8 +57,17 @@ export const IsoNewsSource: UpdateSource = {
         // ISO refuse régulièrement l'ancien RSS (403), y compris lorsqu'une
         // URL obsolète subsiste dans Railway. La page publique officielle est
         // le repli autorisé dans tous les cas.
-        const html = await fetchTextWithRetry(NEWS_URL, { timeoutMs: ctx.timeoutMs, retries: 1 });
-        parsed = extractIsoNews(html);
+        let lastError: unknown = rssError;
+        for (const newsUrl of [CURRENT_NEWS_URL, NEWS_URL]) {
+          try {
+            const html = await fetchTextWithRetry(newsUrl, { timeoutMs: ctx.timeoutMs, retries: 0 });
+            parsed = extractIsoNews(html);
+            break;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        if (!parsed) throw lastError;
       }
 
       // Keep only likely ISO 9001 / ISO 13485 signals to stay relevant.

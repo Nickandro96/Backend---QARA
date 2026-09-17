@@ -73,11 +73,12 @@ export const MdcgSource: UpdateSource = {
     const started = Date.now();
     try {
       // Une ancienne variable Railway ne doit pas condamner le connecteur :
-      // tester ensuite les URL officielles canoniques, sans doublon.
+      // commencer par les URL officielles canoniques, puis seulement tester
+      // l'éventuelle surcharge d'environnement.
       const candidates = Array.from(new Set([
-        ...(process.env.WATCH_MDCG_URL ? [process.env.WATCH_MDCG_URL] : []),
         DEFAULT_URL,
         FALLBACK_URL,
+        ...(process.env.WATCH_MDCG_URL ? [process.env.WATCH_MDCG_URL] : []),
       ]));
       let url = candidates[0];
       let html = "";

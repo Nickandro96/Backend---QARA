@@ -37,15 +37,43 @@ export const TgaSource: UpdateSource = {
   name: "TGA",
   async fetchUpdates(ctx) {
     const started = Date.now();
-    const items = [];
-    for (const feed of FEEDS) {
-      try {
-        if (!isUrlAllowed(feed.url)) throw new Error("URL de source TGA refusée");
-        items.push(...parseTgaRss(await fetchTextWithRetry(feed.url, { timeoutMs: ctx.timeoutMs, retries: 2 }), feed.sourceType));
-      } catch (error: any) {
-        return { items, health: { name: "TGA", ok: false, durationMs: Date.now() - started, items: items.length, message: error?.message ?? "error" } };
-      }
+    const results = await Promise.allSettled(FEEDS.map(async (feed) => {
+      if (!isUrlAllowed(feed.url)) throw new Error("URL de source TGA refusée");
+      const xml = await fetchTextWithRetry(feed.url, {
+        timeoutMs: Math.min(ctx.timeoutMs, 8_000),
+        retries: 0,
+      });
+      return parseTgaRss(xml, feed.sourceType);
+    }));
+    const items = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+    const errors = results.flatMap((result, index) => {
+      if (result.status === "fulfilled") return [];
+      const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      return [`${FEEDS[index].sourceType}: ${message}`];
+    });
+
+    if (errors.length === FEEDS.length) {
+      return {
+        items,
+        health: {
+          name: "TGA",
+          ok: false,
+          durationMs: Date.now() - started,
+          items: items.length,
+          message: errors.join(" | "),
+        },
+      };
     }
-    return { items, health: { name: "TGA", ok: true, durationMs: Date.now() - started, items: items.length } };
+
+    return {
+      items,
+      health: {
+        name: "TGA",
+        ok: true,
+        durationMs: Date.now() - started,
+        items: items.length,
+        message: errors.length ? `Collecte partielle : ${errors.join(" | ")}` : undefined,
+      },
+    };
   },
 };

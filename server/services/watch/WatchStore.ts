@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { RegulatoryUpdate, CompanyProfile } from "./types";
 import crypto from "crypto";
 import * as db from "../../db";
@@ -16,7 +16,16 @@ export async function getLastRefresh(): Promise<Date | null> {
   const database = await db.getDb();
   if (!database) return null;
 
-  const [row] = await database.select().from(watchRefreshRuns).where(eq(watchRefreshRuns.success, true)).orderBy(desc(watchRefreshRuns.finishedAt)).limit(1);
+  // A degraded collection is still a completed synchronization attempt.  Only
+  // exposing successful runs made the UI look frozen whenever one optional
+  // external source was unavailable, even though the other sources and their
+  // health states had been refreshed.
+  const [row] = await database
+    .select()
+    .from(watchRefreshRuns)
+    .where(isNotNull(watchRefreshRuns.finishedAt))
+    .orderBy(desc(watchRefreshRuns.finishedAt))
+    .limit(1);
   return row?.finishedAt ?? row?.startedAt ?? null;
 }
 
