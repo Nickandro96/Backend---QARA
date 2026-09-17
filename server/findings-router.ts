@@ -14,7 +14,8 @@ import { z } from "zod";
 import { eq, and, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
-import { findings, actions, audits } from "../drizzle/schema";
+import { findings, actions, audits, audit_responses, questions, capa_actions, capa_tasks } from "../drizzle/schema";
+import { classifyNonConformityResponse } from "./capa/capaEngine";
 
 async function assertOwnsAudit(db: any, userId: number, auditId: number) {
   const [audit] = await db
@@ -38,6 +39,19 @@ export const findingsRouter = router({
         .from(findings)
         .where(eq(findings.auditId, input.auditId));
 
+      const responseRows = await db
+        .select()
+        .from(audit_responses)
+        .where(and(eq(audit_responses.auditId, input.auditId), eq(audit_responses.userId, ctx.user.id)));
+      const ncResponses = responseRows.filter((row: any) => classifyNonConformityResponse(row.responseValue) !== null);
+      const questionRows = ncResponses.length ? await db.select().from(questions) : [];
+      const questionByKey = new Map(questionRows.map((q: any) => [q.questionKey, q]));
+      const capaRows = await db
+        .select()
+        .from(capa_actions)
+        .where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id)));
+      const capaByQuestionKey = new Map(capaRows.map((row: any) => [row.questionKey, row]));
+
       // Même remarque que pour les actions : le frontend ne reconnaît que
       // 'Open'/'InProgress'/'Closed' explicitement, sinon affiche la valeur
       // brute — normalise la casse pour ces trois cas connus.
@@ -60,12 +74,35 @@ export const findingsRouter = router({
         low: "Observation",
       };
 
-      return rows.map((f: any) => ({
+      const legacyRows = rows.map((f: any) => ({
         ...f,
         criticality: CRITICALITY_MAP[String(f.severity ?? "").toLowerCase()] ?? f.severity,
         processName: null,
         status: STATUS_MAP[f.status] ?? f.status,
       }));
+
+      const legacyQuestionKeys = new Set(legacyRows.map((row: any) => row.questionKey).filter(Boolean));
+      const responseFindings = ncResponses
+        .filter((response: any) => !legacyQuestionKeys.has(response.questionKey))
+        .map((response: any) => {
+          const question: any = questionByKey.get(response.questionKey);
+          const capa: any = capaByQuestionKey.get(response.questionKey);
+          const rawCriticality = String(capa?.criticality ?? question?.criticality ?? "medium").toLowerCase();
+          return {
+            id: `response-${response.id}`,
+            auditId: input.auditId,
+            questionKey: response.questionKey,
+            title: question?.title ?? question?.questionText ?? response.questionKey,
+            description: response.responseComment ?? response.note ?? capa?.ecartIdentifie ?? `Réponse « ${response.responseValue} »`,
+            criticality: CRITICALITY_MAP[rawCriticality] ?? "Mineure",
+            processName: capa?.processName ?? question?.processDetail ?? null,
+            status: capa?.statut?.startsWith("cloturee") ? "Closed" : capa?.statut === "en_cours" ? "InProgress" : "Open",
+            source: "audit_response",
+            responseValue: response.responseValue,
+          };
+        });
+
+      return [...legacyRows, ...responseFindings];
     }),
 });
 
@@ -82,12 +119,19 @@ export const actionsRouter = router({
         .from(findings)
         .where(eq(findings.auditId, input.auditId));
       const findingIds = findingRows.map((f: any) => f.id);
-      if (findingIds.length === 0) return [];
-
-      const rows = await db
+      const rows = findingIds.length === 0 ? [] : await db
         .select()
         .from(actions)
         .where(inArray(actions.findingId, findingIds));
+
+      const capaRows = await db
+        .select({ id: capa_actions.id })
+        .from(capa_actions)
+        .where(and(eq(capa_actions.auditId, input.auditId), eq(capa_actions.userId, ctx.user.id)));
+      const taskRows = capaRows.length === 0 ? [] : await db
+        .select()
+        .from(capa_tasks)
+        .where(and(inArray(capa_tasks.capaId, capaRows.map((row: any) => row.id)), eq(capa_tasks.userId, ctx.user.id)));
 
       // Le frontend (AuditDetail.tsx) ne reconnaît que 'Completed'/'InProgress'
       // explicitement dans son badge ; toute autre valeur affiche "Planifiée"
@@ -98,11 +142,25 @@ export const actionsRouter = router({
         closed: "Completed",
       };
 
-      return rows.map((a: any) => ({
+      const legacyActions = rows.map((a: any) => ({
         ...a,
         title: a.actionCode || a.description?.slice(0, 60) || `Action #${a.id}`,
         status: STATUS_MAP[a.status] ?? a.status,
       }));
+
+      const capaActions = taskRows.map((task: any) => ({
+        id: `capa-task-${task.id}`,
+        findingId: null,
+        actionCode: null,
+        title: task.title,
+        description: task.description,
+        responsible: task.responsible,
+        dueDate: task.dueDate,
+        status: task.status === "cloturee" ? "Completed" : task.status === "en_cours" || task.status === "a_verifier" ? "InProgress" : task.status,
+        source: "capa_task",
+      }));
+
+      return [...legacyActions, ...capaActions];
     }),
 
   /**
