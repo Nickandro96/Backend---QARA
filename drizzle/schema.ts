@@ -811,7 +811,7 @@ export const regulatoryUpdates = mysqlTable(
     licenceVerified: boolean("licence_verified"),
     sourceRegistryId: varchar("source_id", { length: 64 }),
 
-    jurisdiction: mysqlEnum("jurisdiction", ["EU", "UK", "CH", "US"]).notNull().default("EU"),
+    jurisdiction: mysqlEnum("jurisdiction", ["EU", "UK", "CH", "US", "CA", "AU", "JP"]).notNull().default("EU"),
 
     tags: json("tags"),
     impactedMdr: json("impactedMdr"),

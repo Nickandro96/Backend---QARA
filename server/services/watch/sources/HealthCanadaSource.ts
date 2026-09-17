@@ -30,7 +30,7 @@ export function parseHealthCanadaPayload(raw: string) {
     return {
       type: "NOTICE" as const, title, publishedAt, effectiveAt: null, status: "NEW" as const,
       sourceName: "Health Canada", sourceUrl, sourceId: officialId, officialId, rawContent,
-      languageSource: "en", sourceRegistryId: SOURCE_ID, jurisdiction: "UK" as const,
+      languageSource: "en", sourceRegistryId: SOURCE_ID, jurisdiction: "CA" as const,
       tags: [{ key: "market", value: "CA" }, { key: "source_type", value: sourceType }],
       hash: computeUpdateHash({ type: "NOTICE", title, sourceName: "Health Canada", sourceId: officialId, sourceUrl, publishedAt }),
       retrievedAt: nowUtc(),

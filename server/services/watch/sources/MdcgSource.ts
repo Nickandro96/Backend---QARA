@@ -97,11 +97,12 @@ export const MdcgSource: UpdateSource = {
         .filter((l) => /\.pdf(\?|$)/i.test(l.href) || /guidance|mdcg/i.test(l.text));
 
       // Keep only plausible MDCG links
+      let missingPublicationDates = 0;
       const items = links
         .map((l) => {
           const code = extractDocCode(l.text);
           const publishedAt = parseDateFromText(l.text);
-          if (!publishedAt) console.warn("[Watch][MDCG] publication date absent; preserving null", { sourceUrl: l.href });
+          if (!publishedAt) missingPublicationDates += 1;
           const title = code ? `${code} — ${l.text}` : l.text;
           const sourceId = code;
           const revision = extractMdcgRevision(l.text);
@@ -131,6 +132,13 @@ export const MdcgSource: UpdateSource = {
         })
         // de-dupe by hash already, upstream will also dedupe
         .slice(0, 200);
+
+      if (missingPublicationDates > 0) {
+        console.warn("[Watch][MDCG] publications sans date; valeur null conservée", {
+          count: missingPublicationDates,
+          total: links.length,
+        });
+      }
 
       return {
         items,

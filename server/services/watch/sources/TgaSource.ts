@@ -6,9 +6,9 @@ import { parseRssItems, stableOfficialId, stripHtml, tagValue } from "./SourcePa
 
 const SOURCE_ID = "tga";
 const FEEDS = [
-  { url: "https://www.tga.gov.au/feeds/alert/safety-alerts.xml", sourceType: "alert" },
-  { url: "https://www.tga.gov.au/feeds/alert/market-actions.xml", sourceType: "recall" },
-  { url: "https://www.tga.gov.au/feeds/guidance.xml", sourceType: "guidance" },
+  { url: "https://tga.gov.au/feeds/alert/safety-alerts.xml", sourceType: "alert" },
+  { url: "https://tga.gov.au/feeds/alert/market-actions.xml", sourceType: "recall" },
+  { url: "https://tga.gov.au/feeds/guidance.xml", sourceType: "guidance" },
 ];
 
 export function parseTgaRss(xml: string, sourceType = "notice") {
@@ -25,7 +25,7 @@ export function parseTgaRss(xml: string, sourceType = "notice") {
       type: sourceType === "guidance" ? "GUIDANCE" as const : "NOTICE" as const,
       title, publishedAt, effectiveAt: null, status: "NEW" as const,
       sourceName: "TGA", sourceUrl, sourceId: officialId, officialId, rawContent,
-      languageSource: "en", sourceRegistryId: SOURCE_ID, jurisdiction: "UK" as const,
+      languageSource: "en", sourceRegistryId: SOURCE_ID, jurisdiction: "AU" as const,
       tags: [{ key: "market", value: "AU" }, { key: "source_type", value: sourceType }],
       hash: computeUpdateHash({ type: sourceType === "guidance" ? "GUIDANCE" : "NOTICE", title, sourceName: "TGA", sourceId: officialId, sourceUrl, publishedAt }),
       retrievedAt: nowUtc(),

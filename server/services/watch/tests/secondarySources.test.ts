@@ -30,8 +30,16 @@ function assertContract(items: any[], language: "fr" | "en") {
 
 test("ANSM RSS contract", () => assertContract(parseAnsmRss(fixture("ansm.xml")), "fr"));
 test("FDA MedWatch openFDA contract", () => assertContract(parseFdaMedwatchPayload(fixture("fda-medwatch.json") + ""), "en"));
-test("Health Canada contract", () => assertContract(parseHealthCanadaPayload(fixture("health-canada.json")), "en"));
-test("TGA RSS contract", () => assertContract(parseTgaRss(fixture("tga.xml"), "alert"), "en"));
+test("Health Canada contract", () => {
+  const items = parseHealthCanadaPayload(fixture("health-canada.json"));
+  assertContract(items, "en");
+  assert.ok(items.every((item: any) => item.jurisdiction === "CA"));
+});
+test("TGA RSS contract", () => {
+  const items = parseTgaRss(fixture("tga.xml"), "alert");
+  assertContract(items, "en");
+  assert.ok(items.every((item: any) => item.jurisdiction === "AU"));
+});
 test("MHRA Atom contract", () => assertContract(parseMhraAtom(fixture("mhra.atom")), "en"));
 
 test("registry contains the eight P0/P1-C sources", () => {

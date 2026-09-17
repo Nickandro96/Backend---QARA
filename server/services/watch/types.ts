@@ -1,4 +1,4 @@
-export type Jurisdiction = "EU" | "UK" | "CH" | "US";
+export type Jurisdiction = "EU" | "UK" | "CH" | "US" | "CA" | "AU" | "JP";
 
 export type RegulatoryUpdateType =
   | "REGULATION"
