@@ -21,7 +21,7 @@ async function throttle(url: string): Promise<void> {
   lastRequestByDomain.set(domain, Date.now());
 }
 
-export async function fetchTextWithRetry(url: string, opts: { timeoutMs: number; retries?: number }): Promise<string> {
+export async function fetchTextWithRetry(url: string, opts: { timeoutMs: number; retries?: number; headers?: Record<string, string> }): Promise<string> {
   const retries = opts.retries ?? 2;
   let lastErr: unknown = null;
 
@@ -34,6 +34,7 @@ export async function fetchTextWithRetry(url: string, opts: { timeoutMs: number;
         headers: {
           "User-Agent": WATCH_USER_AGENT,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          ...opts.headers,
         },
         // follow redirects
         maxRedirects: 5,

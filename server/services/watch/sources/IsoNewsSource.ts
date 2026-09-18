@@ -3,112 +3,49 @@ import { fetchTextWithRetry } from "./_http";
 import { computeUpdateHash } from "../enrichment/Dedupe";
 import { nowUtc, safeText, isUrlAllowed } from "../utils";
 
-// ISO publishes various RSS feeds; this one is public and stable-ish.
-const DEFAULT_RSS = "https://www.iso.org/contents/data/publication_feeds/iso_rss.xml";
-const NEWS_URL = "https://www.iso.org/home/insights-news/news/standards-world/news-list.html";
-const CURRENT_NEWS_URL = "https://www.iso.org/news.html";
+const OPEN_DATA_URL = "https://isopublicstorageprod.blob.core.windows.net/opendata/_latest/iso_deliverables_metadata/json/iso_deliverables_metadata.jsonl";
+const RELEVANT = /\b(?:ISO(?:\/IEC)?\s*)?(?:9001|13485|14971|19011|10993|11607|14155|15223|20417|62304|62366|27001)\b/i;
 
-function extractRssItems(xml: string): { title: string; link: string; pubDate?: Date }[] {
-  const items: { title: string; link: string; pubDate?: Date }[] = [];
-  const itemRe = /<item>([\s\S]*?)<\/item>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = itemRe.exec(xml))) {
-    const chunk = m[1];
-    const title = chunk.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1]
-      ?? chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1]
-      ?? "";
-    const link = chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? "";
-    const pub = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
-    const pubDate = pub ? new Date(pub) : undefined;
-    if (!title || !link) continue;
-    items.push({ title: safeText(title), link: safeText(link), pubDate: pubDate && !isNaN(pubDate.getTime()) ? pubDate : undefined });
-  }
-  return items;
-}
+type IsoRow = { id?: number; reference?: string; title?: Record<string, string>; publicationDate?: string; currentStage?: number; edition?: number };
 
-export function extractIsoNews(html: string): { title: string; link: string; pubDate?: Date }[] {
-  const items: { title: string; link: string; pubDate?: Date }[] = [];
-  const seen = new Set<string>();
-  const re = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(html))) {
-    const title = safeText(match[2].replace(/<[^>]+>/g, " "));
-    if (!/\bISO\s*(9001|13485)\b|quality\s+management/i.test(title)) continue;
-    const link = new URL(match[1], NEWS_URL).toString();
-    if (seen.has(link)) continue;
-    seen.add(link);
-    items.push({ title, link });
+export function parseIsoOpenData(jsonl: string): IsoRow[] {
+  const rows: IsoRow[] = [];
+  for (const line of jsonl.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line) as IsoRow;
+      if (RELEVANT.test(row.reference ?? "")) rows.push(row);
+    } catch { /* one malformed row must not discard the daily dataset */ }
   }
-  return items;
+  return rows;
 }
 
 export const IsoNewsSource: UpdateSource = {
-  name: "ISO (public RSS)",
+  name: "ISO Open Data",
   async fetchUpdates(ctx) {
     const started = Date.now();
     try {
-      const url = process.env.WATCH_ISO_RSS ?? DEFAULT_RSS;
-      if (!isUrlAllowed(url)) throw new Error("URL de source ISO refusée");
-      let parsed: { title: string; link: string; pubDate?: Date }[] | null = null;
-      try {
-        const xml = await fetchTextWithRetry(url, { timeoutMs: ctx.timeoutMs, retries: 1 });
-        parsed = extractRssItems(xml);
-      } catch (rssError) {
-        // ISO refuse régulièrement l'ancien RSS (403), y compris lorsqu'une
-        // URL obsolète subsiste dans Railway. La page publique officielle est
-        // le repli autorisé dans tous les cas.
-        let lastError: unknown = rssError;
-        for (const newsUrl of [CURRENT_NEWS_URL, NEWS_URL]) {
-          try {
-            const html = await fetchTextWithRetry(newsUrl, { timeoutMs: ctx.timeoutMs, retries: 0 });
-            parsed = extractIsoNews(html);
-            break;
-          } catch (error) {
-            lastError = error;
-          }
-        }
-        if (!parsed) throw lastError;
-      }
-
-      // Keep only likely ISO 9001 / ISO 13485 signals to stay relevant.
-      const filtered = parsed.filter((it) => /\bISO\s*(9001|13485)\b/i.test(it.title) || /quality\s+management/i.test(it.title));
-
-      const items = filtered.slice(0, 50).map((it) => {
-        const publishedAt = it.pubDate ?? null;
-        if (!publishedAt) console.warn("[Watch][ISO] publication date absent; preserving null", { sourceUrl: it.link });
-        const title = it.title;
+      const url = process.env.WATCH_ISO_OPEN_DATA_URL ?? OPEN_DATA_URL;
+      if (!isUrlAllowed(url)) throw new Error("URL ISO Open Data refusée");
+      const payload = await fetchTextWithRetry(url, { timeoutMs: Math.max(ctx.timeoutMs, 30_000), retries: 1 });
+      const items = parseIsoOpenData(payload).slice(0, 100).map((row) => {
+        const reference = safeText(row.reference ?? `ISO-${row.id}`);
+        const label = safeText(row.title?.fr ?? row.title?.en ?? "Métadonnées de norme ISO");
+        const parsedDate = row.publicationDate ? new Date(row.publicationDate) : null;
+        const publishedAt = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null;
+        const sourceUrl = `https://www.iso.org/search.html?q=${encodeURIComponent(reference)}`;
+        const title = `${reference} — ${label}`;
         return {
-          type: "QUALITY" as const,
-          title,
-          publishedAt,
-          effectiveAt: null,
-          status: "NEW" as const,
-          sourceName: "ISO",
-          sourceUrl: it.link,
-          sourceId: it.link,
-          jurisdiction: "EU" as const,
-          tags: [{ key: "iso" }],
-          hash: computeUpdateHash({
-            type: "QUALITY",
-            title,
-            sourceName: "ISO",
-            sourceId: it.link,
-            sourceUrl: it.link,
-            publishedAt,
-          }),
+          type: "STANDARD" as const, title, publishedAt, effectiveAt: null, status: "UPDATED" as const,
+          sourceName: "ISO Open Data", sourceUrl, sourceId: String(row.id ?? reference), jurisdiction: "EU" as const,
+          tags: [{ key: "licence", value: "ODC-By-1.0" }, { key: "stage", value: String(row.currentStage ?? "") }, { key: "edition", value: String(row.edition ?? "") }],
+          hash: computeUpdateHash({ type: "STANDARD", title: `${title}|${row.currentStage ?? ""}|${row.edition ?? ""}`, sourceName: "ISO Open Data", sourceId: String(row.id ?? reference), sourceUrl, publishedAt }),
           retrievedAt: nowUtc(),
         };
       });
-
-      return {
-        items,
-        health: { name: "ISO", ok: true, durationMs: Date.now() - started, items: items.length },
-      };
+      return { items, health: { name: "ISO Open Data", ok: true, durationMs: Date.now() - started, items: items.length } };
     } catch (e: any) {
-      return {
-        items: [],
-        health: { name: "ISO", ok: false, durationMs: Date.now() - started, message: e?.message ?? "error" },
-      };
+      return { items: [], health: { name: "ISO Open Data", ok: false, durationMs: Date.now() - started, message: e?.message ?? "error" } };
     }
   },
 };

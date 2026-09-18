@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseFederalRegisterPayload } from "../sources/FederalRegisterSource";
 import { parseCellarSparqlXml } from "../sources/EurLexMdrSource";
 import { extractMdcgLinks, extractMdcgRevision, parseDateFromText } from "../sources/MdcgSource";
+import { parseIsoOpenData } from "../sources/IsoNewsSource";
 const fixture = (name: string) => readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8");
 
 test("Federal Register contract maps official id and dates", () => {
@@ -23,4 +24,15 @@ test("MDCG HTML contract keeps missing dates null", () => {
 test("MDCG extracts named publication dates and revisions", () => {
   assert.equal(parseDateFromText("Published 15 August 2026")?.toISOString(), "2026-08-15T00:00:00.000Z");
   assert.equal(extractMdcgRevision("MDCG 2021-1 Rev. 1"), "1");
+});
+
+test("ISO Open Data keeps only relevant medical-device and QMS standards", () => {
+  const payload = [
+    JSON.stringify({ id: 1, reference: "ISO 13485:2016", title: { en: "Medical devices — Quality management systems" }, currentStage: 6093 }),
+    JSON.stringify({ id: 2, reference: "ISO 12345:2020", title: { en: "Unrelated standard" }, currentStage: 6060 }),
+    "invalid-json",
+  ].join("\n");
+  const rows = parseIsoOpenData(payload);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].reference, "ISO 13485:2016");
 });

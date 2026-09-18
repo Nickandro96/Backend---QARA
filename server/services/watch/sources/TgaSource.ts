@@ -6,10 +6,15 @@ import { parseRssItems, stableOfficialId, stripHtml, tagValue } from "./SourcePa
 
 const SOURCE_ID = "tga";
 const FEEDS = [
-  { url: "https://tga.gov.au/feeds/alert/safety-alerts.xml", sourceType: "alert" },
-  { url: "https://tga.gov.au/feeds/alert/market-actions.xml", sourceType: "recall" },
-  { url: "https://tga.gov.au/feeds/guidance.xml", sourceType: "guidance" },
+  { path: "/feeds/alert/safety-alerts.xml", relayPath: "/tga/safety", sourceType: "alert" },
+  { path: "/feeds/alert/market-actions.xml", relayPath: "/tga/market-actions", sourceType: "recall" },
+  { path: "/feeds/guidance.xml", relayPath: "/tga/guidance", sourceType: "guidance" },
 ];
+
+function feedUrl(feed: (typeof FEEDS)[number]): string {
+  const relay = process.env.WATCH_RELAY_BASE_URL?.replace(/\/$/, "");
+  return relay ? `${relay}${feed.relayPath}` : `https://tga.gov.au${feed.path}`;
+}
 
 export function parseTgaRss(xml: string, sourceType = "notice") {
   return parseRssItems(xml).map((item) => {
@@ -38,10 +43,13 @@ export const TgaSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     const results = await Promise.allSettled(FEEDS.map(async (feed) => {
-      if (!isUrlAllowed(feed.url)) throw new Error("URL de source TGA refusée");
-      const xml = await fetchTextWithRetry(feed.url, {
+      const url = feedUrl(feed);
+      if (!isUrlAllowed(url)) throw new Error("URL de source TGA refusée");
+      const token = process.env.WATCH_RELAY_TOKEN;
+      const xml = await fetchTextWithRetry(url, {
         timeoutMs: Math.max(ctx.timeoutMs, 20_000),
         retries: 1,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       return parseTgaRss(xml, feed.sourceType);
     }));

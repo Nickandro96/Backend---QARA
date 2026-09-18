@@ -1,0 +1,6 @@
+name = "qara-watch-relay"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# Configure the secret separately:
+# npx wrangler secret put WATCH_RELAY_TOKEN

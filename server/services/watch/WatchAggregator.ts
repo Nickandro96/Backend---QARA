@@ -301,7 +301,7 @@ function sourceRegistryIdFor(sourceName: string): string | null {
   if (value.includes("eur-lex")) return "eur-lex-mdr";
   if (value.includes("mdcg")) return "mdcg";
   if (value.includes("harmonised")) return "harmonised-standards";
-  if (value === "iso") return "iso-news";
+  if (value.includes("iso open data") || value === "iso") return "iso-open-data";
   if (value.includes("federal register")) return "federal-register";
   if (value.includes("federalregister")) return "federal-register";
   if (value.includes("ansm")) return "ansm";
