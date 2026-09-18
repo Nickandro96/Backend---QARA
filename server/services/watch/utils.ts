@@ -44,6 +44,7 @@ const ALLOWED_WATCH_HOSTS: readonly string[] = [
   "publications.europa.eu",
   // Normalisation
   "iso.org",
+  "isopublicstorageprod.blob.core.windows.net",
   "iaf.nu",
   "imdrf.org",
   // France — ANSM
@@ -57,6 +58,8 @@ const ALLOWED_WATCH_HOSTS: readonly string[] = [
   "gov.uk",
   // Australie — TGA
   "tga.gov.au",
+  // Relais QARA Cloudflare, limité aux routes TGA et protégé par jeton
+  "qara-watch-relay.nickandroklauss.workers.dev",
 ];
 
 export function isUrlAllowed(url: string): boolean {

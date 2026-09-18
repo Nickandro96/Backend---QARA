@@ -14,6 +14,8 @@ test("autorise les domaines des régulateurs officiels (rapport QA 2026-09-02)",
     "https://health.ec.europa.eu/latest-updates_en",
     "https://eur-lex.europa.eu/oj/direct-access.html",
     "https://www.iso.org/news.html",
+    "https://isopublicstorageprod.blob.core.windows.net/opendata/_latest/iso_deliverables_metadata/json/iso_deliverables_metadata.jsonl",
+    "https://qara-watch-relay.nickandroklauss.workers.dev/tga/safety",
   ]) {
     assert.equal(isUrlAllowed(url), true, url);
   }
