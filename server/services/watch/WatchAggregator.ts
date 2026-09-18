@@ -31,6 +31,7 @@ import {
   getCompanyProfile,
   upsertCompanyProfile,
   upsertSourceRegistry,
+  retireLegacySourceRegistryEntries,
   updateSourceCollectionState,
 } from "./WatchStore";
 import { REGULATORY_SOURCE_REGISTRY } from "./registry";
@@ -170,7 +171,17 @@ export async function runRefresh(trigger: "page_open" | "job" | "manual"): Promi
   }
 
   const errors: string[] = [];
-  const sources = DEFAULT_SOURCES;
+  const activeSourceIds = new Set(
+    REGULATORY_SOURCE_REGISTRY.filter((source) => source.active).map((source) => source.id),
+  );
+  const sources = DEFAULT_SOURCES.filter((source) => {
+    const id = sourceRegistryIdFor(source.name);
+    return id !== null && activeSourceIds.has(id);
+  });
+
+  // The former ISO news/RSS connector is replaced by ISO Open Data. Keeping
+  // its stale DB row active makes the product permanently appear degraded.
+  await retireLegacySourceRegistryEntries(["ISO public RSS"]);
 
   for (const source of REGULATORY_SOURCE_REGISTRY) {
     const { authorityType: _authorityType, ...persistedSource } = source;

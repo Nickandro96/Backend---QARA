@@ -11,9 +11,25 @@ const FEEDS = [
   { path: "/feeds/guidance.xml", relayPath: "/tga/guidance", sourceType: "guidance" },
 ];
 
-function feedUrl(feed: (typeof FEEDS)[number]): string {
-  const relay = process.env.WATCH_RELAY_BASE_URL?.replace(/\/$/, "");
-  return relay ? `${relay}${feed.relayPath}` : `https://tga.gov.au${feed.path}`;
+export function tgaFeedRequest(feed: (typeof FEEDS)[number], env: NodeJS.ProcessEnv = process.env): { url: string; token?: string } {
+  const authorizedBase = env.WATCH_TGA_FEED_BASE_URL?.replace(/\/$/, "");
+  if (authorizedBase) {
+    return { url: `${authorizedBase}${feed.path}`, token: env.WATCH_TGA_FEED_TOKEN };
+  }
+  const relay = env.WATCH_RELAY_BASE_URL?.replace(/\/$/, "");
+  if (relay) return { url: `${relay}${feed.relayPath}`, token: env.WATCH_RELAY_TOKEN };
+  return { url: `https://www.tga.gov.au${feed.path}` };
+}
+
+function isConfiguredTgaUrlAllowed(url: string): boolean {
+  if (isUrlAllowed(url)) return true;
+  const configuredBase = process.env.WATCH_TGA_FEED_BASE_URL;
+  if (!configuredBase) return false;
+  try {
+    return new URL(url).origin === new URL(configuredBase).origin;
+  } catch {
+    return false;
+  }
 }
 
 export function parseTgaRss(xml: string, sourceType = "notice") {
@@ -43,9 +59,8 @@ export const TgaSource: UpdateSource = {
   async fetchUpdates(ctx) {
     const started = Date.now();
     const results = await Promise.allSettled(FEEDS.map(async (feed) => {
-      const url = feedUrl(feed);
-      if (!isUrlAllowed(url)) throw new Error("URL de source TGA refusée");
-      const token = process.env.WATCH_RELAY_TOKEN;
+      const { url, token } = tgaFeedRequest(feed);
+      if (!isConfiguredTgaUrlAllowed(url)) throw new Error("URL de source TGA refusée");
       const xml = await fetchTextWithRetry(url, {
         timeoutMs: Math.max(ctx.timeoutMs, 20_000),
         retries: 1,

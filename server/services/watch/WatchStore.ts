@@ -218,6 +218,19 @@ export async function upsertSourceRegistry(source: typeof regulatorySources.$inf
   else await database.insert(regulatorySources).values(source);
 }
 
+export async function retireLegacySourceRegistryEntries(names: string[]): Promise<void> {
+  const database = await db.getDb();
+  if (!database) return;
+  for (const name of names) {
+    await database.update(regulatorySources).set({
+      active: false,
+      lastError: null,
+      lastErrorAt: null,
+      updatedAt: new Date(),
+    }).where(eq(regulatorySources.name, name));
+  }
+}
+
 export async function updateSourceCollectionState(input: { id: string; ok: boolean; error?: string }): Promise<void> {
   const database = await db.getDb();
   if (!database) return;

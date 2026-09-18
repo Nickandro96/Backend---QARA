@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { REGULATORY_SOURCE_REGISTRY } from "../registry";
+import { isTgaEnabled, REGULATORY_SOURCE_REGISTRY } from "../registry";
 import { parseAnsmRss } from "../sources/AnsmSource";
 import { parseFdaMedwatchPayload } from "../sources/FdaMedwatchSource";
 import { parseHealthCanadaPayload } from "../sources/HealthCanadaSource";
 import { parseMhraAtom } from "../sources/MhraSource";
-import { parseTgaRss } from "../sources/TgaSource";
+import { parseTgaRss, tgaFeedRequest } from "../sources/TgaSource";
 
 const fixture = (name: string) =>
   readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8");
@@ -39,6 +39,23 @@ test("TGA RSS contract", () => {
   const items = parseTgaRss(fixture("tga.xml"), "alert");
   assertContract(items, "en");
   assert.ok(items.every((item: any) => item.jurisdiction === "AU"));
+});
+
+test("TGA is opt-in until an authorized relay is configured", () => {
+  assert.equal(isTgaEnabled({}), false);
+  assert.equal(isTgaEnabled({ WATCH_TGA_ENABLED: "true" }), true);
+});
+
+test("TGA supports a dedicated authorized upstream without leaking the generic relay token", () => {
+  const feed = { path: "/feeds/guidance.xml", relayPath: "/tga/guidance", sourceType: "guidance" };
+  assert.deepEqual(tgaFeedRequest(feed, {
+    WATCH_TGA_FEED_BASE_URL: "https://authorized.example/",
+    WATCH_TGA_FEED_TOKEN: "dedicated-token",
+    WATCH_RELAY_TOKEN: "generic-token",
+  }), {
+    url: "https://authorized.example/feeds/guidance.xml",
+    token: "dedicated-token",
+  });
 });
 test("MHRA Atom contract", () => assertContract(parseMhraAtom(fixture("mhra.atom")), "en"));
 
