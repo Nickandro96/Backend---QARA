@@ -295,6 +295,8 @@ export async function fetchAuditScopedQuestions(db: any, params: {
   processIds: string[];
   referentialIds: number[];
   select: any;
+  /** Sampling controls presentation, not write authorization. */
+  applySampling?: boolean;
 }) {
   const { economicRole, economicRolesFromOnboarding = [], situationTags = [], processIds, referentialIds, select } = params;
   const useOnboardingScope = economicRolesFromOnboarding.length > 0;
@@ -400,7 +402,7 @@ export async function fetchAuditScopedQuestions(db: any, params: {
     rows = await applyOnboardingScopeFilter(db, rows, finalWhere, economicRolesFromOnboarding, situationTags);
   }
 
-  if (params.auditId > 0) {
+  if (params.auditId > 0 && params.applySampling !== false) {
     const [auditSampling] = await db.select({ sampleMode: (audits as any).sampleMode }).from(audits)
       .where(and(eq((audits as any).id, params.auditId), eq((audits as any).userId, params.userId))).limit(1);
     return sampleAuditQuestions(rows || [], auditSampling?.sampleMode as SampleMode);
@@ -1280,6 +1282,7 @@ export const mdrRouter = router({
         processIds: auditContext.processIds,
         referentialIds: auditContext.referentialIds,
         select: { questionKey: (questions as any).questionKey, processId: (questions as any).processId },
+        applySampling: false,
       });
       assertQuestionBelongsToAudit(input.questionKey, scopedQuestions);
 

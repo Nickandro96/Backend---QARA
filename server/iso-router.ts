@@ -507,6 +507,7 @@ export const isoRouter = router({
         processIds: auditContext.processIds,
         referentialIds: auditContext.referentialIds,
         select: { questionKey: (questions as any).questionKey, processId: (questions as any).processId },
+        applySampling: false,
       });
       assertQuestionBelongsToAudit(questionKey, scopedQuestions);
 
