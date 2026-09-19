@@ -33,6 +33,7 @@ export interface CapaAction {
   criticality: Criticality;
   ecartIdentifie: string;
   analyseCauseRacine: string | null;
+  ai5Pourquoi?: Record<string, unknown> | null;
   actionRecommandee: string;
   actionRetenue: string | null;
   responsible: string | null;

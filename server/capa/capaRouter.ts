@@ -30,6 +30,7 @@ function toCapaAction(row: typeof capa_actions.$inferSelect): CapaAction {
     criticality: row.criticality as CapaAction["criticality"],
     ecartIdentifie: row.ecartIdentifie,
     analyseCauseRacine: row.analyseCauseRacine,
+    ai5Pourquoi: safeJsonParse<Record<string, unknown> | null>(row.ai5Pourquoi, null),
     actionRecommandee: row.actionRecommandee,
     actionRetenue: row.actionRetenue,
     responsible: row.responsible,

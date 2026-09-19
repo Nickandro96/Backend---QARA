@@ -58,6 +58,7 @@ export interface CapaEntry {
   gapReference: string;
   containment: string | null;
   rootCauseAnalysis: string | null;
+  fiveWhys: Array<{ question: string; reponse: string }>;
   rootCauseMethod: string | null;
   correctiveAction: string | null;
   responsible: string | null;
@@ -419,12 +420,20 @@ export async function assembleReportData(
     .filter((g) => g.linkedCapaId !== null)
     .map((g) => {
       const capa = capaRows.find((c) => c.id === g.linkedCapaId)!;
+      const fiveWhysJson = safeJsonParse<Record<string, unknown>>(capa.ai5Pourquoi, {});
+      const fiveWhys = [1, 2, 3, 4, 5].flatMap((index) => {
+        const item = fiveWhysJson[`pourquoi${index}`] as { question?: unknown; reponse?: unknown } | undefined;
+        return typeof item?.question === "string" && typeof item?.reponse === "string"
+          ? [{ question: item.question, reponse: item.reponse }]
+          : [];
+      });
       return {
         gapReference: g.reference,
         containment: capa.correctionImmediate,
         rootCauseAnalysis:
           capa.analyseCauseRacine ||
           ((capa.ai5Pourquoi as { causeRacineIdentifiee?: string } | null)?.causeRacineIdentifiee ?? null),
+        fiveWhys,
         rootCauseMethod: (capa as any).rootCauseMethod ?? null,
         correctiveAction: capa.actionRetenue || capa.actionRecommandee,
         responsible: capa.responsible,

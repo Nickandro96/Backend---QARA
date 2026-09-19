@@ -300,6 +300,13 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       doc.font("Helvetica").text(val(action.containment));
       doc.font("Helvetica-Bold").text(`${L("rootCauseAnalysis")} : `, { continued: true });
       doc.font("Helvetica").text(val(action.rootCauseAnalysis));
+      if (action.fiveWhys.length > 0) {
+        doc.font("Helvetica-Bold").text("Chaîne des 5 Pourquoi :");
+        action.fiveWhys.forEach((item, index) => {
+          doc.font("Helvetica").text(`${"  ".repeat(index)}Pourquoi ${index + 1} : ${item.question} → ${item.reponse}`);
+        });
+        doc.font("Helvetica-Bold").text(`Cause racine : ${val(action.rootCauseAnalysis)}`);
+      }
       doc.font("Helvetica-Bold").text(`${L("rootCauseMethod")} : `, { continued: true });
       doc.font("Helvetica").text(val(action.rootCauseMethod));
       doc.font("Helvetica-Bold").text(`${L("correctiveAction")} : `, { continued: true });
