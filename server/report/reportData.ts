@@ -81,6 +81,25 @@ export interface EvidenceEntry {
   createdAt: string;
 }
 
+const MISSING_OBJECTIVE_EVIDENCE =
+  "Preuve objective non documentée lors de l’audit — à compléter avant transmission à l’organisme notifié";
+
+export function buildAuditorGapStatement(input: {
+  requirementRef: string | null;
+  questionText: string | null;
+  responseComment: string | null;
+  gravite: GapEntry["gravite"];
+}): string {
+  const observation = input.responseComment?.trim() ||
+    `${(input.questionText?.trim() || "Question non renseignée").slice(0, 200)} (aucun commentaire d’auditeur saisi)`;
+  const classification = input.gravite === "majeur" ? "Majeure" : input.gravite === "mineur" ? "Mineure" : "Observation";
+  return `[Exigence : ${input.requirementRef || "référence non renseignée"}] — [Constat : ${observation}] — [Classement : ${classification}]`;
+}
+
+export function resolveObjectiveEvidence(note: string | null | undefined): string {
+  return note?.trim() || MISSING_OBJECTIVE_EVIDENCE;
+}
+
 export interface CertificateEntry {
   referentialCode: string | null;
   certificateNumber: string | null;
@@ -370,14 +389,20 @@ export async function assembleReportData(
     const r = responseByKey.get(ecart.questionKey);
     const capa = capaByKey.get(ecart.questionKey);
     const requirementRef = [q?.article, q?.annexe].filter(Boolean).join(" / ") || null;
-    const objectiveEvidence = r?.responseComment || r?.note || null;
+    const objectiveEvidence = resolveObjectiveEvidence(r?.note);
+    const gapStatement = buildAuditorGapStatement({
+      requirementRef,
+      questionText: q?.questionText ?? q?.title ?? null,
+      responseComment: r?.responseComment ?? null,
+      gravite: ecart.gravite,
+    });
 
     return {
       reference: formatGapReference(year, index),
       requirementRef,
       requirementTitle: dedupeRequirementTitle(q?.annexe ?? q?.article ?? null, q?.title ?? null),
       objectiveEvidence,
-      gapStatement: capa?.aiNonConformite || capa?.ecartIdentifie || buildGapStatement(ecart),
+      gapStatement,
       gravite: ecart.gravite,
       criticalityJustification: GRAVITE_JUSTIFICATION[ecart.gravite] ?? "",
       processName: ecart.processName,
