@@ -8,7 +8,7 @@ import { buildScoringResult } from "../scoring/scoringEngine";
 import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, classifyFinding, classifyNonConformityResponse, isTaskOverdue, isValidStatusTransition, sortByPriority, validateCapaTaskReadiness, validateTaskTransition, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
-import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
+import { buildRecommendedSequence, CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
 
 const CapaStatusEnum = z.enum([
   "ouverte",
@@ -364,13 +364,19 @@ export const capaRouter = router({
       }).where(eq(capa_actions.id, existing.id));
       const existingTasks = await db.select({ title: capa_tasks.title }).from(capa_tasks).where(and(eq(capa_tasks.capaId, existing.id), eq(capa_tasks.userId, ctx.user.id)));
       const existingTitles = new Set(existingTasks.map((task) => task.title.trim().toLocaleLowerCase("fr")));
+      const sequence = buildRecommendedSequence(input.selectedActions);
+      const dueDateByActionId = new Map(sequence.map((step) => {
+        const due = new Date();
+        due.setUTCDate(due.getUTCDate() + Number(step.fin.slice(2)));
+        return [step.actionId, due] as const;
+      }));
       const newTasks = input.selectedActions.filter((action) => !existingTitles.has(action.titre.trim().toLocaleLowerCase("fr"))).map((action) => ({
         capaId: existing.id,
         userId: ctx.user.id,
         title: action.titre,
         description: action.description,
         responsible: input.responsible,
-        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+        dueDate: dueDateByActionId.get(action.id) ?? (input.dueDate ? new Date(input.dueDate) : undefined),
         priority: (action.priorite === "immediate" ? "critique" : action.priorite === "court_terme" ? "haute" : "moyenne") as "critique" | "haute" | "moyenne",
         effectivenessCriterion: action.indicateurEfficacite,
       }));

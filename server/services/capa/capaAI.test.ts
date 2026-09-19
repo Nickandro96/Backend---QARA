@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CAPA_SYSTEM_PROMPT, CapaAIResultSchema, buildCapaPrompt, generateCapaAnalysis, serializeSelectedActions } from "./capaAI";
+import { CAPA_SYSTEM_PROMPT, CapaAIResultSchema, buildCapaPrompt, buildRecommendedSequence, generateCapaAnalysis, serializeSelectedActions } from "./capaAI";
 
 const valid = {
   contexteSituation: "La gestion des risques n'est pas démontrée par les preuves fournies dans l'audit.",
@@ -43,7 +43,7 @@ test("Anthropic request uses structured JSON with enough output tokens",async()=
   const result=await generateCapaAnalysis({questionText:"Q",questionKey:"K",criticality:"high",processSlug:null,referentialCode:"MDR",articleReference:"Art. 10(9)",responseValue:"partiel",responseComment:null,objectiveEvidence:null},{organisationName:null,economicRole:null,referentialCode:"MDR",processName:null},client);
   assert.equal(request.max_tokens,4000);
   assert.equal(request.output_config.format.type,"json_schema");
-  assert.deepEqual(result,valid);
+  assert.deepEqual(result,{...valid,sequenceRecommandee:buildRecommendedSequence(valid.actionsCorrectivesProposees as any)});
 });
 test("truncated Anthropic response is rejected before JSON parsing",async()=>{
   const client:any={messages:{create:async()=>({stop_reason:"max_tokens",content:[{type:"text",text:'{"contexteSituation":"incomplet"'}]})}};
@@ -61,4 +61,17 @@ test("seules les actions sélectionnées sont préparées pour la sauvegarde",()
   assert.match(saved.actionRetenue,/Action 1/);
   assert.doesNotMatch(saved.actionRetenue,/Action 2/);
   assert.match(saved.actionRetenue,/Action 3/);
+});
+
+test("les échéances CAPA sont réalistes et séquencées",()=>{
+  const actions = [
+    {...valid.actionsCorrectivesProposees[0],id:"1",complexite:"faible",priorite:"immediate"},
+    {...valid.actionsCorrectivesProposees[1],id:"2",complexite:"faible",priorite:"court_terme"},
+    {...valid.actionsCorrectivesProposees[2],id:"3",complexite:"elevee",priorite:"moyen_terme",delaiSuggeree:"180 jours"},
+  ] as any;
+  assert.deepEqual(buildRecommendedSequence(actions),[
+    {actionId:"1",debut:"J+0",fin:"J+30"},
+    {actionId:"2",debut:"J+30",fin:"J+90"},
+    {actionId:"3",debut:"J+90",fin:"J+270"},
+  ]);
 });

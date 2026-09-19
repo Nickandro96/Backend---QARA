@@ -7,7 +7,7 @@ export const CapaAIActionSchema = z.object({
   titre: z.string().min(3).max(300),
   description: z.string().min(10).max(3000),
   exigenceReglementaire: z.string().min(1).max(500),
-  delaiSuggeree: z.enum(["30 jours", "60 jours", "90 jours"]),
+  delaiSuggeree: z.enum(["30 jours", "60 jours", "90 jours", "180 jours"]),
   indicateurEfficacite: z.string().min(5).max(1000),
   complexite: z.enum(["faible", "moyenne", "elevee"]),
   priorite: z.enum(["immediate", "court_terme", "moyen_terme"]),
@@ -28,6 +28,11 @@ export const CapaAIResultSchema = z.object({
   }),
   correctionImmediate: z.string().min(3).max(2000),
   actionsCorrectivesProposees: z.array(CapaAIActionSchema).min(3).max(5),
+  sequenceRecommandee: z.array(z.object({
+    actionId: z.string().min(1).max(20),
+    debut: z.string().regex(/^J\+\d+$/),
+    fin: z.string().regex(/^J\+\d+$/),
+  })).default([]),
   pointsVigilance: z.array(z.string().min(3).max(1000)).min(2).max(3),
   referenceReglementaire: z.string().min(1).max(500),
   niveauConfiance: z.enum(["eleve", "moyen", "faible"]),
@@ -60,7 +65,7 @@ export function buildCapaPrompt(nc: NonConformite, context: AuditContext) {
   const auditorObservation = nc.responseComment?.trim()
     ? nc.responseComment.trim().slice(0, 300)
     : "Aucun commentaire d'auditeur disponible — baser l'analyse uniquement sur l'exigence réglementaire et fixer niveauConfiance à 'faible'.";
-  return `CONTEXTE ORGANISATION\nOrganisation : ${context.organisationName ?? "Non renseignée"}\nRôle économique : ${context.economicRole ?? "Non renseigné"}\nRéférentiel : ${context.referentialCode}\nProcessus : ${context.processName ?? nc.processSlug ?? "Non renseigné"}\n\nNON-CONFORMITÉ RÉELLE\nQuestion : ${questionText}\nArticle/Clause : ${nc.articleReference ?? "Non renseigné"}\nCriticité : ${nc.criticality}\nRéponse : ${nc.responseValue}\nConstat de l'auditeur : ${auditorObservation}\nPreuves objectives : ${nc.objectiveEvidence ?? "Non fournies"}\n\nProduis une analyse CAPA en JSON avec les champs exacts définis : contexteSituation, nonConformiteIdentifiee, analyse5Pourquoi (pourquoi1 à pourquoi5 et causeRacineIdentifiee), correctionImmediate, actionsCorrectivesProposees (3 à 5 actions), pointsVigilance, referenceReglementaire, niveauConfiance, raisonNiveauConfiance. Ne transforme jamais une hypothèse en fait.`;
+  return `CONTEXTE ORGANISATION\nOrganisation : ${context.organisationName ?? "Non renseignée"}\nRôle économique : ${context.economicRole ?? "Non renseigné"}\nRéférentiel : ${context.referentialCode}\nProcessus : ${context.processName ?? nc.processSlug ?? "Non renseigné"}\n\nNON-CONFORMITÉ RÉELLE\nQuestion : ${questionText}\nArticle/Clause : ${nc.articleReference ?? "Non renseigné"}\nCriticité : ${nc.criticality}\nRéponse : ${nc.responseValue}\nConstat de l'auditeur : ${auditorObservation}\nPreuves objectives : ${nc.objectiveEvidence ?? "Non fournies"}\n\nProduis une analyse CAPA en JSON avec les champs exacts définis : contexteSituation, nonConformiteIdentifiee, analyse5Pourquoi (pourquoi1 à pourquoi5 et causeRacineIdentifiee), correctionImmediate, actionsCorrectivesProposees (3 à 5 actions), sequenceRecommandee, pointsVigilance, referenceReglementaire, niveauConfiance, raisonNiveauConfiance. Échéances : faible+immediate=J+30, faible+court_terme=J+60, moyenne=J+90, elevee=J+180. Les actions sont séquencées : chaque action commence après la fin de la précédente. Ne transforme jamais une hypothèse en fait.`;
 }
 
 export async function generateCapaAnalysis(
@@ -89,7 +94,12 @@ export async function generateCapaAnalysis(
       console.error("[CAPA AI] Invalid response", validated.error.issues);
       return null;
     }
-    return validated.data;
+    return {
+      ...validated.data,
+      sequenceRecommandee: validated.data.sequenceRecommandee.length
+        ? validated.data.sequenceRecommandee
+        : buildRecommendedSequence(validated.data.actionsCorrectivesProposees),
+    };
   } catch (error) {
     console.error("[CAPA AI] Generation failed", error);
     const message = error instanceof Error ? error.message : String(error);
@@ -99,4 +109,19 @@ export async function generateCapaAnalysis(
     }
     throw new Error(`Service d'analyse IA indisponible : ${message}`);
   }
+}
+
+export function actionDurationDays(action: z.infer<typeof CapaAIActionSchema>): number {
+  if (action.complexite === "elevee") return 180;
+  if (action.complexite === "moyenne") return 90;
+  return action.priorite === "immediate" ? 30 : 60;
+}
+
+export function buildRecommendedSequence(actions: Array<z.infer<typeof CapaAIActionSchema>>) {
+  let cursor = 0;
+  return actions.map((action) => {
+    const debut = cursor;
+    cursor += actionDurationDays(action);
+    return { actionId: action.id, debut: `J+${debut}`, fin: `J+${cursor}` };
+  });
 }
