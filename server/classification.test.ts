@@ -35,3 +35,21 @@ test("appliedRules sont des objets et confidence est une enum", () => {
   assert.ok(["high", "medium", "low"].includes(res.confidence));
   assert.equal(typeof res.confidenceScore, "number");
 });
+
+for (const device_name of ["Implant cochléaire", "Stimulateur cardiaque", "Neurostimulateur implantable", "Défibrillateur implantable"]) {
+  test(`${device_name} : implantable actif = Classe III (Règle 8 §3)`, () => {
+    const res = classifyAnswers({ device_name, implantable: true, is_active: true } as any);
+    assert.equal(res.resultingClass, "III");
+    assert.ok(res.appliedRules.some((r) => r.number === "8 §3"));
+  });
+}
+
+test("thermomètre auriculaire non implantable reste Classe IIa", () => {
+  const res = classifyAnswers({
+    device_name: "Thermomètre auriculaire",
+    implantable: false,
+    is_active: true,
+    function: ["diagnostic_monitoring"],
+  } as any);
+  assert.equal(res.resultingClass, "IIa");
+});

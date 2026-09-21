@@ -184,7 +184,18 @@ export function classifyAnswers(answers: z.infer<typeof AnswersSchema>) {
   }
 
   // ---------- Implantable / CNS / circulatory central (Rule 8 orientation) ----------
-  if (answers.implantable) {
+  if (answers.implantable && answers.is_active) {
+    resultingClass = "III";
+    rules.push(
+      buildRule(
+        "8 §3",
+        "Dispositifs implantables actifs et leurs accessoires",
+        "Dispositif à la fois implantable et actif → MDR Annexe VIII — Règle 8 §3 : Classe III, sans exception.",
+        ["MDR 2017/745 — Annexe VIII — Règle 8 §3"],
+      ),
+    );
+    notes.push("Règle absolue : tout dispositif implantable actif est de classe III.");
+  } else if (answers.implantable) {
     resultingClass = maxClass(resultingClass, "IIb");
     rules.push(
       buildRule(
