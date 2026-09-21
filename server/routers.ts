@@ -52,6 +52,7 @@ import {
 } from "../drizzle/schema";
 import { sendAccountDeletionEmail } from "./_core/legalEmails";
 import { computeGenericAuditScoreSafe } from "./audit-scoring";
+import { getOpenNCCount } from "./open-nc-count";
 import { safeParseArray } from "./mdr-router";
 import { findingsRouter, actionsRouter } from "./findings-router";
 import { contactRouter } from "./contact-router";
@@ -927,6 +928,7 @@ export const appRouter = router({
       // client jusqu'ici. Calculé ici à la volée par code de référentiel
       // (jamais par ID en dur), même barème que audit.getScore.
       const frameworkScores = await getFrameworkScores(ctx.user.id);
+      const openFindings = await getOpenNCCount(ctx.user.id);
 
       // We return a stable shape even if dashboardV2 changes internally
       return {
@@ -934,9 +936,7 @@ export const appRouter = router({
         progression: stats?.averageProgression ?? 0,
         auditsByStatus: stats?.auditsByStatus,
         actuallyCompleteAudits: stats?.actuallyCompleteAudits ?? 0,
-        openFindings: stats?.totalFindings
-          ? (stats.totalFindings - (stats?.findingsByStatus?.closed ?? 0))
-          : 0,
+        openFindings,
         overdueActions: stats?.overdueActions ?? 0,
         conforme: stats?.findingsByType?.positive ?? stats?.okCount ?? stats?.conforme ?? 0,
         nonConforme:

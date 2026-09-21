@@ -9,6 +9,7 @@ import { loadAuditScoringContext } from "../scoring/scoringRouter";
 import { buildActionDraft, classifyFinding, classifyNonConformityResponse, isTaskOverdue, isValidStatusTransition, sortByPriority, validateCapaTaskReadiness, validateTaskTransition, validateTransitionFields } from "./capaEngine";
 import type { CapaAction, CapaReferentielImpacte, CapaStatus } from "./types";
 import { CapaAIActionSchema, CapaAIResultSchema, generateCapaAnalysis, serializeSelectedActions } from "../services/capa/capaAI";
+import { getOpenNCCount } from "../open-nc-count";
 
 const CapaStatusEnum = z.enum([
   "ouverte",
@@ -265,9 +266,10 @@ export const capaRouter = router({
         capaIdentifier: action.capaIdentifier,
       })),
     ].sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+    const ncOuvertes = await getOpenNCCount(ctx.user.id);
     return {
       stats: {
-        ncOuvertes: unplanned.length + actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
+        ncOuvertes,
         ncSansCapa: unplanned.length,
         ncRecurrentes: unplanned.filter((nc) => nc.recurrenceCount > 1).length,
         capaOuvertes: actionRows.filter((a) => !a.statut.startsWith("cloturee")).length,
