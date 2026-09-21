@@ -491,6 +491,10 @@ export const mdrRouter = router({
         siteLocation: z.string().nullable().optional(),
         auditorName: z.string().nullable().optional(),
         auditorEmail: z.string().nullable().optional(),
+        auditTeam: z.array(z.object({ name: z.string(), role: z.string(), email: z.string().optional() })).optional(),
+        auditeesRepresentatives: z.array(z.object({ name: z.string(), function: z.string().optional() })).optional(),
+        scopeExclusions: z.string().nullable().optional(),
+        markets: z.array(z.string()).optional(),
 
         startDate: z.string().optional().nullable(),
         endDate: z.string().optional().nullable(),
@@ -548,6 +552,10 @@ export const mdrRouter = router({
         siteLocation: input.siteLocation ?? null,
         auditorName: input.auditorName ?? null,
         auditorEmail: input.auditorEmail ?? null,
+        auditTeam: input.auditTeam ?? [],
+        auditeesRepresentatives: input.auditeesRepresentatives ?? [],
+        scopeExclusions: input.scopeExclusions ?? null,
+        markets: input.markets ?? [],
 
         economicRole: input.economicRole ?? null,
         updatedAt: now,

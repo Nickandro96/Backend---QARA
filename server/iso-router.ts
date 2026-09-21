@@ -571,6 +571,9 @@ createOrUpdateAuditDraft: protectedProcedure
       auditorName: z.string().optional().default(""),
       auditeeName: z.string().optional().default(""),
       auditeeEmail: z.string().optional().default(""),
+      exclusions: z.string().nullable().optional(),
+      markets: z.string().nullable().optional(),
+      auditTeam: z.string().nullable().optional(),
       status: z.enum(["draft", "in_progress"]).optional(),
     })
   )
@@ -620,6 +623,9 @@ createOrUpdateAuditDraft: protectedProcedure
       auditorName: (input.auditorName ?? "").trim(),
       auditeeName: (input.auditeeName ?? "").trim(),
       auditeeEmail: (input.auditeeEmail ?? "").trim(),
+      scopeExclusions: input.exclusions ?? null,
+      markets: input.markets ? input.markets.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean) : [],
+      auditTeam: input.auditTeam ? [{ name: input.auditTeam, role: "Équipe d’audit" }] : [],
       updatedAt: new Date(),
     };
 
