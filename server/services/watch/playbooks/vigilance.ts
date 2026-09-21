@@ -4,7 +4,7 @@ export function vigilancePlaybook(_title: string): ActionItem[] {
   return [
     {
       id: "vig-001",
-      title: "Revoir la procédure de vigilance (délais, critères SI/NSI, reporting, FSCA)",
+      title: "Revoir la procédure de vigilance MDR Art. 87 : 2 jours (menace grave), 10 jours (décès/détérioration grave inattendue), 15 jours (autre incident grave) ; tendances selon l’Art. 88",
       owner: "Vigilance",
       dueDays: 30,
       deliverables: ["SOP vigilance mise à jour", "Workflow de déclaration", "Matrice de décision"],

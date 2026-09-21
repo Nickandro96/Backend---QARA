@@ -9,7 +9,8 @@ const MDR = [
   item("Documentation technique", "Étiquetage conforme UDI", "Article 27 MDR"), item("Documentation technique", "Déclaration de conformité UE", "Article 19 MDR"),
   item("SMQ", "Manuel qualité à jour", "ISO 13485"), item("SMQ", "Procédures applicables validées et diffusées", "ISO 13485"),
   item("SMQ", "Enregistrements de formation du personnel", "ISO 13485 §6.2"), item("SMQ", "Audits internes réalisés depuis moins de 12 mois", "ISO 13485 §8.2.4"),
-  item("SMQ", "Revue de direction réalisée depuis moins de 12 mois", "ISO 13485 §5.6"), item("SMQ", "CAPA ouvertes avec plan d'action", "ISO 13485 §8.5"),
+  item("SMQ", "Revue de direction réalisée depuis moins de 12 mois", "ISO 13485:2016 §5.6"), item("SMQ", "CAPA ouvertes avec plan d'action", "ISO 13485:2016 §8.5.2 (corrective) / §8.5.3 (préventive)"),
+  item("SMQ", "Produit non conforme maîtrisé", "ISO 13485:2016 §8.3"),
   item("Vigilance et PMS", "Plan PMS documenté et actif", "MDR Article 83"), item("Vigilance et PMS", "Rapports PSUR/PSR à jour", "MDR Article 86"),
   item("Vigilance et PMS", "Registre des incidents et FSCA", "MDR Articles 87-89"), item("Vigilance et PMS", "Rapports de vigilance soumis si requis", "MDR Article 87"),
 ];
