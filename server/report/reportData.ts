@@ -67,6 +67,21 @@ export interface CapaEntry {
   status: string;
 }
 
+const CAPA_NOT_PLANNED = "Action CAPA non encore planifiée — à compléter";
+
+function formatFiveWhys(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(" → ") || null;
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const chain = record.pourquoi || record.pourquois || record.chaine || record.analyse;
+    if (Array.isArray(chain)) return chain.map(String).filter(Boolean).join(" → ") || null;
+    if (record.causeRacineIdentifiee) return String(record.causeRacineIdentifiee);
+  }
+  return null;
+}
+
 export interface QaEntry {
   processName: string | null;
   requirementRef: string | null;
@@ -394,17 +409,18 @@ export async function assembleReportData(
     .filter((g) => g.linkedCapaId !== null)
     .map((g) => {
       const capa = capaRows.find((c) => c.id === g.linkedCapaId)!;
+      const fiveWhys = formatFiveWhys(capa.ai5Pourquoi);
       return {
         gapReference: g.reference,
-        containment: capa.correctionImmediate,
+        containment: capa.correctionImmediate || CAPA_NOT_PLANNED,
         rootCauseAnalysis:
           capa.analyseCauseRacine ||
-          ((capa.ai5Pourquoi as { causeRacineIdentifiee?: string } | null)?.causeRacineIdentifiee ?? null),
+          fiveWhys || CAPA_NOT_PLANNED,
         rootCauseMethod: (capa as any).rootCauseMethod ?? null,
-        correctiveAction: capa.actionRetenue || capa.actionRecommandee,
-        responsible: capa.responsible,
-        dueDate: capa.dueDate ? capa.dueDate.toISOString() : null,
-        verificationCriteria: capa.preuveEfficacite,
+        correctiveAction: capa.actionRetenue || CAPA_NOT_PLANNED,
+        responsible: capa.responsible || CAPA_NOT_PLANNED,
+        dueDate: capa.dueDate ? capa.dueDate.toISOString() : CAPA_NOT_PLANNED,
+        verificationCriteria: capa.preuveEfficacite || CAPA_NOT_PLANNED,
         verificationDate: capa.dateVerificationEfficacite ? capa.dateVerificationEfficacite.toISOString() : null,
         status: capa.statut,
       };
