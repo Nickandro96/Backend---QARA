@@ -6,7 +6,7 @@ export type QueueLogger={info:(d:unknown,m:string)=>void;warn:(d:unknown,m:strin
 export function isEligibleForAnalysis(item:{aiAnalyzed:boolean;rawContent:string|null}):boolean{return item.aiAnalyzed===false&&typeof item.rawContent==="string"&&item.rawContent.length>0;}
 export async function runAnalysisQueue(db:any, logger:QueueLogger, analyze=analyzeRegulatoryDocument, delay=(ms:number)=>new Promise(r=>setTimeout(r,ms))) {
   // SQL invariant: ai_analyzed = false AND raw_content IS NOT NULL AND raw_content != ''
-  const items=await db.select().from(regulatoryUpdates).where(and(eq(regulatoryUpdates.aiAnalyzed,false),isNotNull(regulatoryUpdates.rawContent),ne(regulatoryUpdates.rawContent,""))).orderBy(sql`FIELD(${regulatoryUpdates.impactLevel}, 'Critical','High','Medium','Low')`,desc(regulatoryUpdates.retrievedAt)).limit(20);
+  const items=await db.select().from(regulatoryUpdates).where(and(eq(regulatoryUpdates.aiAnalyzed,false),isNotNull(regulatoryUpdates.rawContent),ne(regulatoryUpdates.rawContent,""))).orderBy(sql`FIELD(${regulatoryUpdates.impactLevel}, 'Critical','High','Medium','Low')`,desc(regulatoryUpdates.retrievedAt)).limit(50);
   let inputTokens=0,outputTokens=0,analyzed=0,skipped=0;
   for(const item of items){ if(!isEligibleForAnalysis({aiAnalyzed:Boolean(item.aiAnalyzed),rawContent:item.rawContent}))continue; const raw=String(item.rawContent??"");
     if(raw.length<50){await db.update(regulatoryUpdates).set({aiAnalyzed:true,aiModelVersion:"skipped:content_too_short",aiAnalysisDate:new Date()}).where(eq(regulatoryUpdates.id,item.id));logger.warn({id:item.id,source_id:item.sourceRegistryId},"raw_content too short — skipped");skipped++;continue;}
