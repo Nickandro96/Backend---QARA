@@ -507,6 +507,7 @@ export const auditRouter = router({
   completeAudit: protectedProcedure
     .input(z.object({ auditId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
+      try {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const auditContext = await getAuditContextInternal(db, ctx.user.id, input.auditId);
@@ -531,6 +532,10 @@ export const auditRouter = router({
         .set({ status: "completed", endDate: new Date(), updatedAt: new Date() })
         .where(and(eq(audits.id, input.auditId), eq(audits.userId, ctx.user.id)));
       return { success: true as const };
+      } catch (error) {
+        console.error("[audit.completeAudit] completion failed", { auditId: input.auditId, userId: ctx.user.id, error });
+        throw error;
+      }
     }),
 
   getQuestionsForAudit: protectedProcedure

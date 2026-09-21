@@ -34,10 +34,10 @@ export function assertAuditCanComplete(audit: { status?: unknown }): void {
   if (isAuditClosed(audit.status)) {
     throw new TRPCError({ code: "CONFLICT", message: "Cet audit est déjà terminé." });
   }
-  if (audit.status !== "in_progress") {
+  if (audit.status !== "in_progress" && audit.status !== "draft") {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Seul un audit en cours peut être terminé.",
+      message: "Seul un audit brouillon ou en cours peut être terminé.",
     });
   }
 }

@@ -23,7 +23,7 @@ test("suppression destructive refusée dès qu'une preuve réglementaire existe"
 test("machine d’états : brouillon puis en cours, sans modification silencieuse après clôture", () => {
   assert.doesNotThrow(() => assertAuditCanStart({ status: "draft" }));
   assert.doesNotThrow(() => assertAuditCanStart({ status: "in_progress" }));
-  assert.throws(() => assertAuditCanComplete({ status: "draft" }), codeIs("PRECONDITION_FAILED"));
+  assert.doesNotThrow(() => assertAuditCanComplete({ status: "draft" }));
   assert.doesNotThrow(() => assertAuditCanComplete({ status: "in_progress" }));
   for (const status of ["completed", "closed"]) {
     assert.equal(isAuditClosed(status), true);
