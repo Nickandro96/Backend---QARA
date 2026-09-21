@@ -50,7 +50,16 @@ export const createContext = async ({
 
 type Context = Awaited<ReturnType<typeof createContext>>;
 
-const t = initTRPC.context<Context>().create();
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    if (error.code !== "INTERNAL_SERVER_ERROR") return shape;
+    return {
+      ...shape,
+      message: "Une erreur interne s'est produite. Veuillez réessayer.",
+      data: { ...shape.data, stack: undefined },
+    };
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
