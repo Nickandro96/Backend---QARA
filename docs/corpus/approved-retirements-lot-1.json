@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "status": "planning-only",
+  "approvedAt": "2026-08-04",
+  "note": "Aucun effet runtime. Lot 1 validé par l’utilisateur; désactivation non destructive à implémenter après validation technique.",
+  "retirements": [
+    {
+      "questionKey": "Q-FDA-CR-3056",
+      "supersededByQuestionKey": "Q-FDA-CR-5666",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-FDA-CMC-1104",
+      "supersededByQuestionKey": "Q-FDA-CMC-0807",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-FDA-CMC-4738",
+      "supersededByQuestionKey": "Q-FDA-CMC-0807",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-13485-RD-8627",
+      "supersededByQuestionKey": "Q-13485-RD-6139",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-13485-RP-5113",
+      "supersededByQuestionKey": "Q-13485-RP-6946",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-13485-VC-1214",
+      "supersededByQuestionKey": "Q-13485-VC-9155",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-13485-VS-3424",
+      "supersededByQuestionKey": "Q-13485-VS-8190",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    },
+    {
+      "questionKey": "Q-14971-PGR-3372",
+      "supersededByQuestionKey": "Q-14971-PGR-8687",
+      "reason": "questionText, expectedEvidence et criticality identiques"
+    }
+  ]
+}
