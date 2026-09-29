@@ -6,6 +6,7 @@ import { getDb, safeJsonParse } from "../db";
 import { audits, audit_responses, questions, processus, referentiels } from "../../drizzle/schema";
 import { buildScoringResult } from "./scoringEngine";
 import type { ScoringQuestion, ScoringResponse, ResponseValue } from "./types";
+import { fetchAuditScopedQuestions, getAuditContextInternal } from "../mdr-router";
 
 /**
  * Reconstruit les objets `ScoringQuestion`/`ScoringResponse` (voir ./types.ts)
@@ -54,7 +55,21 @@ export async function loadAuditScoringContext(
     });
   }
 
-  const questionRows = await db.select().from(questions).where(and(inArray(questions.referentialId, referentialIds), eq(questions.isActive, true)));
+  // Source de vérité unique : le questionnaire, la revue, le moteur CAPA et
+  // les rapports doivent tous utiliser exactement le même périmètre. Une
+  // sélection par référentiel seul réintroduisait des questions hors rôle ou
+  // hors processus (65/70, 65/71 et 89/88 observés en contre-recette).
+  const auditContext = await getAuditContextInternal(db, userId, auditId);
+  const questionRows = await fetchAuditScopedQuestions(db, {
+    auditId,
+    userId,
+    economicRole: auditContext.economicRole,
+    economicRolesFromOnboarding: auditContext.economicRolesFromOnboarding,
+    situationTags: auditContext.situationTags,
+    processIds: auditContext.processIds,
+    referentialIds,
+    select: questions,
+  }) as Array<typeof questions.$inferSelect>;
   const processRows = await db.select().from(processus);
   const processNameById = new Map(processRows.map((p) => [p.id, p.name]));
 
@@ -78,7 +93,8 @@ export async function loadAuditScoringContext(
     .from(audit_responses)
     .where(and(eq(audit_responses.auditId, auditId), eq(audit_responses.userId, userId)));
 
-  const scoringResponses: ScoringResponse[] = responseRows.map((r) =>
+  const scopedQuestionKeys = new Set(questionRows.map((q) => q.questionKey));
+  const scoringResponses: ScoringResponse[] = responseRows.filter((r) => scopedQuestionKeys.has(r.questionKey)).map((r) =>
     toScoringResponse({ questionKey: r.questionKey, responseValue: r.responseValue })
   );
 
