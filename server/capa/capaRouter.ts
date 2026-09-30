@@ -531,6 +531,7 @@ export const capaRouter = router({
     .input(
       z.object({
         actionId: z.number().int().positive(),
+        correctionImmediate: z.string().optional(),
         actionRetenue: z.string().optional(),
         analyseCauseRacine: z.string().optional(),
         responsible: z.string().optional(),
