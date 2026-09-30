@@ -77,13 +77,16 @@ export async function loadAuditScoringContext(
   const referentialCodeById = new Map(referentialRows.map((r) => [r.id, r.code ?? String(r.id)]));
 
   const scoringQuestions: ScoringQuestion[] = questionRows
-    .filter((q) => q.questionKey && q.criticality && q.questionType)
+    .filter((q) => q.questionKey)
     .map((q) => ({
       questionKey: q.questionKey!,
       referentialCode: q.referentialId !== null ? referentialCodeById.get(q.referentialId) ?? String(q.referentialId) : "?",
       processName: q.processId !== null ? processNameById.get(q.processId) ?? null : null,
-      criticality: q.criticality as ScoringQuestion["criticality"],
-      questionType: q.questionType as ScoringQuestion["questionType"],
+      // Les anciennes banques ISO ne renseignent pas toujours ces deux
+      // colonnes. Le questionnaire les traite comme des questions standard ;
+      // le scoring/CAPA doit faire de même au lieu de les supprimer du calcul.
+      criticality: (q.criticality ?? "medium") as ScoringQuestion["criticality"],
+      questionType: (q.questionType ?? "yes_no_partial_na") as ScoringQuestion["questionType"],
       typicalNc: safeJsonParse(q.typicalNc, []),
       mappings: safeJsonParse(q.mappings, []),
     }));
