@@ -396,6 +396,12 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     const bottom = doc.page.height - 35;
+    // PDFKit déclenche automatiquement un saut de page lorsqu'un texte est
+    // placé sous la zone de contenu définie par la marge basse. Les pieds de
+    // page sont volontairement dans cette marge : neutraliser temporairement
+    // la marge empêche la création de deux pages blanches par page réelle.
+    const originalBottomMargin = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
     doc.fontSize(8).fillColor(COLORS.gray).font("Helvetica");
     doc.text(
       `${data.reportReference} — ${L("version")} ${data.reportVersion} — ${L("confidential")}`,
@@ -408,6 +414,7 @@ export async function renderReportPdf(data: ReportData): Promise<Buffer> {
       align: "right",
       lineBreak: false,
     });
+    doc.page.margins.bottom = originalBottomMargin;
     doc.fillColor("black");
   }
 

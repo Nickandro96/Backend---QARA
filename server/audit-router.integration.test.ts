@@ -98,12 +98,11 @@ test("06 question existante mais hors questionnaire : écriture refusée", async
   assert.equal(f.writes.length, 0);
 });
 
-test("07 completed et closed protègent réponse, audit, métadonnées, périmètre et suppression", async () => {
+test("07 completed et closed protègent réponse, audit, périmètre et suppression", async () => {
   for (const status of ["completed", "closed"] as const) for (const invoke of [
     () => caller().audit.saveResponse(saveInput()),
     () => caller().audits.update({ id: 10, name: "Audit test" }),
     () => caller().audits.updateMetadata({ id: 10, notes: "x" }),
-    () => caller().audit.updateReportFields({ id: 10, scopeExclusions: "x" }),
     () => caller().audits.delete({ id: 10 }),
   ]) { const f = fakeDb([[audit(status)]]); __setDbForTests(f.db); await assert.rejects(invoke(), rejectsCode("CONFLICT")); assert.equal(f.writes.length, 0); }
 });
@@ -188,5 +187,20 @@ test("19 multi-tenant CAPA : lecture, création et mutation par identifiant devi
 
   f = fakeDb([[]]); __setDbForTests(f.db);
   await assert.rejects(caller(2).capa.updateStatus({ actionId: 4, statut: "en_cours" }), rejectsCode("NOT_FOUND"));
+  assert.equal(f.writes.length, 0);
+});
+
+test("20 métadonnées rapport : le propriétaire enrichit un audit terminé, un tiers et un audit archivé restent bloqués", async () => {
+  let f = fakeDb([[audit("completed")]]); __setDbForTests(f.db);
+  await caller().audit.updateReportFields({ id: 10, auditNature: "surveillance", scopeExclusions: "Importation non applicable" });
+  assert.equal(f.writes[0].values.auditNature, "surveillance");
+  assert.equal(f.writes[0].values.scopeExclusions, "Importation non applicable");
+
+  f = fakeDb([[]]); __setDbForTests(f.db);
+  await assert.rejects(caller(2).audit.updateReportFields({ id: 10, auditNature: "surveillance" }), rejectsCode("NOT_FOUND"));
+  assert.equal(f.writes.length, 0);
+
+  f = fakeDb([[audit("closed")]]); __setDbForTests(f.db);
+  await assert.rejects(caller().audit.updateReportFields({ id: 10, auditNature: "surveillance" }), rejectsCode("CONFLICT"));
   assert.equal(f.writes.length, 0);
 });

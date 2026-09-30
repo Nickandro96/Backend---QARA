@@ -272,7 +272,7 @@ export const audits = mysqlTable("audits", {
   // (Tâche D.7, migration 0027) — facultatifs, section éditable post-création
   // sur AuditDetail. `auditorName`/`auditorEmail` restent le repli mono-
   // auditeur historique ; `auditTeam` porte l'équipe complète si renseignée.
-  auditNature: varchar("auditNature", { length: 50 }), // interne / fournisseur / blanc / revue_conformite
+  auditNature: varchar("auditNature", { length: 50 }), // interne / fournisseur / blanc / revue_conformite / surveillance
   auditTeam: json("auditTeam"), // [{ name, role, email }]
   auditeesRepresentatives: json("auditeesRepresentatives"), // [{ name, function }]
   scopeExclusions: text("scopeExclusions"), // exclusions de périmètre + justification

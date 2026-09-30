@@ -315,7 +315,7 @@ export const auditRouter = router({
     .input(
       z.object({
         id: z.number(),
-        auditNature: z.enum(["interne", "fournisseur", "blanc", "revue_conformite"]).optional(),
+        auditNature: z.enum(["interne", "fournisseur", "blanc", "revue_conformite", "surveillance"]).optional(),
         auditTeam: z
           .array(z.object({ name: z.string(), role: z.string(), email: z.string().optional() }))
           .optional(),
@@ -333,7 +333,13 @@ export const auditRouter = router({
 
       const audit = await getAuditById(input.id, ctx.user.id);
       if (!audit) throw new TRPCError({ code: "NOT_FOUND", message: "Audit non trouvé" });
-      assertAuditMutable(audit);
+      // Les métadonnées documentaires n'altèrent ni les réponses ni le score.
+      // Elles doivent pouvoir être complétées après la fin de l'audit afin de
+      // produire le rapport final. Un audit explicitement archivé (`closed`)
+      // reste, lui, strictement immuable.
+      if (String(audit.status).toLowerCase() === "closed") {
+        throw new TRPCError({ code: "CONFLICT", message: "Cet audit archivé ne peut plus être modifié." });
+      }
 
       const { id, ...fields } = input;
       const patch: Record<string, any> = {};

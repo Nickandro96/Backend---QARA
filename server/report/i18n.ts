@@ -160,6 +160,7 @@ const AUDIT_NATURE_LABELS: Record<string, { fr: string; en: string }> = {
   fournisseur: { fr: "Fournisseur", en: "Supplier" },
   blanc: { fr: "Audit à blanc", en: "Mock audit" },
   revue_conformite: { fr: "Revue de conformité", en: "Compliance review" },
+  surveillance: { fr: "Audit de surveillance", en: "Surveillance audit" },
 };
 
 export function translateAuditNature(value: string | null, lang: ReportLanguage): string | null {
