@@ -101,7 +101,7 @@ export async function loadAuditScoringContext(
     toScoringResponse({ questionKey: r.questionKey, responseValue: r.responseValue })
   );
 
-  return { scoringQuestions, scoringResponses, questionRows };
+  return { scoringQuestions, scoringResponses, questionRows, responseRows };
 }
 
 export const scoringRouter = router({

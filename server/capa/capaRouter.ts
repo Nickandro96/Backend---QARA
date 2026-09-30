@@ -392,14 +392,45 @@ export const capaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
-      const { scoringQuestions, scoringResponses, questionRows } = await loadAuditScoringContext(
+      const { scoringQuestions, scoringResponses, questionRows, responseRows } = await loadAuditScoringContext(
         db,
         input.auditId,
         ctx.user.id
       );
       const questionByKey = new Map(questionRows.map((q) => [q.questionKey, q]));
 
-      const { ecarts, couvertureCroisee } = buildScoringResult(scoringQuestions, scoringResponses);
+      const scoringResult = buildScoringResult(scoringQuestions, scoringResponses);
+      const ecartsByKey = new Map(scoringResult.ecarts.map((ecart) => [ecart.questionKey, ecart]));
+      const scoringQuestionByKey = new Map(scoringQuestions.map((question) => [question.questionKey, question]));
+
+      // Compatibilité des audits historiques : une réponse NC enregistrée
+      // reste une source de vérité, même si le corpus ou le périmètre ont
+      // évolué depuis la saisie. Sans ce repli, ces NC apparaissaient dans la
+      // fiche audit mais « Générer depuis les écarts » retournait zéro action.
+      for (const response of responseRows) {
+        const classification = classifyNonConformityResponse(response.responseValue);
+        if (!classification || ecartsByKey.has(response.questionKey)) continue;
+
+        const scoringQuestion = scoringQuestionByKey.get(response.questionKey);
+        const question = questionByKey.get(response.questionKey);
+        const criticality = (scoringQuestion?.criticality ?? question?.criticality ?? "medium") as "low" | "medium" | "high" | "critical";
+        const isHigh = criticality === "high" || criticality === "critical";
+        ecartsByKey.set(response.questionKey, {
+          questionKey: response.questionKey,
+          referentialCode: scoringQuestion?.referentialCode ?? "?",
+          processName: scoringQuestion?.processName ?? question?.processDetail ?? null,
+          gravite: classification === "non_conforme"
+            ? (isHigh ? "majeur" : "mineur")
+            : (isHigh ? "mineur" : "observation"),
+          criticality,
+          responseValue: response.responseValue as "partial" | "non_compliant",
+          elementaryScore: classification === "non_conforme" ? 0 : 0.5,
+          typicalNc: safeJsonParse(question?.typicalNc, []),
+        });
+      }
+
+      const ecarts = Array.from(ecartsByKey.values());
+      const { couvertureCroisee } = scoringResult;
       const coverageByKey = new Map(couvertureCroisee.map((c) => [c.questionKey, c.referentielsCouverts]));
 
       const existingRows = await db
