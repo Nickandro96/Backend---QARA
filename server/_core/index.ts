@@ -14,7 +14,11 @@ app.set("trust proxy", 1);
 
 // ⚠️ Le webhook Stripe doit recevoir le body BRUT (vérification de signature),
 // donc AVANT express.json().
-app.post("/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+const stripeWebhookBody = express.raw({ type: "application/json" });
+app.post("/stripe/webhook", stripeWebhookBody, handleStripeWebhook);
+// Alias explicite pour éviter une rupture lorsque le tableau de bord Stripe
+// utilise le chemin documenté au pluriel.
+app.post("/webhooks/stripe", stripeWebhookBody, handleStripeWebhook);
 
 app.use(express.json());
 

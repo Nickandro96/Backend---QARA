@@ -10,9 +10,8 @@ import { setSubscription } from "../db";
  * Monté dans server/_core/index.ts sur `POST /stripe/webhook` AVANT
  * express.json(), avec un body brut (obligatoire pour vérifier la signature).
  *
- * Sans STRIPE_WEBHOOK_SECRET la route répond 200 sans rien faire (no-op),
- * pour ne pas faire échouer les redéploiements tant que Stripe n'est pas
- * configuré.
+ * Sans configuration Stripe, la route répond 503 afin qu'une configuration
+ * incomplète ne puisse pas être confondue avec un événement traité.
  */
 
 function tierFromPriceId(priceId: string | undefined): string | null {
@@ -31,8 +30,8 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secret || !key) {
-    // Stripe pas encore configuré : on acquitte sans traiter.
-    return res.status(200).json({ received: true, skipped: "stripe-not-configured" });
+    console.error("[stripe] webhook unavailable: Stripe environment is incomplete");
+    return res.status(503).json({ received: false, error: "stripe-not-configured" });
   }
 
   const stripe = new Stripe(key);
