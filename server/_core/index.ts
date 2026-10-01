@@ -4,6 +4,8 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./trpc";
 import { handleStripeWebhook } from "../stripe/webhook";
+import { getDb } from "../db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 
@@ -65,6 +67,28 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+
+app.get("/healthz", async (_req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database unavailable");
+    await db.execute(sql`SELECT 1`);
+    res.status(200).json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      database: "connected",
+    });
+  } catch (error) {
+    console.error("[healthz] database check failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(503).json({
+      status: "error",
+      timestamp: new Date().toISOString(),
+      database: "disconnected",
+    });
+  }
+});
 
 app.use(
   "/trpc",
