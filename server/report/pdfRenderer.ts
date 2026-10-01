@@ -27,7 +27,10 @@ function graviteColor(gravite: string): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return null as any;
-  return new Date(iso).toISOString().slice(0, 10);
+  const parsed = new Date(iso);
+  // Une CAPA incomplète porte une valeur explicite (« à compléter »), pas
+  // une date ISO. La restituer telle quelle évite une erreur de rendu 500.
+  return Number.isNaN(parsed.getTime()) ? iso : parsed.toISOString().slice(0, 10);
 }
 
 export async function renderReportPdf(data: ReportData): Promise<Buffer> {

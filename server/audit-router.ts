@@ -11,6 +11,7 @@ import { computeGenericAuditStats, computeGenericAuditProgressSafe, computeGener
 import { safeParseArray, getAuditContextInternal, fetchAuditScopedQuestions } from "./mdr-router";
 import { generatePreparationChecklist } from "./services/preparation/checklistGenerator";
 import { generatePreparationPlanAI, generateAuditorQuestionsAI, evaluateAuditorAnswerAI, SIMULATION_WARNING } from "./services/preparation/preparationAI";
+import { normalizeIsoReference } from "./shared/isoReference";
 import {
   assertAuditCanComplete,
   assertAuditCanReopen,
@@ -581,7 +582,8 @@ export const auditRouter = router({
         },
       });
 
-      return { count: (rows || []).length, questions: rows || [] };
+      const normalizedRows = (rows || []).map((row: any) => normalizeIsoReference(row));
+      return { count: normalizedRows.length, questions: normalizedRows };
     }),
 
   /**

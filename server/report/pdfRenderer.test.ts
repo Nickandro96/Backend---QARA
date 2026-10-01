@@ -59,3 +59,21 @@ test("renderReportPdf n'ajoute aucune page blanche lors de la pagination", async
   // correctif, les pieds de page ajoutaient vingt pages blanches (30 au total).
   assert.equal(pageObjects.length, 10);
 });
+
+test("renderReportPdf accepte une échéance CAPA textuelle non planifiée", async () => {
+  const report = minimalReport();
+  report.capaPlan = [{
+    gapReference: "NC-2026-001",
+    containment: "Action immédiate",
+    rootCauseAnalysis: "Cause en cours d'analyse",
+    rootCauseMethod: "5 pourquoi",
+    correctiveAction: "Action à définir",
+    responsible: "Responsable qualité",
+    dueDate: "Action CAPA non encore planifiée — à compléter",
+    verificationCriteria: "À compléter",
+    verificationDate: null,
+    status: "ouverte",
+  }];
+  const pdf = await renderReportPdf(report);
+  assert.ok(pdf.length > 0);
+});

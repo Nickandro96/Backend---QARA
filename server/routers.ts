@@ -1095,6 +1095,8 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const startedAt = Date.now();
+        try {
         const reportData = await assembleReportData(input.auditId, ctx.user.id, input.language);
         const assessment = assessReportCompleteness(reportData);
         if (assessment.blocking.length) {
@@ -1143,11 +1145,31 @@ export const appRouter = router({
           language: input.language,
         });
 
-        return {
+        const result = {
           success: true,
           reportId: insertResult?.[0]?.insertId ?? insertResult?.insertId,
           fileName,
         };
+        console.info("[reports.generateV2] generated", {
+          auditId: input.auditId,
+          userId: ctx.user.id,
+          format: input.format,
+          durationMs: Date.now() - startedAt,
+          reportId: result.reportId,
+        });
+        return result;
+        } catch (error) {
+          console.error("[reports.generateV2] failed", {
+            auditId: input.auditId,
+            userId: ctx.user.id,
+            format: input.format,
+            durationMs: Date.now() - startedAt,
+            error: error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : error,
+          });
+          throw error;
+        }
       }),
 
     download: protectedProcedure
