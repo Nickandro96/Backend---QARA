@@ -20,8 +20,8 @@ async function sendEmail(input: { to: string; subject: string; text: string; htm
 
 export async function sendWelcomeEmail(email: string, displayName?: string | null) {
   const appUrl = process.env.FRONTEND_URL?.trim().replace(/\/$/, "");
-  const contact = process.env.EMAIL_FROM?.trim();
-  if (!appUrl || !contact) throw new Error("Missing FRONTEND_URL or EMAIL_FROM");
+  const contact = process.env.PRIVACY_CONTACT_EMAIL?.trim() || "infos@n3-conseil.com";
+  if (!appUrl) throw new Error("Missing FRONTEND_URL");
   const privacyUrl = `${appUrl}/politique-confidentialite`;
   const greeting = displayName?.trim() || email;
 
