@@ -12,9 +12,13 @@ export interface ReportCompleteness {
 }
 
 export function assessReportCompleteness(data: ReportData): ReportCompleteness {
-  const notApplicableQuestions = data.fullQA.filter((row) => row.responseValue === "not_applicable").length;
-  const answeredQuestions = data.fullQA.filter((row) => ["compliant", "partial", "non_compliant"].includes(String(row.responseValue))).length;
-  const totalQuestions = Math.max(data.fullQA.length - notApplicableQuestions, 0);
+  // Une réponse N/A est une réponse auditée et traçable. L'exclure du
+  // numérateur ET du dénominateur produisait des compteurs différents entre
+  // questionnaire, revue et rapport (65/63 puis 15/13).
+  const answeredQuestions = data.fullQA.filter((row) =>
+    ["compliant", "partial", "non_compliant", "not_applicable"].includes(String(row.responseValue))
+  ).length;
+  const totalQuestions = data.fullQA.length;
   const missingCritical: string[] = [];
   const warnings: string[] = [];
 

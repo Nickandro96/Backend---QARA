@@ -39,3 +39,16 @@ test("un audit complet est prêt et propose une conclusion éditable", () => {
   assert.equal(result.completionPercent, 100);
   assert.match(result.defaultConclusion, /Système apte/);
 });
+
+test("les réponses non applicables restent comptées dans le total et les réponses", () => {
+  const result = assessReportCompleteness(report({
+    fullQA: [
+      { responseValue: "compliant" },
+      { responseValue: "not_applicable" },
+      { responseValue: "partial" },
+    ],
+  }));
+  assert.equal(result.answeredQuestions, 3);
+  assert.equal(result.totalQuestions, 3);
+  assert.equal(result.completionPercent, 100);
+});

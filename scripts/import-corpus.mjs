@@ -195,7 +195,9 @@ async function runImport(conn) {
       processId: pid,
       processDetail: row.processName || null,
       questionKey: row.questionKey,
-      article: row.article || null,
+      // Les sources ISO portent la clause dans `reference` et non `article`.
+      // Conserver cette référence évite les "Référence réglementaire n/a".
+      article: row.article || row.reference || null,
       annexe: row.annexe || null,
       title: row.title || null,
       economicRole,

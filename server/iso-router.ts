@@ -145,6 +145,15 @@ function normalizeIsoQuestion(row: any) {
   // Normalize commonly-JSON fields used by the ISO UI (avoid null/undefined in frontend)
   const out: any = { ...row };
 
+  // Le corpus ISO historique stocke souvent la clause dans le titre
+  // (ex. "5.6.1 — revue de direction") alors que `article` est vide.
+  // L'UI et les rapports doivent néanmoins toujours exposer la référence.
+  if (!String(out.article ?? "").trim()) {
+    const title = String(out.title ?? "").trim();
+    const clause = title.match(/^(?:ISO\s*13485(?::2016)?\s*)?(\d+(?:\.\d+){0,3})\b/i)?.[1];
+    if (clause) out.article = `ISO 13485:2016 §${clause}`;
+  }
+
   const jsonArrayFields = [
     "applicableProcesses",
     "interviewFunctions",

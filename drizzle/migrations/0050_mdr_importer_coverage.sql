@@ -1,0 +1,32 @@
+-- P0 pilote Marc : porter le corpus MDR importateur de 3 à 15 questions.
+-- Idempotent grâce à l'index unique questionKey.
+INSERT IGNORE INTO questions
+  (referentialId, processId, processDetail, questionKey, article, title,
+   economicRole, applicableProcesses, questionType, questionText,
+   expectedEvidence, criticality, risk, interviewFunctions, actionPlan,
+   displayOrder, isActive, auditVerifies, referenceStatus, officialSource,
+   roleReglementaire, situationTags, economicRoleSource)
+SELECT r.id, p.id, 'Obligations de l''importateur', x.questionKey, x.article,
+       x.title, 'importateur', JSON_ARRAY('importation'), 'yes_no_partial_na',
+       x.questionText, x.expectedEvidence, x.criticality, x.risk,
+       JSON_ARRAY('Responsable affaires réglementaires','Responsable qualité'),
+       x.actionPlan, x.displayOrder, 1, x.auditVerifies, 'verified',
+       'Règlement (UE) 2017/745', JSON_ARRAY('importateur'), JSON_ARRAY(),
+       'importateur'
+FROM referentiels r
+JOIN processus p ON p.slug = 'importation'
+JOIN (
+  SELECT 'Q-MDR-IMP-001' questionKey,'Art. 13(2)' article,'Vérification du marquage CE et de la déclaration UE' title,'Démontrez la vérification du marquage CE, de la déclaration UE de conformité et de la désignation du fabricant avant mise sur le marché.' questionText,'Checklist signée, déclaration UE, certificat et étiquette.' expectedEvidence,'high' criticality,'Mise sur le marché d''un dispositif non conforme.' risk,'Bloquer le lot et formaliser la vérification préalable.' actionPlan,12001 displayOrder,'La vérification préalable à la mise sur le marché est documentée.' auditVerifies
+  UNION ALL SELECT 'Q-MDR-IMP-002','Art. 13(2)(a)','Vérification de l''identification du fabricant et du mandataire','Montrez comment vous vérifiez le fabricant hors UE et son mandataire dûment désigné.','Mandat, coordonnées, étiquetage et contrôle d''entrée.','high','Absence de représentant légal UE valide.','Suspendre l''importation et régulariser le dossier.',12002,'Le fabricant et le mandataire sont identifiés et vérifiés.'
+  UNION ALL SELECT 'Q-MDR-IMP-003','Art. 13(2)(b)','Vérification UDI et enregistrement EUDAMED','Démontrez la vérification de l''UDI et des enregistrements EUDAMED applicables avant mise à disposition.','Capture EUDAMED, SRN, Basic UDI-DI et checklist.','high','Traçabilité réglementaire insuffisante.','Corriger l''enregistrement avant libération.',12003,'UDI et enregistrements sont vérifiés.'
+  UNION ALL SELECT 'Q-MDR-IMP-004','Art. 13(3)','Identification de l''importateur sur le dispositif','Montrez que le nom et l''adresse de l''importateur figurent sur le dispositif, l''emballage ou un document accompagnant sans masquer les informations fabricant.','Étiquettes, maquettes approuvées et contrôle réception.','high','Importateur non identifiable sur le marché.','Mettre en quarantaine et corriger l''étiquetage.',12004,'L''identification importateur est présente et maîtrisée.'
+  UNION ALL SELECT 'Q-MDR-IMP-005','Art. 13(5)','Conditions de stockage et de transport','Démontrez que les conditions de stockage et de transport sous votre responsabilité respectent celles du fabricant.','Enregistrements température, transporteurs qualifiés, gestion excursions.','high','Altération de la sécurité ou des performances.','Traiter les excursions et qualifier les prestataires.',12005,'Les conditions logistiques préservent la conformité.'
+  UNION ALL SELECT 'Q-MDR-IMP-006','Art. 13(6)','Registre des réclamations et dispositifs non conformes','Présentez le registre des réclamations, rappels, retraits et dispositifs non conformes ainsi que sa mise à jour.','Registre, tendances, dossiers de rappels et décisions.','high','Signaux qualité non détectés ou non traités.','Mettre à jour le registre et revoir les tendances.',12006,'Le registre importateur est complet et exploité.'
+  UNION ALL SELECT 'Q-MDR-IMP-007','Art. 13(6)','Information du fabricant et du mandataire','Sur un cas réel, montrez la transmission sans délai d''une réclamation ou suspicion d''incident au fabricant et au mandataire.','Courriels horodatés, procédure et accusés de réception.','high','Retard de vigilance et défaut de coordination.','Formaliser les délais et tester la chaîne d''alerte.',12007,'Les informations sont transmises sans délai.'
+  UNION ALL SELECT 'Q-MDR-IMP-008','Art. 13(7)','Coopération avec les autorités compétentes','Démontrez votre capacité à fournir échantillons, documents et informations à l''autorité compétente et à mettre en œuvre une action corrective.','Procédure autorité, exercice, contacts et preuves.','critical','Entrave à une mesure de sécurité réglementaire.','Tester la procédure de coopération.',12008,'La coopération avec les autorités est opérationnelle.'
+  UNION ALL SELECT 'Q-MDR-IMP-009','Art. 13(8)','Conservation de la déclaration et des certificats','Montrez la conservation de la déclaration UE et des certificats pendant au moins dix ans après la dernière mise sur le marché.','Politique d''archivage, index et test de restauration.','high','Documents réglementaires indisponibles.','Étendre la durée et vérifier les archives.',12009,'La conservation réglementaire de dix ans est prouvée.'
+  UNION ALL SELECT 'Q-MDR-IMP-010','Art. 13(4)','Traitement d''un dispositif présumé non conforme','Déroulez la décision prise lorsqu''un dispositif est présumé non conforme, y compris l''information du fabricant et du mandataire.','Dossier de quarantaine, décision, notifications et libération.','critical','Mise sur le marché d''un dispositif non conforme.','Bloquer, évaluer et notifier avant toute libération.',12010,'La non-conformité présumée déclenche un blocage effectif.'
+  UNION ALL SELECT 'Q-MDR-IMP-011','Art. 13(4)','Risque grave et notification aux autorités','Montrez comment un risque grave ou un dispositif falsifié est notifié immédiatement aux autorités compétentes.','Procédure, matrice d''escalade et exercice documenté.','critical','Risque patient non signalé.','Déclencher l''escalade et vérifier les contacts.',12011,'La notification immédiate est maîtrisée.'
+  UNION ALL SELECT 'Q-MDR-IMP-012','Art. 31','Maintien des données d''enregistrement importateur','Démontrez la revue et la mise à jour des données d''enregistrement et du SRN de l''importateur.','Revue périodique EUDAMED, SRN et responsabilités.','medium','Données opérateur économique obsolètes.','Mettre à jour EUDAMED et planifier une revue annuelle.',12012,'Les données d''enregistrement sont exactes et maintenues.'
+) x
+WHERE r.code = 'MDR';
