@@ -934,10 +934,19 @@ export const appRouter = router({
       return {
         scoreGlobal: stats?.averageAuditScore ?? stats?.globalScore ?? stats?.scoreGlobal ?? 0,
         progression: stats?.averageProgression ?? 0,
+        totalAudits: stats?.totalAudits ?? 0,
         auditsByStatus: stats?.auditsByStatus,
         actuallyCompleteAudits: stats?.actuallyCompleteAudits ?? 0,
         openFindings,
         overdueActions: stats?.overdueActions ?? 0,
+        overduePercentage: stats?.overduePercentage ?? 0,
+        averageClosureTime: stats?.averageClosureTime ?? 0,
+        totalFindings: stats?.totalFindings ?? 0,
+        findingsByCriticality: stats?.findingsByCriticality,
+        findingsByStatus: stats?.findingsByStatus,
+        findingsByType: stats?.findingsByType,
+        totalActions: stats?.totalActions ?? 0,
+        actionsByStatus: stats?.actionsByStatus,
         conforme: stats?.findingsByType?.positive ?? stats?.okCount ?? stats?.conforme ?? 0,
         nonConforme:
           (stats?.findingsByType?.nc_major ?? 0) + (stats?.findingsByType?.nc_minor ?? 0) ||
