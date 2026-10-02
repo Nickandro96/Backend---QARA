@@ -19,10 +19,13 @@ import { getUserByEmail } from "../db";
  * les mutations renvoient une erreur explicite plutôt qu'un 404 silencieux.
  *
  * Variables attendues :
+ *   STRIPE_MODE          (`test` par défaut, `live` pour la production)
  *   STRIPE_SECRET_KEY
+ *   STRIPE_SECRET_KEY_LIVE
  *   STRIPE_PRICE_PRO_MONTH / STRIPE_PRICE_PRO_YEAR
  *   STRIPE_PRICE_EXPERT_MONTH / STRIPE_PRICE_EXPERT_YEAR
  *   STRIPE_PRICE_ENTREPRISE_MONTH / STRIPE_PRICE_ENTREPRISE_YEAR
+ *   Les six mêmes variables suffixées `_LIVE`
  *   FRONTEND_URL           (pour les URLs de retour success/cancel)
  *   STRIPE_WEBHOOK_SECRET  (utilisé par server/stripe/webhook.ts)
  */
@@ -33,13 +36,23 @@ const IntervalEnum = z.enum(["month", "year"]);
 type Tier = z.infer<typeof TierEnum>;
 type Interval = z.infer<typeof IntervalEnum>;
 
+export function isStripeLiveMode(): boolean {
+  return process.env.STRIPE_MODE?.trim().toLowerCase() === "live";
+}
+
+export function getStripeSecretKey(): string | undefined {
+  const key = isStripeLiveMode() ? "STRIPE_SECRET_KEY_LIVE" : "STRIPE_SECRET_KEY";
+  return process.env[key]?.trim() || undefined;
+}
+
 export function getStripePriceId(tier: Tier, interval: Interval): string | undefined {
-  const key = `STRIPE_PRICE_${tier}_${interval === "month" ? "MONTH" : "YEAR"}`;
+  const suffix = isStripeLiveMode() ? "_LIVE" : "";
+  const key = `STRIPE_PRICE_${tier}_${interval === "month" ? "MONTH" : "YEAR"}${suffix}`;
   return process.env[key]?.trim() || undefined;
 }
 
 export function isStripeConfigured(): boolean {
-  if (!process.env.STRIPE_SECRET_KEY?.trim()) return false;
+  if (!getStripeSecretKey()) return false;
   // Au moins un prix doit être défini pour que le tunnel ait un sens.
   return (["PRO", "EXPERT", "ENTREPRISE"] as Tier[]).some(
     (t) => getStripePriceId(t, "month") || getStripePriceId(t, "year")
@@ -48,7 +61,7 @@ export function isStripeConfigured(): boolean {
 
 let _stripe: Stripe | null = null;
 function stripeClient(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY?.trim();
+  const key = getStripeSecretKey();
   if (!key) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

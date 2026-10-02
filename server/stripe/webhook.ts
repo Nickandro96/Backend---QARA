@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import Stripe from "stripe";
 
 import { setSubscription } from "../db";
+import { getStripeSecretKey, isStripeLiveMode } from "./router";
 
 /**
  * Webhook Stripe — met à jour users.subscriptionTier / subscriptionStatus
@@ -17,9 +18,10 @@ import { setSubscription } from "../db";
 function tierFromPriceId(priceId: string | undefined): string | null {
   if (!priceId) return null;
   const map: Record<string, string> = {};
+  const modeSuffix = isStripeLiveMode() ? "_LIVE" : "";
   for (const tier of ["PRO", "EXPERT", "ENTREPRISE"]) {
     for (const suffix of ["MONTH", "YEAR"]) {
-      const v = process.env[`STRIPE_PRICE_${tier}_${suffix}`]?.trim();
+      const v = process.env[`STRIPE_PRICE_${tier}_${suffix}${modeSuffix}`]?.trim();
       if (v) map[v] = tier.toLowerCase();
     }
   }
@@ -27,8 +29,11 @@ function tierFromPriceId(priceId: string | undefined): string | null {
 }
 
 export async function handleStripeWebhook(req: Request, res: Response) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  const key = process.env.STRIPE_SECRET_KEY?.trim();
+  const webhookKey = isStripeLiveMode()
+    ? "STRIPE_WEBHOOK_SECRET_LIVE"
+    : "STRIPE_WEBHOOK_SECRET";
+  const secret = process.env[webhookKey]?.trim();
+  const key = getStripeSecretKey();
   if (!secret || !key) {
     console.error("[stripe] webhook unavailable: Stripe environment is incomplete");
     return res.status(503).json({ received: false, error: "stripe-not-configured" });
