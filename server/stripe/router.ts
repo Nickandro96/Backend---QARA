@@ -119,10 +119,39 @@ export const stripeRouter = router({
       const stripe = stripeClient();
       const base = frontendUrl();
 
+      // Reuse an existing Stripe customer and prevent a second concurrent
+      // subscription. Plan changes must go through the Billing Portal.
+      const customers = ctx.user.email
+        ? await stripe.customers.list({ email: ctx.user.email, limit: 100 })
+        : { data: [] as Stripe.Customer[] };
+      let existingCustomer: Stripe.Customer | undefined;
+      for (const customer of customers.data) {
+        existingCustomer ??= customer;
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: "all",
+          limit: 10,
+        });
+        const hasCurrentSubscription = subscriptions.data.some(
+          (subscription) =>
+            subscription.status !== "canceled" &&
+            subscription.status !== "incomplete_expired"
+        );
+        if (hasCurrentSubscription) {
+          const portal = await stripe.billingPortal.sessions.create({
+            customer: customer.id,
+            return_url: `${base}/subscription`,
+          });
+          return { checkoutUrl: portal.url, sessionId: portal.id };
+        }
+      }
+
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
-        customer_email: ctx.user.email ?? undefined,
+        ...(existingCustomer
+          ? { customer: existingCustomer.id }
+          : { customer_email: ctx.user.email ?? undefined }),
         client_reference_id: String(ctx.user.id),
         metadata: { userId: String(ctx.user.id), tier: input.tier },
         subscription_data: { metadata: { userId: String(ctx.user.id), tier: input.tier } },
