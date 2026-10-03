@@ -22,9 +22,9 @@
  */
 
 import { getDb } from "./db";
-import { audits, findings, actions } from "../drizzle/schema";
+import { audits, findings, actions, audit_responses, questions, sites, processus, referentiels } from "../drizzle/schema";
 import { eq, and, inArray, gte, lte } from "drizzle-orm";
-import { computeGenericAuditProgressSafe, computeGenericAuditScoreSafe, mapSeverityToFindingType } from "./audit-scoring";
+import { computeGenericAuditProgressSafe, computeGenericAuditScoreSafe, mapSeverityToFindingType, SCORE_MAP } from "./audit-scoring";
 
 // Types pour les filtres
 export interface DashboardFilters {
@@ -230,6 +230,111 @@ export async function getDashboardSummary(userId: number, filters?: DashboardFil
 /** GET STATS - utilisé par dashboard.getKPIs (réel). */
 export async function getDashboardStats(userId: number, filters?: DashboardFilters) {
   return await getDashboardSummary(userId, filters);
+}
+
+function scoreRows(rows: any[]) {
+  if (!rows.length) return 0;
+  const total = rows.reduce((sum, row) => sum + (SCORE_MAP[String(row.responseValue || "in_progress")] ?? 50), 0);
+  return Math.round((total / rows.length) * 10) / 10;
+}
+
+/** Agrégats analytiques réels, toujours isolés par propriétaire d'audit. */
+export async function getAnalyticsBreakdown(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const userAudits = await db.select().from(audits).where(eq(audits.userId, userId));
+  const auditIds = userAudits.map((audit: any) => audit.id);
+  if (!auditIds.length) {
+    return { timeline: [], sites: [], processes: [], referentials: [], clauses: [] };
+  }
+
+  const responses = await db
+    .select()
+    .from(audit_responses)
+    .where(and(eq(audit_responses.userId, userId), inArray(audit_responses.auditId, auditIds)));
+  const questionKeys = [...new Set(responses.map((row: any) => row.questionKey).filter(Boolean))];
+  const questionRows = questionKeys.length
+    ? await db.select().from(questions).where(inArray(questions.questionKey, questionKeys))
+    : [];
+
+  const siteIds = [...new Set(userAudits.map((audit: any) => audit.siteId).filter(Boolean))] as number[];
+  const processIds = [...new Set(questionRows.map((question: any) => question.processId).filter(Boolean))] as number[];
+  const referentialIds = [...new Set(questionRows.map((question: any) => question.referentialId).filter(Boolean))] as number[];
+  const [siteRows, processRows, referentialRows] = await Promise.all([
+    siteIds.length ? db.select().from(sites).where(inArray(sites.id, siteIds)) : [],
+    processIds.length ? db.select().from(processus).where(inArray(processus.id, processIds)) : [],
+    referentialIds.length ? db.select().from(referentiels).where(inArray(referentiels.id, referentialIds)) : [],
+  ]);
+
+  const auditsById = new Map(userAudits.map((audit: any) => [audit.id, audit]));
+  const questionsByKey = new Map(questionRows.map((question: any) => [String(question.questionKey), question]));
+  const siteNames = new Map(siteRows.map((site: any) => [site.id, site.name]));
+  const processNames = new Map(processRows.map((process: any) => [process.id, process.name]));
+  const referentialNames = new Map(referentialRows.map((ref: any) => [ref.id, ref.name]));
+
+  const group = (keyOf: (response: any) => string | null) => {
+    const buckets = new Map<string, any[]>();
+    for (const response of responses) {
+      const key = keyOf(response);
+      if (!key) continue;
+      buckets.set(key, [...(buckets.get(key) ?? []), response]);
+    }
+    return [...buckets.entries()].map(([label, rows]) => ({ label, score: scoreRows(rows), responses: rows.length }));
+  };
+
+  const byAudit = new Map<number, any[]>();
+  for (const response of responses) byAudit.set(response.auditId, [...(byAudit.get(response.auditId) ?? []), response]);
+  const monthly = new Map<string, { scores: number[]; audits: number }>();
+  for (const audit of userAudits as any[]) {
+    const date = audit.endDate || audit.startDate || audit.updatedAt || audit.createdAt;
+    if (!date || !(byAudit.get(audit.id)?.length)) continue;
+    const key = new Date(date).toISOString().slice(0, 7);
+    const bucket = monthly.get(key) ?? { scores: [], audits: 0 };
+    bucket.scores.push(scoreRows(byAudit.get(audit.id) ?? []));
+    bucket.audits += 1;
+    monthly.set(key, bucket);
+  }
+
+  const timeline = [...monthly.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, bucket]) => ({
+      month,
+      score: Math.round((bucket.scores.reduce((sum, value) => sum + value, 0) / bucket.scores.length) * 10) / 10,
+      audits: bucket.audits,
+    }));
+
+  const siteBreakdown = group((response) => {
+    const audit: any = auditsById.get(response.auditId);
+    if (!audit) return null;
+    return siteNames.get(audit.siteId) || audit.siteLocation || null;
+  });
+  const processBreakdown = group((response) => {
+    const question: any = questionsByKey.get(String(response.questionKey));
+    const processId = response.processId || question?.processId;
+    return processNames.get(processId) || question?.processDetail || null;
+  });
+  const referentialBreakdown = group((response) => {
+    const question: any = questionsByKey.get(String(response.questionKey));
+    return referentialNames.get(question?.referentialId) || null;
+  });
+
+  const clauseBuckets = new Map<string, { total: number; nonConforming: number }>();
+  for (const response of responses as any[]) {
+    const question: any = questionsByKey.get(String(response.questionKey));
+    const clause = question?.article || question?.annexe || null;
+    if (!clause) continue;
+    const bucket = clauseBuckets.get(clause) ?? { total: 0, nonConforming: 0 };
+    bucket.total += 1;
+    if (["partial", "non_compliant"].includes(String(response.responseValue))) bucket.nonConforming += 1;
+    clauseBuckets.set(clause, bucket);
+  }
+  const clauses = [...clauseBuckets.entries()]
+    .map(([label, bucket]) => ({ label, ...bucket }))
+    .sort((a, b) => b.nonConforming - a.nonConforming || b.total - a.total)
+    .slice(0, 20);
+
+  return { timeline, sites: siteBreakdown, processes: processBreakdown, referentials: referentialBreakdown, clauses };
 }
 
 /**

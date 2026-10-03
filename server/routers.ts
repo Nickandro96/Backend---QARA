@@ -977,6 +977,10 @@ export const appRouter = router({
         return drill?.items ?? drill?.data ?? [];
       }),
 
+    getAnalytics: protectedProcedure.query(async ({ ctx }) => {
+      return dashboardV2.getAnalyticsBreakdown(ctx.user.id);
+    }),
+
   }),
 
   // Stripe payment router
