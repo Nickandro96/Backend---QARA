@@ -1,0 +1,1778 @@
+{
+  "generatedAt": "2026-10-05T19:48:13.123Z",
+  "source": "C:/Users/nngan/Documents/Codex/2026-09-21/tu-as-les-acc-s-n/work/backend-qara/scripts/questions_import_ready.json",
+  "total": 473,
+  "byRef": {
+    "FDA_QMSR": {
+      "count": 43,
+      "exactReference": 43,
+      "evidence": 43,
+      "discriminating": 43,
+      "pedagogy": 43,
+      "grading": 43,
+      "official": 43,
+      "staleFda": 0,
+      "generic": 43,
+      "samd": 3,
+      "latam": 0,
+      "multiMarket": 0,
+      "scoreSum": 258,
+      "processes": {
+        "Applicabilité QMSR": 1,
+        "Définitions QMSR": 1,
+        "Incorporation ISO 13485": 1,
+        "Système qualité QMSR": 1,
+        "Clarification de concepts": 2,
+        "Control of records": 1,
+        "Device labeling and packaging controls": 1,
+        "Medical Device Reporting": 2,
+        "Procédure MDR reporting": 2,
+        "Reporting fabricant": 1,
+        "Corrections and removals": 3,
+        "Report corrections/removals": 1,
+        "Records non-reportable corrections": 1,
+        "Registration and listing": 2,
+        "Foreign establishment/importer": 1,
+        "510(k)": 2,
+        "Labeling": 1,
+        "UDI Label": 2,
+        "UDI System": 2,
+        "New Device Identifier": 1,
+        "De Novo": 3,
+        "PMA": 1,
+        "Complaint→MDR→CAPA": 3,
+        "Design change→submission": 2,
+        "Supplier/QMSR": 2,
+        "Software/Cybersecurity": 3
+      }
+    },
+    "ISO13485": {
+      "count": 93,
+      "exactReference": 93,
+      "evidence": 93,
+      "discriminating": 93,
+      "pedagogy": 93,
+      "grading": 93,
+      "official": 0,
+      "staleFda": 0,
+      "generic": 87,
+      "samd": 0,
+      "latam": 0,
+      "multiMarket": 0,
+      "scoreSum": 465,
+      "processes": {
+        "SMQ médical": 1,
+        "Processus externalisés": 2,
+        "Documentation SMQ": 1,
+        "Manuel qualité": 1,
+        "Dossier dispositif médical": 1,
+        "Maîtrise documentaire": 1,
+        "Maîtrise des enregistrements": 1,
+        "Engagement direction": 1,
+        "Orientation client/réglementaire": 1,
+        "Politique qualité DM": 1,
+        "Objectifs qualité DM": 1,
+        "Planification SMQ": 1,
+        "Responsabilités": 1,
+        "Représentant direction": 1,
+        "Communication interne": 1,
+        "Revue de direction": 3,
+        "Ressources": 1,
+        "Ressources humaines": 2,
+        "Infrastructure": 2,
+        "Environnement de travail": 1,
+        "Réalisation produit": 3,
+        "Exigences produit": 1,
+        "Revue exigences": 1,
+        "Communication client": 2,
+        "Planification conception": 2,
+        "Entrées conception": 2,
+        "Sorties conception": 2,
+        "Revues conception": 2,
+        "Vérification conception": 2,
+        "Validation conception": 3,
+        "Transfert conception": 2,
+        "Modifications conception": 2,
+        "Dossier conception": 2,
+        "Achats": 2,
+        "Informations d’achat": 2,
+        "Vérification achat": 1,
+        "Production/service": 1,
+        "Propreté produit": 1,
+        "Installation": 1,
+        "Service après-vente": 1,
+        "Dispositifs stériles": 3,
+        "Validation procédés": 3,
+        "Validation stérilisation": 3,
+        "Identification": 1,
+        "Traçabilité": 2,
+        "Propriété client": 2,
+        "Préservation produit": 2,
+        "Équipements mesure": 1,
+        "Feedback": 1,
+        "Réclamations": 2,
+        "Signalement autorités": 1,
+        "Audit interne": 2,
+        "Surveillance processus": 1,
+        "Surveillance produit": 1,
+        "Produit non conforme": 1,
+        "Analyse des données": 2,
+        "Amélioration": 1,
+        "Action corrective": 2,
+        "Action préventive": 2
+      }
+    },
+    "ISO14971": {
+      "count": 67,
+      "exactReference": 67,
+      "evidence": 67,
+      "discriminating": 67,
+      "pedagogy": 67,
+      "grading": 67,
+      "official": 67,
+      "staleFda": 0,
+      "generic": 66,
+      "samd": 6,
+      "latam": 0,
+      "multiMarket": 0,
+      "scoreSum": 402,
+      "processes": {
+        "Processus gestion des risques": 3,
+        "Responsabilités direction risques": 3,
+        "Compétence risques": 3,
+        "Plan de gestion des risques": 3,
+        "Dossier de gestion des risques": 3,
+        "Analyse des risques": 3,
+        "Usage prévu": 1,
+        "Caractéristiques sécurité": 1,
+        "Dangers et situations dangereuses": 1,
+        "Estimation des risques": 3,
+        "Évaluation des risques": 3,
+        "Maîtrise des risques": 3,
+        "Analyse options de maîtrise": 3,
+        "Mise en œuvre contrôles": 1,
+        "Résidu de risque individuel": 3,
+        "Analyse bénéfice-risque": 3,
+        "Risques issus des contrôles": 3,
+        "Complétude maîtrise": 1,
+        "Risque résiduel global": 3,
+        "Revue gestion des risques": 3,
+        "Production et post-production": 2,
+        "Revue des informations post-production": 3,
+        "Actions post-production": 3,
+        "Lien risques-PMS-CAPA": 3,
+        "Lien risques-utilisabilité": 3,
+        "Lien risques-logiciel": 3
+      }
+    },
+    "ISO9001": {
+      "count": 44,
+      "exactReference": 44,
+      "evidence": 44,
+      "discriminating": 44,
+      "pedagogy": 44,
+      "grading": 44,
+      "official": 44,
+      "staleFda": 0,
+      "generic": 41,
+      "samd": 0,
+      "latam": 0,
+      "multiMarket": 0,
+      "scoreSum": 264,
+      "processes": {
+        "Contexte de l’organisme": 1,
+        "Parties intéressées": 1,
+        "Périmètre du SMQ": 1,
+        "Processus SMQ": 1,
+        "Leadership": 1,
+        "Politique qualité": 1,
+        "Rôles et responsabilités": 1,
+        "Risques et opportunités": 3,
+        "Objectifs qualité": 1,
+        "Changements SMQ": 1,
+        "Ressources générales": 1,
+        "Personnel": 1,
+        "Infrastructure": 1,
+        "Environnement opérationnel": 1,
+        "Ressources de surveillance et mesure": 1,
+        "Connaissances organisationnelles": 1,
+        "Compétence": 1,
+        "Sensibilisation": 1,
+        "Communication": 1,
+        "Informations documentées": 1,
+        "Planification opérationnelle": 1,
+        "Exigences clients": 1,
+        "Conception et développement": 3,
+        "Prestataires externes": 2,
+        "Production et prestation": 1,
+        "Libération": 1,
+        "Sorties non conformes": 1,
+        "Surveillance et mesure": 2,
+        "Satisfaction client": 1,
+        "Analyse des données": 1,
+        "Audit interne": 3,
+        "Revue de direction": 1,
+        "Amélioration": 1,
+        "Non-conformité et action corrective": 2,
+        "Amélioration continue": 1
+      }
+    },
+    "IVDR": {
+      "count": 72,
+      "exactReference": 72,
+      "evidence": 72,
+      "discriminating": 72,
+      "pedagogy": 72,
+      "grading": 72,
+      "official": 72,
+      "staleFda": 0,
+      "generic": 67,
+      "samd": 0,
+      "latam": 0,
+      "multiMarket": 0,
+      "scoreSum": 432,
+      "processes": {
+        "Mise sur le marché IVD": 1,
+        "Obligations fabricant IVD": 3,
+        "SMQ fabricant IVDR": 3,
+        "Mandataire IVDR": 1,
+        "Importateur IVDR": 1,
+        "Distributeur IVDR": 2,
+        "PRRC IVDR": 2,
+        "Relabelling/repackaging IVDR": 2,
+        "Déclaration UE conformité IVDR": 2,
+        "Marquage CE IVDR": 2,
+        "UDI IVDR": 2,
+        "Enregistrement dispositifs IVD": 1,
+        "Enregistrement opérateurs IVDR": 1,
+        "Classification IVD": 1,
+        "Conformity assessment IVDR": 2,
+        "Intervention ON": 1,
+        "Performance evaluation": 3,
+        "Documentation performance": 3,
+        "Études de performance": 2,
+        "PMS IVDR": 3,
+        "Plan PMS IVDR": 3,
+        "Rapport PMS IVDR": 3,
+        "PSUR IVDR": 1,
+        "Vigilance IVDR": 3,
+        "Trend reporting IVDR": 1,
+        "Analyse incidents/FSCA IVDR": 3,
+        "Surveillance marché IVDR": 1,
+        "GSPR IVD général": 3,
+        "GSPR performance/conception IVD": 3,
+        "GSPR information utilisateur IVD": 2,
+        "Documentation technique IVDR": 1,
+        "Documentation PMS IVDR": 3,
+        "Règles classification IVDR": 1,
+        "Évaluation conformité SMQ IVDR": 2,
+        "Examen type UE IVDR": 1,
+        "Assurance qualité production IVDR": 1,
+        "Performance studies IVDR": 2
+      }
+    },
+    "MDR": {
+      "count": 80,
+      "exactReference": 80,
+      "evidence": 80,
+      "discriminating": 80,
+      "pedagogy": 80,
+      "grading": 80,
+      "official": 80,
+      "staleFda": 0,
+      "generic": 74,
+      "samd": 0,
+      "latam": 1,
+      "multiMarket": 0,
+      "scoreSum": 480,
+      "processes": {
+        "Mise sur le marché": 1,
+        "Obligations fabricant": 3,
+        "SMQ fabricant MDR": 3,
+        "Responsabilité produit": 3,
+        "Mandataire": 1,
+        "Importateur": 2,
+        "Distributeur": 2,
+        "PRRC": 2,
+        "Relabelling/repackaging": 2,
+        "Carte implant": 1,
+        "Déclaration UE de conformité": 2,
+        "Marquage CE": 2,
+        "Systèmes et nécessaires": 1,
+        "Traçabilité chaîne d’approvisionnement": 2,
+        "UDI": 2,
+        "Enregistrement dispositifs": 1,
+        "Enregistrement opérateurs": 1,
+        "SSCP": 3,
+        "Classification": 1,
+        "Conformity assessment": 2,
+        "Certificats ON": 1,
+        "Évaluation clinique": 3,
+        "Investigations cliniques": 3,
+        "PMS": 3,
+        "Plan PMS": 3,
+        "Rapport PMS": 3,
+        "PSUR": 1,
+        "Vigilance incidents graves/FSCA": 3,
+        "Trend reporting": 3,
+        "Analyse incidents/FSCA": 3,
+        "Surveillance marché": 1,
+        "GSPR général": 3,
+        "GSPR conception/fabrication": 2,
+        "GSPR information utilisateur": 2,
+        "Documentation technique": 1,
+        "Documentation PMS": 3,
+        "Règles classification": 1,
+        "Évaluation conformité SMQ": 2,
+        "Assurance qualité production": 1,
+        "Dispositifs sur mesure": 1
+      }
+    },
+    "MDSAP": {
+      "count": 74,
+      "exactReference": 74,
+      "evidence": 74,
+      "discriminating": 74,
+      "pedagogy": 74,
+      "grading": 74,
+      "official": 73,
+      "staleFda": 0,
+      "generic": 66,
+      "samd": 0,
+      "latam": 4,
+      "multiMarket": 3,
+      "scoreSum": 443,
+      "processes": {
+        "Management": 12,
+        "Measurement, Analysis and Improvement": 12,
+        "Design and Development": 15,
+        "Production and Service Controls": 8,
+        "Purchasing": 7,
+        "Device Marketing Authorization and Facility Registration": 6,
+        "Medical Device Adverse Events and Advisory Notices Reporting": 10,
+        "Process Linkage": 1,
+        "NC Grading": 1,
+        "Country-specific requirements": 2
+      }
+    }
+  },
+  "duplicateTitles": [
+    {
+      "title": "21 cfr 820.15 — clarification des concepts fda tels que organisation, safety/performance et exigences réglementaires",
+      "keys": [
+        "Q-FDA-CC-4802",
+        "Q-FDA-CC-5099"
+      ]
+    },
+    {
+      "title": "21 cfr 803 — détection, évaluation et déclaration des événements à déclaration obligatoire fda",
+      "keys": [
+        "Q-FDA-MDR-9221",
+        "Q-FDA-MDR-0336"
+      ]
+    },
+    {
+      "title": "21 cfr 803.17 — procédures écrites de medical device reporting et enregistrements d’évaluation",
+      "keys": [
+        "Q-FDA-PMR-8072",
+        "Q-FDA-PMR-2003"
+      ]
+    },
+    {
+      "title": "21 cfr 806 — rapports et enregistrements fda des corrections et retraits visant un risque santé ou violation",
+      "keys": [
+        "Q-FDA-CR-5666",
+        "Q-FDA-CR-7241",
+        "Q-FDA-CR-3056"
+      ]
+    },
+    {
+      "title": "21 cfr 807 — enregistrement établissement et listing des dispositifs auprès de la fda",
+      "keys": [
+        "Q-FDA-RL-9680",
+        "Q-FDA-RL-8745"
+      ]
+    },
+    {
+      "title": "21 cfr 801.20-57 — exigences udi sur étiquette et exceptions applicables",
+      "keys": [
+        "Q-FDA-UL-1662",
+        "Q-FDA-UL-1365"
+      ]
+    },
+    {
+      "title": "21 cfr 830 — attribution, changement, maintien et soumission gudid des identifiants udi",
+      "keys": [
+        "Q-FDA-US-4294",
+        "Q-FDA-US-2719"
+      ]
+    },
+    {
+      "title": "21 cfr 860 subpart d (§§860.200–860.260) — demande de classification de novo (fd&c 513(f)(2)) pour dispositif nouveau à risque faible/modéré sans predicate légalement commercialisé : contenu, recevabilité, délais et effets de l'ordre de classification (contrôles spéciaux applicables, base pour de futurs 510(k)).",
+      "keys": [
+        "Q-FDA-N-2561",
+        "Q-FDA-N-1933",
+        "Q-FDA-N-6492"
+      ]
+    },
+    {
+      "title": "qmsr — traitement des réclamations et capa : 21 cfr 820.35(a) et 820.10, iso 13485:2016 §8.2.2, §8.5.2 et §8.5.3 incorporées par référence",
+      "keys": [
+        "Q-FDA-CMC-0807",
+        "Q-FDA-CMC-1104",
+        "Q-FDA-CMC-4738"
+      ]
+    },
+    {
+      "title": "21 cfr 807.81(a)(3) — nouveau 510(k) requis pour tout changement/modification significatif du dispositif ou de son étiquetage susceptible d'affecter sécurité ou efficacité (guidance fda « deciding when to submit a 510(k) for a change to an existing device »).",
+      "keys": [
+        "Q-FDA-DCS-2444",
+        "Q-FDA-DCS-2147"
+      ]
+    },
+    {
+      "title": "qmsr 21 cfr 820.10 — maîtrise des achats et des fournisseurs via iso 13485 7.4 incorporée par référence (§820.7) : critères d'évaluation/sélection/surveillance proportionnés au risque, informations d'achat, vérification du produit acheté ; les rapports de performance fournisseur documentés.",
+      "keys": [
+        "Q-FDA-SQ-5662",
+        "Q-FDA-SQ-4087"
+      ]
+    },
+    {
+      "title": "fd&c section 524b — exigences cybersécurité pour les « cyber devices » (plan de surveillance et de correction des vulnérabilités, processus assurant la cybersécurité, sbom) dans les soumissions premarket ; intégration au design control iso 13485 7.3 (gestion du cycle de vie du logiciel).",
+      "keys": [
+        "Q-FDA-SC-6736",
+        "Q-FDA-SC-8311",
+        "Q-FDA-SC-4677"
+      ]
+    },
+    {
+      "title": "4.1.5 — maîtrise des processus externalisés influençant la conformité des dispositifs",
+      "keys": [
+        "Q-13485-PE-8433",
+        "Q-13485-PE-0008"
+      ]
+    },
+    {
+      "title": "5.6 — revue de direction incluant entrées réglementaires, feedback, audits, fournisseurs, risques et actions",
+      "keys": [
+        "Q-13485-RD-6139",
+        "Q-13485-RD-4564",
+        "Q-13485-RD-8627"
+      ]
+    },
+    {
+      "title": "6.2 — compétence, formation, sensibilisation et traçabilité du personnel",
+      "keys": [
+        "Q-13485-RH-8042",
+        "Q-13485-RH-4408"
+      ]
+    },
+    {
+      "title": "6.3 — infrastructures nécessaires pour prévenir la non-conformité du produit",
+      "keys": [
+        "Q-13485-I-8964",
+        "Q-13485-I-2598"
+      ]
+    },
+    {
+      "title": "7.1 — planification de la réalisation produit incluant exigences qualité, risques, vérifications et enregistrements",
+      "keys": [
+        "Q-13485-RP-6946",
+        "Q-13485-RP-1479",
+        "Q-13485-RP-5113"
+      ]
+    },
+    {
+      "title": "7.2.3 — communication client incluant informations produit, contrats, feedback et réclamations",
+      "keys": [
+        "Q-13485-CC-8673",
+        "Q-13485-CC-6577"
+      ]
+    },
+    {
+      "title": "7.3.2 — planification de la conception avec étapes, revues, interfaces et responsabilités",
+      "keys": [
+        "Q-13485-PC-5493",
+        "Q-13485-PC-9127"
+      ]
+    },
+    {
+      "title": "7.3.3 — entrées conception complètes, vérifiables, incluant exigences fonctionnelles, performance, sécurité, réglementation",
+      "keys": [
+        "Q-13485-EC-3453",
+        "Q-13485-EC-4972"
+      ]
+    },
+    {
+      "title": "7.3.4 — sorties conception approuvées permettant vérification et fournissant critères d’acceptation",
+      "keys": [
+        "Q-13485-SC-8394",
+        "Q-13485-SC-4797"
+      ]
+    },
+    {
+      "title": "7.3.5 — revues systématiques de conception aux étapes appropriées",
+      "keys": [
+        "Q-13485-RC-6014",
+        "Q-13485-RC-1108"
+      ]
+    },
+    {
+      "title": "7.3.6 — vérification démontrant que les sorties répondent aux entrées",
+      "keys": [
+        "Q-13485-VC-0493",
+        "Q-13485-VC-2698"
+      ]
+    },
+    {
+      "title": "7.3.7 — validation démontrant que le dispositif répond à l’usage prévu et aux besoins utilisateur",
+      "keys": [
+        "Q-13485-VC-9155",
+        "Q-13485-VC-7580",
+        "Q-13485-VC-1214"
+      ]
+    },
+    {
+      "title": "7.3.8 — transfert de conception vers production maîtrisé et vérifié",
+      "keys": [
+        "Q-13485-TC-1099",
+        "Q-13485-TC-4733"
+      ]
+    },
+    {
+      "title": "7.3.9 — maîtrise des modifications de conception et analyse d’impact",
+      "keys": [
+        "Q-13485-MC-1581",
+        "Q-13485-MC-7947"
+      ]
+    },
+    {
+      "title": "7.3.10 — dossier de conception maintenu pour démontrer la conformité",
+      "keys": [
+        "Q-13485-DC-8776",
+        "Q-13485-DC-9073"
+      ]
+    },
+    {
+      "title": "7.4.1 — processus d’achat fondé sur l’impact fournisseur sur la conformité produit",
+      "keys": [
+        "Q-13485-A-1074",
+        "Q-13485-A-4176"
+      ]
+    },
+    {
+      "title": "7.4.2 — exigences d’achat documentées, incluant critères produit, procédures, qualification et qms fournisseur",
+      "keys": [
+        "Q-13485-IDA-1734",
+        "Q-13485-IDA-1457"
+      ]
+    },
+    {
+      "title": "7.5.5 — exigences spécifiques aux dispositifs stériles et barrières stériles",
+      "keys": [
+        "Q-13485-DS-9110",
+        "Q-13485-DS-6140",
+        "Q-13485-DS-7051"
+      ]
+    },
+    {
+      "title": "7.5.6 — validation des procédés dont les résultats ne peuvent pas être pleinement vérifiés a posteriori",
+      "keys": [
+        "Q-13485-VP-0054",
+        "Q-13485-VP-0351",
+        "Q-13485-VP-6015"
+      ]
+    },
+    {
+      "title": "7.5.7 — validation des procédés de stérilisation et systèmes barrières stériles",
+      "keys": [
+        "Q-13485-VS-8190",
+        "Q-13485-VS-5001",
+        "Q-13485-VS-3424"
+      ]
+    },
+    {
+      "title": "7.5.9 — traçabilité produit, lots, composants et exigences réglementaires applicables",
+      "keys": [
+        "Q-13485-T-3038",
+        "Q-13485-T-6672"
+      ]
+    },
+    {
+      "title": "7.5.10 — maîtrise de la propriété client ou fournisseur externe",
+      "keys": [
+        "Q-13485-PC-2325",
+        "Q-13485-PC-2169"
+      ]
+    },
+    {
+      "title": "7.5.11 — préservation de la conformité durant traitement, stockage, manutention et livraison",
+      "keys": [
+        "Q-13485-PP-6329",
+        "Q-13485-PP-6862"
+      ]
+    },
+    {
+      "title": "8.2.2 — traitement des réclamations avec investigation, justification et enregistrements",
+      "keys": [
+        "Q-13485-R-1225",
+        "Q-13485-R-4859"
+      ]
+    },
+    {
+      "title": "8.2.4 — audits internes planifiés et réalisés sur l’ensemble du smq",
+      "keys": [
+        "Q-13485-AI-1246",
+        "Q-13485-AI-7179"
+      ]
+    },
+    {
+      "title": "8.4 — analyse des données qualité, fournisseurs, feedback, conformité et tendances",
+      "keys": [
+        "Q-13485-AD-5089",
+        "Q-13485-AD-1455"
+      ]
+    },
+    {
+      "title": "8.5.2 — actions correctives fondées sur investigation cause racine et efficacité",
+      "keys": [
+        "Q-13485-AC-1826",
+        "Q-13485-AC-6599"
+      ]
+    },
+    {
+      "title": "8.5.3 — actions préventives proportionnées aux effets potentiels des non-conformités",
+      "keys": [
+        "Q-13485-AP-7100",
+        "Q-13485-AP-7394"
+      ]
+    },
+    {
+      "title": "4.1 — processus de gestion des risques couvrant toutes les phases du cycle de vie du dispositif",
+      "keys": [
+        "Q-14971-PGR-8687",
+        "Q-14971-PGR-9738",
+        "Q-14971-PGR-3372"
+      ]
+    },
+    {
+      "title": "4.2 — responsabilités, ressources et revue de direction pour la gestion des risques",
+      "keys": [
+        "Q-14971-RDR-4511",
+        "Q-14971-RDR-4214",
+        "Q-14971-RDR-1036"
+      ]
+    },
+    {
+      "title": "4.3 — compétence du personnel réalisant les activités de gestion des risques",
+      "keys": [
+        "Q-14971-CR-6258",
+        "Q-14971-CR-0864",
+        "Q-14971-CR-2327"
+      ]
+    },
+    {
+      "title": "4.4 — plan de gestion des risques définissant périmètre, responsabilités, critères d’acceptabilité et activités",
+      "keys": [
+        "Q-14971-PGR-1943",
+        "Q-14971-PGR-1248",
+        "Q-14971-PGR-4002"
+      ]
+    },
+    {
+      "title": "4.5 — dossier de gestion des risques traçable vers analyses, évaluations, contrôles et revues",
+      "keys": [
+        "Q-14971-DGR-2987",
+        "Q-14971-DGR-5438",
+        "Q-14971-DGR-9056"
+      ]
+    },
+    {
+      "title": "5.1 — analyse des risques sur le dispositif médical selon le plan approuvé",
+      "keys": [
+        "Q-14971-AR-6051",
+        "Q-14971-AR-5754",
+        "Q-14971-AR-2120"
+      ]
+    },
+    {
+      "title": "5.5 — estimation des risques pour chaque situation dangereuse identifiée",
+      "keys": [
+        "Q-14971-ER-1264",
+        "Q-14971-ER-9689",
+        "Q-14971-ER-1630"
+      ]
+    },
+    {
+      "title": "6 — comparaison des risques estimés aux critères d’acceptabilité définis",
+      "keys": [
+        "Q-14971-ER-8113",
+        "Q-14971-ER-8253",
+        "Q-14971-ER-0172"
+      ]
+    },
+    {
+      "title": "7.1 — analyse des options de maîtrise des risques et détermination des mesures appropriées pour ramener les risques à un niveau acceptable",
+      "keys": [
+        "Q-14971-MR-4038",
+        "Q-14971-MR-9153",
+        "Q-14971-MR-9272"
+      ]
+    },
+    {
+      "title": "7.1 — ordre de priorité des options de maîtrise : sécurité inhérente à la conception et à la fabrication, mesures de protection (dispositif ou procédé de fabrication), information pour la sécurité / formation",
+      "keys": [
+        "Q-14971-AOM-0896",
+        "Q-14971-AOM-5470",
+        "Q-14971-AOM-2955"
+      ]
+    },
+    {
+      "title": "7.3 — évaluation des risques résiduels après maîtrise, selon les critères d'acceptabilité du plan",
+      "keys": [
+        "Q-14971-RRI-6312",
+        "Q-14971-RRI-0054",
+        "Q-14971-RRI-8371"
+      ]
+    },
+    {
+      "title": "7.4 — analyse du bénéfice/risque lorsque le risque résiduel n'est pas acceptable et qu'aucune réduction supplémentaire n'est réalisable",
+      "keys": [
+        "Q-14971-ABR-2180",
+        "Q-14971-ABR-5814",
+        "Q-14971-ABR-6111"
+      ]
+    },
+    {
+      "title": "7.5 — examen des risques découlant des mesures de maîtrise : nouveaux dangers/situations dangereuses ou impact sur les risques déjà estimés",
+      "keys": [
+        "Q-14971-RIC-1049",
+        "Q-14971-RIC-0752",
+        "Q-14971-RIC-7118"
+      ]
+    },
+    {
+      "title": "8 — évaluation de l’acceptabilité du risque résiduel global",
+      "keys": [
+        "Q-14971-RRG-7446",
+        "Q-14971-RRG-3812",
+        "Q-14971-RRG-3515"
+      ]
+    },
+    {
+      "title": "9 — revue de gestion des risques avant libération commerciale",
+      "keys": [
+        "Q-14971-RGR-9160",
+        "Q-14971-RGR-5334",
+        "Q-14971-RGR-3091"
+      ]
+    },
+    {
+      "title": "10.3 — examen des informations collectées pour leur pertinence en matière de sécurité : nouveaux dangers, risque devenu inacceptable, risque résiduel global remis en cause, évolution de l'état de l'art",
+      "keys": [
+        "Q-14971-RIPP-2086",
+        "Q-14971-RIPP-6339",
+        "Q-14971-RIPP-4764"
+      ]
+    },
+    {
+      "title": "10.4 — actions lorsque les informations sont pertinentes pour la sécurité : réexamen du dossier de risques, réappréciation, impact sur les mesures, actions sur les dispositifs sur le marché, retour vers la revue de direction",
+      "keys": [
+        "Q-14971-APP-5733",
+        "Q-14971-APP-7458",
+        "Q-14971-APP-9033"
+      ]
+    },
+    {
+      "title": "10.3/10.4 — cohérence de la boucle post-production : examen des informations (réclamations, pms, capa) et actions résultantes incluant la mise à jour du dossier de gestion des risques et l'évaluation d'impact sur la conception",
+      "keys": [
+        "Q-14971-LRPC-0459",
+        "Q-14971-LRPC-0756",
+        "Q-14971-LRPC-4390"
+      ]
+    },
+    {
+      "title": "5.4 — identification des dangers et situations dangereuses incluant les erreurs d'utilisation, sur la base de l'utilisation prévue et de la mauvaise utilisation raisonnablement prévisible documentées en 5.2 (déf. 3.30 ; liaison iec 62366-1)",
+      "keys": [
+        "Q-14971-LRU-1486",
+        "Q-14971-LRU-1705",
+        "Q-14971-LRU-3545"
+      ]
+    },
+    {
+      "title": "5.4 — identification des dangers incluant les risques liés au logiciel et à la sécurité des données et des systèmes, explicitement dans le domaine d'application (article 1 ; justification a.2.1)",
+      "keys": [
+        "Q-14971-LRL-8098",
+        "Q-14971-LRL-7801",
+        "Q-14971-LRL-4167"
+      ]
+    },
+    {
+      "title": "6.1 — planification des risques et opportunités affectant le smq",
+      "keys": [
+        "Q-9001-RO-2538",
+        "Q-9001-RO-8904",
+        "Q-9001-RO-9521"
+      ]
+    },
+    {
+      "title": "8.3 — maîtrise de la conception, des revues, vérifications, validations et changements",
+      "keys": [
+        "Q-9001-CD-6572",
+        "Q-9001-CD-4997",
+        "Q-9001-CD-9497"
+      ]
+    },
+    {
+      "title": "8.4 — maîtrise des fournisseurs et processus externalisés",
+      "keys": [
+        "Q-9001-PE-9284",
+        "Q-9001-PE-8987"
+      ]
+    },
+    {
+      "title": "9.1.1 — détermination, analyse et évaluation des performances du smq",
+      "keys": [
+        "Q-9001-SM-5761",
+        "Q-9001-SM-9395"
+      ]
+    },
+    {
+      "title": "9.2 — programme d’audit interne planifié selon les risques et résultats",
+      "keys": [
+        "Q-9001-AI-9052",
+        "Q-9001-AI-8755",
+        "Q-9001-AI-5121"
+      ]
+    },
+    {
+      "title": "10.2 — traitement des non-conformités et actions correctives efficaces",
+      "keys": [
+        "Q-9001-NCAC-0474",
+        "Q-9001-NCAC-0771"
+      ]
+    },
+    {
+      "title": "art. 10 — fabricant ivd disposant d’un smq, gestion des risques, performance evaluation, pms et documentation technique",
+      "keys": [
+        "Q-IVDR-OFI-2440",
+        "Q-IVDR-OFI-0865",
+        "Q-IVDR-OFI-4499"
+      ]
+    },
+    {
+      "title": "art. 10(8) — smq couvrant stratégie réglementaire, gspr, responsabilités, ressources, production, pms, vigilance et capa",
+      "keys": [
+        "Q-IVDR-SFI-3580",
+        "Q-IVDR-SFI-4845",
+        "Q-IVDR-SFI-9649"
+      ]
+    },
+    {
+      "title": "art. 11 — mandat écrit et obligations du mandataire ue maîtrisés",
+      "keys": [
+        "Q-IVDR-MI-1229",
+        "Q-MDR-M-1555"
+      ]
+    },
+    {
+      "title": "art. 14 — vérifications distributeur, stockage/transport, réclamations et coopération autorités",
+      "keys": [
+        "Q-IVDR-DI-8225",
+        "Q-IVDR-DI-0200",
+        "Q-MDR-D-7081",
+        "Q-MDR-D-5506"
+      ]
+    },
+    {
+      "title": "art. 15 — personne responsable conformité réglementaire qualifiée et impliquée",
+      "keys": [
+        "Q-IVDR-PI-5092",
+        "Q-IVDR-PI-6667"
+      ]
+    },
+    {
+      "title": "art. 16 — reconditionnement/relabeling maîtrisé sans altérer la conformité ivd",
+      "keys": [
+        "Q-IVDR-RRI-8516",
+        "Q-IVDR-RRI-4675"
+      ]
+    },
+    {
+      "title": "art. 17 — déclaration ue de conformité ivd établie et tenue à jour",
+      "keys": [
+        "Q-IVDR-DUCI-8719",
+        "Q-IVDR-DUCI-5085"
+      ]
+    },
+    {
+      "title": "art. 18 — marquage ce apposé après conformité démontrée",
+      "keys": [
+        "Q-IVDR-MCI-9783",
+        "Q-IVDR-MCI-4711"
+      ]
+    },
+    {
+      "title": "art. 24 — udi-di/udi-pi attribué, apposé et maintenu",
+      "keys": [
+        "Q-IVDR-UI-2489",
+        "Q-IVDR-UI-8855"
+      ]
+    },
+    {
+      "title": "art. 48 — voie d’évaluation de conformité sélectionnée selon classe ivd",
+      "keys": [
+        "Q-IVDR-CAI-3208",
+        "Q-IVDR-CAI-3158"
+      ]
+    },
+    {
+      "title": "art. 56 — évaluation des performances fondée sur validité scientifique, performance analytique et clinique",
+      "keys": [
+        "Q-IVDR-PE-8439",
+        "Q-IVDR-PE-1858",
+        "Q-IVDR-PE-0283"
+      ]
+    },
+    {
+      "title": "art. 57 — documentation de performance evaluation et pmpf tenue à jour",
+      "keys": [
+        "Q-IVDR-DP-1061",
+        "Q-IVDR-DP-1358",
+        "Q-IVDR-DP-4992"
+      ]
+    },
+    {
+      "title": "art. 58-77 — études de performance planifiées, autorisées, conduites, surveillées et reportées",
+      "keys": [
+        "Q-IVDR-EP-8616",
+        "Q-IVDR-EP-0191"
+      ]
+    },
+    {
+      "title": "art. 78 — système de pms ivd proportionné et intégré au smq",
+      "keys": [
+        "Q-IVDR-PI-7357",
+        "Q-IVDR-PI-0991",
+        "Q-IVDR-PI-9416"
+      ]
+    },
+    {
+      "title": "art. 79 — plan pms ivd documenté et relié aux risques, performance et capa",
+      "keys": [
+        "Q-IVDR-PPI-1977",
+        "Q-IVDR-PPI-2274",
+        "Q-IVDR-PPI-4092"
+      ]
+    },
+    {
+      "title": "art. 80 — rapport pms pour classes applicables établi et exploité",
+      "keys": [
+        "Q-IVDR-RPI-9799",
+        "Q-IVDR-RPI-8626",
+        "Q-IVDR-RPI-4565"
+      ]
+    },
+    {
+      "title": "art. 82 — déclaration incidents graves et fsca ivd dans les délais applicables",
+      "keys": [
+        "Q-IVDR-VI-2557",
+        "Q-IVDR-VI-8923",
+        "Q-IVDR-VI-0498"
+      ]
+    },
+    {
+      "title": "art. 84 — investigation, analyse causes et actions suite incident/fsca",
+      "keys": [
+        "Q-IVDR-AIFI-4529",
+        "Q-IVDR-AIFI-1837",
+        "Q-IVDR-AIFI-6588"
+      ]
+    },
+    {
+      "title": "annexe i ch. i — exigences générales sécurité/performance ivd démontrées et reliées aux risques",
+      "keys": [
+        "Q-IVDR-GIG-9779",
+        "Q-IVDR-GIG-8646",
+        "Q-IVDR-GIG-5848"
+      ]
+    },
+    {
+      "title": "annexe i ch. ii — exigences de performance analytique/clinique, stabilité, traçabilité métrologique et fabrication démontrées",
+      "keys": [
+        "Q-IVDR-GPCI-0625",
+        "Q-IVDR-GPCI-0922",
+        "Q-IVDR-GPCI-4556"
+      ]
+    },
+    {
+      "title": "annexe i ch. iii — étiquetage et notice ivd conformes, lisibles et validés",
+      "keys": [
+        "Q-IVDR-GIUI-6261",
+        "Q-IVDR-GIUI-6930"
+      ]
+    },
+    {
+      "title": "annexe iii — documentation pms ivd structurée et reliée au dossier technique",
+      "keys": [
+        "Q-IVDR-DPI-6055",
+        "Q-IVDR-DPI-2370",
+        "Q-IVDR-DPI-0795"
+      ]
+    },
+    {
+      "title": "annexe ix — smq et documentation technique prêts pour évaluation on",
+      "keys": [
+        "Q-IVDR-ECSI-7691",
+        "Q-IVDR-ECSI-7559"
+      ]
+    },
+    {
+      "title": "annexe xiii — dossier d’étude de performance et protection des sujets maîtrisés",
+      "keys": [
+        "Q-IVDR-PSI-5186",
+        "Q-IVDR-PSI-0064"
+      ]
+    },
+    {
+      "title": "art. 10 — fabricant disposant d’un système qualité, d’une gestion des risques, d’une évaluation clinique, d’un pms et d’une documentation technique",
+      "keys": [
+        "Q-MDR-OF-8437",
+        "Q-MDR-OF-8685",
+        "Q-MDR-OF-4506"
+      ]
+    },
+    {
+      "title": "art. 10(9) — système de management qualité couvrant conformité réglementaire, responsabilité direction, ressources, réalisation produit, pms, vigilance et capa",
+      "keys": [
+        "Q-MDR-SFM-1774",
+        "Q-MDR-SFM-1417",
+        "Q-MDR-SFM-2992"
+      ]
+    },
+    {
+      "title": "art. 10(12-15) — couverture responsabilité financière et conservation documentaire adaptée au risque, classe et type de dispositif",
+      "keys": [
+        "Q-MDR-RP-6887",
+        "Q-MDR-RP-1538",
+        "Q-MDR-RP-1835"
+      ]
+    },
+    {
+      "title": "art. 13 — vérifications importateur avant mise sur le marché et traçabilité des réclamations/non-conformités",
+      "keys": [
+        "Q-MDR-I-5980",
+        "Q-MDR-I-6277"
+      ]
+    },
+    {
+      "title": "art. 15 — personne chargée de veiller au respect de la réglementation qualifiée et impliquée dans les libérations et obligations post-market",
+      "keys": [
+        "Q-MDR-P-8665",
+        "Q-MDR-P-9760"
+      ]
+    },
+    {
+      "title": "art. 16 — obligations en cas de reconditionnement, relabelling ou modification susceptible d’affecter la conformité",
+      "keys": [
+        "Q-MDR-RR-2567",
+        "Q-MDR-RR-6201"
+      ]
+    },
+    {
+      "title": "art. 19 — déclaration ue de conformité établie, tenue à jour et reliée au dossier technique",
+      "keys": [
+        "Q-MDR-DUC-1803",
+        "Q-MDR-DUC-5437"
+      ]
+    },
+    {
+      "title": "art. 20 — marquage ce apposé uniquement après conformité démontrée",
+      "keys": [
+        "Q-MDR-MC-8407",
+        "Q-MDR-MC-0018"
+      ]
+    },
+    {
+      "title": "art. 25 — identification des opérateurs économiques amont/aval dans la chaîne d’approvisionnement",
+      "keys": [
+        "Q-MDR-TCDA-6992",
+        "Q-MDR-TCDA-9374"
+      ]
+    },
+    {
+      "title": "art. 27 — système udi attribué, apposé et maintenu dans les données réglementaires",
+      "keys": [
+        "Q-MDR-U-2683",
+        "Q-MDR-U-8636"
+      ]
+    },
+    {
+      "title": "art. 32 — résumé des caractéristiques de sécurité et des performances cliniques (sscp) pour les dispositifs implantables et de classe iii (hors sur mesure et investigation), validé par l'organisme notifié et téléversé dans eudamed, rédigé de manière compréhensible pour l'utilisateur prévu (et le grand public le cas échéant).",
+      "keys": [
+        "Q-MDR-S-3363",
+        "Q-MDR-S-5062",
+        "Q-MDR-S-1304"
+      ]
+    },
+    {
+      "title": "art. 52 — voie d’évaluation de conformité sélectionnée selon classe et type de dispositif",
+      "keys": [
+        "Q-MDR-CA-6183",
+        "Q-MDR-CA-8311"
+      ]
+    },
+    {
+      "title": "art. 61 — évaluation clinique fondée sur données cliniques suffisantes et mise à jour sur cycle de vie",
+      "keys": [
+        "Q-MDR-EC-6441",
+        "Q-MDR-EC-1984",
+        "Q-MDR-EC-5618"
+      ]
+    },
+    {
+      "title": "art. 62-80 — investigations cliniques planifiées, autorisées, conduites et reportées si nécessaires",
+      "keys": [
+        "Q-MDR-IC-4353",
+        "Q-MDR-IC-6966",
+        "Q-MDR-IC-8284"
+      ]
+    },
+    {
+      "title": "art. 83 — système de surveillance après commercialisation proportionné et intégré au smq",
+      "keys": [
+        "Q-MDR-P-8644",
+        "Q-MDR-P-2278",
+        "Q-MDR-P-2575"
+      ]
+    },
+    {
+      "title": "art. 84 — plan pms documenté, actif, relié aux risques, clinique et capa",
+      "keys": [
+        "Q-MDR-PP-6472",
+        "Q-MDR-PP-8047",
+        "Q-MDR-PP-2250"
+      ]
+    },
+    {
+      "title": "art. 85 — rapport pms établi pour classes applicables et exploité",
+      "keys": [
+        "Q-MDR-RP-5018",
+        "Q-MDR-RP-1384",
+        "Q-MDR-RP-7041"
+      ]
+    },
+    {
+      "title": "art. 87 — déclaration des incidents graves et actions correctives de sécurité terrain dans les délais applicables",
+      "keys": [
+        "Q-MDR-VIGF-1884",
+        "Q-MDR-VIGF-6541",
+        "Q-MDR-VIGF-0175"
+      ]
+    },
+    {
+      "title": "art. 88 — analyse et déclaration des tendances significatives d’incidents ou effets indésirables",
+      "keys": [
+        "Q-MDR-TR-2051",
+        "Q-MDR-TR-8417",
+        "Q-MDR-TR-8120"
+      ]
+    },
+    {
+      "title": "art. 89 — investigation, analyse et suivi des incidents graves et fsca",
+      "keys": [
+        "Q-MDR-AIF-2845",
+        "Q-MDR-AIF-2405",
+        "Q-MDR-AIF-0786"
+      ]
+    },
+    {
+      "title": "annexe i ch. i — exigences générales de sécurité et performance démontrées et reliées aux risques",
+      "keys": [
+        "Q-MDR-GG-8504",
+        "Q-MDR-GG-8618",
+        "Q-MDR-GG-4573"
+      ]
+    },
+    {
+      "title": "annexe i ch. ii — exigences de conception et fabrication démontrées par preuves techniques",
+      "keys": [
+        "Q-MDR-GCF-4569",
+        "Q-MDR-GCF-8622"
+      ]
+    },
+    {
+      "title": "annexe i ch. iii — étiquetage, notice et information utilisateur conformes, lisibles et validés",
+      "keys": [
+        "Q-MDR-GIU-4931",
+        "Q-MDR-GIU-8260"
+      ]
+    },
+    {
+      "title": "annexe iii — documentation pms structurée et reliée au dossier technique",
+      "keys": [
+        "Q-MDR-DP-5220",
+        "Q-MDR-DP-3205",
+        "Q-MDR-DP-3502"
+      ]
+    },
+    {
+      "title": "annexe ix — smq et documentation technique prêts pour audit on",
+      "keys": [
+        "Q-MDR-ECS-8162",
+        "Q-MDR-ECS-8204"
+      ]
+    },
+    {
+      "title": "management t1 — responsabilité direction, conformité réglementaire et efficacité du smq selon approche processus",
+      "keys": [
+        "Q-MDSAP-M-1006",
+        "Q-MDSAP-M-2185"
+      ]
+    },
+    {
+      "title": "management t2 — politique, objectifs, planification qualité et ressources alignés sur risques et conformité",
+      "keys": [
+        "Q-MDSAP-M-9936",
+        "Q-MDSAP-M-4558",
+        "Q-MDSAP-M-3867"
+      ]
+    },
+    {
+      "title": "management t3 — revue de direction utilisant réclamations, audits, fournisseurs, pms, capa et changements réglementaires",
+      "keys": [
+        "Q-MDSAP-M-9824",
+        "Q-MDSAP-M-0121",
+        "Q-MDSAP-M-3755"
+      ]
+    },
+    {
+      "title": "management t5 — gestion des risques intégrée aux processus mdsap et exigences juridictionnelles",
+      "keys": [
+        "Q-MDSAP-M-9017",
+        "Q-MDSAP-M-4174",
+        "Q-MDSAP-M-1076"
+      ]
+    },
+    {
+      "title": "mai t1 — collecte et analyse des données qualité issues production, audits, feedback, fournisseurs et surveillance",
+      "keys": [
+        "Q-MDSAP-MAI-1941",
+        "Q-MDSAP-MAI-3309"
+      ]
+    },
+    {
+      "title": "mai t2 — traitement des réclamations et investigations proportionnées au risque",
+      "keys": [
+        "Q-MDSAP-MAI-4126",
+        "Q-MDSAP-MAI-9065",
+        "Q-MDSAP-MAI-8057"
+      ]
+    },
+    {
+      "title": "mai t3 — capa fondées sur causes racines, impact produit/réglementaire et efficacité",
+      "keys": [
+        "Q-MDSAP-MAI-9447",
+        "Q-MDSAP-MAI-8978"
+      ]
+    },
+    {
+      "title": "mai t5 — audits internes planifiés selon risques, changements et résultats précédents",
+      "keys": [
+        "Q-MDSAP-MAI-0861",
+        "Q-MDSAP-MAI-3633",
+        "Q-MDSAP-MAI-5208"
+      ]
+    },
+    {
+      "title": "design t1 — planification conception et interfaces entre exigences, risques, vérification et validation",
+      "keys": [
+        "Q-MDSAP-DD-8592",
+        "Q-MDSAP-DD-0167",
+        "Q-MDSAP-DD-6533"
+      ]
+    },
+    {
+      "title": "design t2 — entrées de conception incluant exigences utilisateur, réglementaires, sécurité/performance et risques",
+      "keys": [
+        "Q-MDSAP-DD-7051",
+        "Q-MDSAP-DD-9315",
+        "Q-MDSAP-DD-0982"
+      ]
+    },
+    {
+      "title": "design t3 — revues, vérification, validation et transfert conception réalisés sur preuves objectives",
+      "keys": [
+        "Q-MDSAP-DD-3825",
+        "Q-MDSAP-DD-4122",
+        "Q-MDSAP-DD-7756"
+      ]
+    },
+    {
+      "title": "design t4 — changements de conception évalués pour impact risque, production, labeling et autorisations marché",
+      "keys": [
+        "Q-MDSAP-DD-4161",
+        "Q-MDSAP-DD-1089",
+        "Q-MDSAP-DD-2102"
+      ]
+    },
+    {
+      "title": "design t5 — dossier de conception démontrant la traçabilité complète entrée-sortie-risque-validation",
+      "keys": [
+        "Q-MDSAP-DD-9660",
+        "Q-MDSAP-DD-6706",
+        "Q-MDSAP-DD-1719"
+      ]
+    },
+    {
+      "title": "production t2 — validation des procédés spéciaux et maîtrise des paramètres critiques",
+      "keys": [
+        "Q-MDSAP-PSC-8101",
+        "Q-MDSAP-PSC-6393",
+        "Q-MDSAP-PSC-2032"
+      ]
+    },
+    {
+      "title": "production t3 — identification, traçabilité, statut produit et maîtrise des lots/séries",
+      "keys": [
+        "Q-MDSAP-PSC-6087",
+        "Q-MDSAP-PSC-0279"
+      ]
+    },
+    {
+      "title": "purchasing t1 — qualification et sélection fournisseurs selon impact sur sécurité/performance/conformité",
+      "keys": [
+        "Q-MDSAP-P-3849",
+        "Q-MDSAP-P-3552"
+      ]
+    },
+    {
+      "title": "purchasing t2 — contrats, exigences d’achat et notification des changements fournisseurs",
+      "keys": [
+        "Q-MDSAP-P-2444",
+        "Q-MDSAP-P-5981"
+      ]
+    },
+    {
+      "title": "purchasing t3 — surveillance fournisseurs, non-conformités fournisseurs et réévaluation",
+      "keys": [
+        "Q-MDSAP-P-2432",
+        "Q-MDSAP-P-5993"
+      ]
+    },
+    {
+      "title": "authorization t1 — autorisations de mise sur le marché et enregistrements établissement valides pour au/br/ca/jp/us",
+      "keys": [
+        "Q-MDSAP-DMAF-2705",
+        "Q-MDSAP-DMAF-5720"
+      ]
+    },
+    {
+      "title": "authorization t2 — changements produit/site/étiquetage évalués pour impact autorisations et listings",
+      "keys": [
+        "Q-MDSAP-DMAF-6417",
+        "Q-MDSAP-DMAF-7992"
+      ]
+    },
+    {
+      "title": "authorization t3 — dispositifs commercialisés cohérents avec licences, listings, certificats et dossiers techniques",
+      "keys": [
+        "Q-MDSAP-DMAF-2068",
+        "Q-MDSAP-DMAF-1123"
+      ]
+    },
+    {
+      "title": "adverse t1 — détection et décision de reportability selon juridictions au/br/ca/jp/us",
+      "keys": [
+        "Q-MDSAP-MDAE-6758",
+        "Q-MDSAP-MDAE-0392"
+      ]
+    },
+    {
+      "title": "adverse t2 — délais de déclaration, contenu des rapports et preuves de soumission",
+      "keys": [
+        "Q-MDSAP-MDAE-1652",
+        "Q-MDSAP-MDAE-1539"
+      ]
+    },
+    {
+      "title": "adverse t3 — advisory notices, fsca/recalls et communications autorités/clients maîtrisés",
+      "keys": [
+        "Q-MDSAP-MDAE-1373",
+        "Q-MDSAP-MDAE-2948",
+        "Q-MDSAP-MDAE-9314"
+      ]
+    },
+    {
+      "title": "adverse t4 — boucle incident → capa → risque → pms → autorisations démontrée",
+      "keys": [
+        "Q-MDSAP-MDAE-1613",
+        "Q-MDSAP-MDAE-7979",
+        "Q-MDSAP-MDAE-7682"
+      ]
+    },
+    {
+      "title": "mdsap countries — exigences spécifiques tga, anvisa, santé canada, mhlw/pmda et fda intégrées dans l’audit",
+      "keys": [
+        "Q-MDSAP-CSR-8134",
+        "Q-MDSAP-CSR-2163"
+      ]
+    }
+  ],
+  "duplicateTexts": [
+    {
+      "questionText": "choisissons un danger réel concerné par rapports et enregistrements fda des corrections et retraits visant un risque santé ou violation : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-FDA-CR-5666",
+        "Q-FDA-CR-3056"
+      ]
+    },
+    {
+      "questionText": "sous le qmsr actuel — 21 cfr 820.10 incorporant iso 13485:2016 §8.5.2 et §8.5.3 (anciennement 21 cfr 820.100 sous la qsr) — prenez votre dernière action corrective. montrez comment vous avez recherché la cause, défini et appliqué l’action, puis vérifié son efficacité.",
+      "keys": [
+        "Q-FDA-CMC-0807",
+        "Q-FDA-CMC-1104",
+        "Q-FDA-CMC-4738"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par revue de direction incluant entrées réglementaires, feedback, audits, fournisseurs, risques et actions : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-13485-RD-6139",
+        "Q-13485-RD-8627"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par planification de la réalisation produit incluant exigences qualité, risques, vérifications et enregistrements : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-13485-RP-6946",
+        "Q-13485-RP-5113"
+      ]
+    },
+    {
+      "questionText": "ouvrons le dernier dossier de conception concerné par validation démontrant que le dispositif répond à l’usage prévu et aux besoins utilisateur : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+      "keys": [
+        "Q-13485-VC-9155",
+        "Q-13485-VC-1214"
+      ]
+    },
+    {
+      "questionText": "prenez un dossier de lot récent : montrez-moi comment validation des procédés de stérilisation et systèmes barrières stériles est appliquée au poste, pas seulement décrite dans une procédure.",
+      "keys": [
+        "Q-13485-VS-8190",
+        "Q-13485-VS-3424"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par processus de gestion des risques couvrant toutes les phases du cycle de vie du dispositif : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-PGR-8687",
+        "Q-14971-PGR-3372"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par responsabilités, ressources et revue de direction pour la gestion des risques : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-RDR-4511",
+        "Q-14971-RDR-1036"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par compétence du personnel réalisant les activités de gestion des risques : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-CR-6258",
+        "Q-14971-CR-2327"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par plan de gestion des risques définissant périmètre, responsabilités, critères d’acceptabilité et activités : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-PGR-1943",
+        "Q-14971-PGR-4002"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par dossier de gestion des risques traçable vers analyses, évaluations, contrôles et revues : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-DGR-2987",
+        "Q-14971-DGR-9056"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par analyse des risques sur le dispositif médical selon le plan approuvé : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-AR-6051",
+        "Q-14971-AR-2120"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par estimation des risques pour chaque situation dangereuse identifiée : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-ER-1264",
+        "Q-14971-ER-1630"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par comparaison des risques estimés aux critères d’acceptabilité définis : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-ER-8113",
+        "Q-14971-ER-0172"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par évaluation des risques résiduels après maîtrise : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-14971-RRI-6312",
+        "Q-14971-RRI-8371"
+      ]
+    },
+    {
+      "questionText": "prenez la dernière action corrective liée à cohérence entre réclamations, pms, capa, conception et mise à jour du dossier de risques : déroulez-la du déclencheur jusqu'à la preuve d'efficacité vérifiée à distance.",
+      "keys": [
+        "Q-14971-LRPC-0459",
+        "Q-14971-LRPC-4390"
+      ]
+    },
+    {
+      "questionText": "ouvrons le dernier dossier de conception concerné par maîtrise de la conception, des revues, vérifications, validations et changements : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+      "keys": [
+        "Q-9001-CD-6572",
+        "Q-9001-CD-9497"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par programme d’audit interne planifié selon les risques et résultats : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-9001-AI-9052",
+        "Q-9001-AI-5121"
+      ]
+    },
+    {
+      "questionText": "prenez la dernière action corrective liée à smq couvrant stratégie réglementaire, gspr, responsabilités, ressources, production, pms, vigilance et capa : déroulez-la du déclencheur jusqu'à la preuve d'efficacité vérifiée à distance.",
+      "keys": [
+        "Q-IVDR-SFI-3580",
+        "Q-IVDR-SFI-9649"
+      ]
+    },
+    {
+      "questionText": "montrez-moi, sur un cas réel récent, comment mandat écrit et obligations du mandataire ue maîtrisés est appliquée en pratique et où en est la preuve.",
+      "keys": [
+        "Q-IVDR-MI-1229",
+        "Q-MDR-M-1555"
+      ]
+    },
+    {
+      "questionText": "montrez-moi, sur un cas réel récent, comment vérifications distributeur, stockage/transport, réclamations et coopération autorités est appliquée en pratique et où en est la preuve.",
+      "keys": [
+        "Q-IVDR-DI-8225",
+        "Q-MDR-D-7081"
+      ]
+    },
+    {
+      "questionText": "déroulez un cas concret concerné par vérifications distributeur, stockage/transport, réclamations et coopération autorités : quelle décision, par qui, sur quelle preuve, avec quel contrôle d'efficacité ?",
+      "keys": [
+        "Q-IVDR-DI-0200",
+        "Q-MDR-D-5506"
+      ]
+    },
+    {
+      "questionText": "choisissons un document soumis à documentation de performance evaluation et pmpf tenue à jour : montrez-moi sa version en vigueur, son approbation et le retrait des versions périmées.",
+      "keys": [
+        "Q-IVDR-DP-1061",
+        "Q-IVDR-DP-4992"
+      ]
+    },
+    {
+      "questionText": "prenez la dernière action corrective liée à plan pms ivd documenté et relié aux risques, performance et capa : déroulez-la du déclencheur jusqu'à la preuve d'efficacité vérifiée à distance.",
+      "keys": [
+        "Q-IVDR-PPI-1977",
+        "Q-IVDR-PPI-4092"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par déclaration incidents graves et fsca ivd dans les délais applicables et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-IVDR-VI-2557",
+        "Q-IVDR-VI-0498"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par investigation, analyse causes et actions suite incident/fsca et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-IVDR-AIFI-4529",
+        "Q-IVDR-AIFI-6588"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par exigences générales sécurité/performance ivd démontrées et reliées aux risques : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-IVDR-GIG-9779",
+        "Q-IVDR-GIG-5848"
+      ]
+    },
+    {
+      "questionText": "ouvrons le dernier dossier de conception concerné par exigences de performance analytique/clinique, stabilité, traçabilité métrologique et fabrication démontrées : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+      "keys": [
+        "Q-IVDR-GPCI-0625",
+        "Q-IVDR-GPCI-4556"
+      ]
+    },
+    {
+      "questionText": "choisissons un document soumis à documentation pms ivd structurée et reliée au dossier technique : montrez-moi sa version en vigueur, son approbation et le retrait des versions périmées.",
+      "keys": [
+        "Q-IVDR-DPI-6055",
+        "Q-IVDR-DPI-0795"
+      ]
+    },
+    {
+      "questionText": "prenez la dernière action corrective liée à système de management qualité couvrant conformité réglementaire, responsabilité direction, ressources, réalisation produit, pms, vigilance et capa : déroulez-la du déclencheur jusqu'à la preuve d'efficacité vérifiée à distance.",
+      "keys": [
+        "Q-MDR-SFM-1774",
+        "Q-MDR-SFM-2992"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par couverture responsabilité financière et conservation documentaire adaptée au risque, classe et type de dispositif : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDR-RP-6887",
+        "Q-MDR-RP-1835"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par investigations cliniques planifiées, autorisées, conduites et reportées si nécessaires et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-MDR-IC-4353",
+        "Q-MDR-IC-8284"
+      ]
+    },
+    {
+      "questionText": "prenez la dernière action corrective liée à plan pms documenté, actif, relié aux risques, clinique et capa : déroulez-la du déclencheur jusqu'à la preuve d'efficacité vérifiée à distance.",
+      "keys": [
+        "Q-MDR-PP-6472",
+        "Q-MDR-PP-2250"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par déclaration des incidents graves et actions correctives de sécurité terrain dans les délais applicables et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-MDR-VIGF-1884",
+        "Q-MDR-VIGF-0175"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par analyse et déclaration des tendances significatives d’incidents ou effets indésirables et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-MDR-TR-2051",
+        "Q-MDR-TR-8120"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par investigation, analyse et suivi des incidents graves et fsca et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-MDR-AIF-2845",
+        "Q-MDR-AIF-0786"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par exigences générales de sécurité et performance démontrées et reliées aux risques : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDR-GG-8504",
+        "Q-MDR-GG-4573"
+      ]
+    },
+    {
+      "questionText": "choisissons un document soumis à documentation pms structurée et reliée au dossier technique : montrez-moi sa version en vigueur, son approbation et le retrait des versions périmées.",
+      "keys": [
+        "Q-MDR-DP-5220",
+        "Q-MDR-DP-3502"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par politique, objectifs, planification qualité et ressources alignés sur risques et conformité : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-M-9936",
+        "Q-MDSAP-M-3867"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par gestion des risques intégrée aux processus mdsap et exigences juridictionnelles : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-M-9017",
+        "Q-MDSAP-M-1076"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par traitement des réclamations et investigations proportionnées au risque : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-MAI-4126",
+        "Q-MDSAP-MAI-8057"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par audits internes planifiés selon risques, changements et résultats précédents : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-MAI-0861",
+        "Q-MDSAP-MAI-5208"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par planification conception et interfaces entre exigences, risques, vérification et validation : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-DD-8592",
+        "Q-MDSAP-DD-6533"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par entrées de conception incluant exigences utilisateur, réglementaires, sécurité/performance et risques : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-DD-7051",
+        "Q-MDSAP-DD-0982"
+      ]
+    },
+    {
+      "questionText": "ouvrons le dernier dossier de conception concerné par revues, vérification, validation et transfert conception réalisés sur preuves objectives : montrez-moi la trace de bout en bout, entrées, revues, vérification, validation.",
+      "keys": [
+        "Q-MDSAP-DD-3825",
+        "Q-MDSAP-DD-7756"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par changements de conception évalués pour impact risque, production, labeling et autorisations marché : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-DD-4161",
+        "Q-MDSAP-DD-2102"
+      ]
+    },
+    {
+      "questionText": "choisissons un danger réel concerné par dossier de conception démontrant la traçabilité complète entrée-sortie-risque-validation : déroulez son identification, son estimation, sa maîtrise et le risque résiduel retenu.",
+      "keys": [
+        "Q-MDSAP-DD-9660",
+        "Q-MDSAP-DD-1719"
+      ]
+    },
+    {
+      "questionText": "prenez un dossier de lot récent : montrez-moi comment validation des procédés spéciaux et maîtrise des paramètres critiques est appliquée au poste, pas seulement décrite dans une procédure.",
+      "keys": [
+        "Q-MDSAP-PSC-8101",
+        "Q-MDSAP-PSC-2032"
+      ]
+    },
+    {
+      "questionText": "sortez le dernier cas concerné par advisory notices, fsca/recalls et communications autorités/clients maîtrisés et reconstituons la chronologie : date de connaissance, décision, date d'action. le délai a-t-il été tenu ?",
+      "keys": [
+        "Q-MDSAP-MDAE-1373",
+        "Q-MDSAP-MDAE-9314"
+      ]
+    }
+  ],
+  "global": {
+    "exactReference": 473,
+    "evidence": 473,
+    "discriminating": 473,
+    "pedagogy": 473,
+    "grading": 473,
+    "official": 379,
+    "generic": 444,
+    "staleFda": 0
+  }
+}

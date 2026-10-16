@@ -1,0 +1,8 @@
+"ID","priorite","domaine","action","preuve_acceptation","responsable_propose","echeance_cible","statut"
+"P0-COV-001","P0","Corpus","Rapprocher les 473 questions sources avec les 485 lignes observées dans la restauration de production","Export production daté, diff sur questionKey, décision documentée sur les 12 écarts","Responsable qualité + administrateur données","avant GO large","ouvert"
+"P0-STAB-001","P0","Stabilité","Achever 14 jours consécutifs sans P0 avec journal quotidien","14 lignes quotidiennes complètes et seuils atteints","Nick Ngankep","J+14","non démarré"
+"P0-PILOT-001","P0","Recette","Fournir trois PV organisations distinctes audit→constat→CAPA→PDF","3 PV signés et preuves d'isolation","Responsable recette","avant GO large","preuve insuffisante"
+"P0-BACKUP-001","P0","Sauvegarde","Prouver planification quotidienne, stockage hors service, manifeste SHA-256 et alerte d'échec","14 sauvegardes valides + restauration périodique","Responsable exploitation","avant GO large","partiel"
+"P1-BUILD-001","P1","Build local","Réinstaller les dépendances locales pour supprimer les liens esbuild vers l'ancien workspace","npm run build vert dans les deux dépôts","Développement","7 jours","ouvert"
+"P1-HUMAN-001","P1","Corpus","Faire relire chaque question par deux experts humains compétents/licenciés","473 lignes avec deux signatures, date et source","Direction qualité","90 jours","ouvert"
+"P1-BCP-001","P1","Continuité","Désigner un suppléant ou accepter explicitement le risque pour le GO large","Procédure signée avec suppléant ou acceptation comité","Direction","30 jours","risque accepté seulement pour go contrôlé"

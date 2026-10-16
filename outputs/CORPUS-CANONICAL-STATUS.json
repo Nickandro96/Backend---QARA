@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-10-16T18:40:40.560Z",
+  "sourceCount": 473,
+  "sourceQuestionKeySha256": "49f996f03e3ed42b034e64636efd8ecfd4e7a2c8868d7b7f5afb82879fd853f2",
+  "productionChecked": false,
+  "productionCount": null,
+  "missingInProduction": [],
+  "unexpectedInProduction": [],
+  "status": "SOURCE_ONLY"
+}
